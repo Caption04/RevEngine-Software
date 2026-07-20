@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldCore Schedule</title>
+    <link rel="stylesheet" href="assets/app.css">
+    <script defer src="assets/ui-feedback.js"></script>
+    <script defer src="assets/layout.js"></script>
+    <script defer src="assets/api.js?v=worker-activity-notes-1"></script>
+  </head>
+  <body data-page="schedule" data-title="Schedule">
+    <section class="page">
+      <div class="hero-row">
+        <div class="hero-copy">
+          <h2>Schedule</h2>
+          <p>The calendar starts empty until jobs are assigned to dates and workers.</p>
+        </div>
+        <div class="toolbar-actions">
+          <span class="api-status" data-api-status>Connecting...</span>
+          <button class="primary-button">+ New Job</button>
+        </div>
+      </div>
+      <div class="toolbar">
+        <div class="tabs">
+          <button class="tab" type="button" data-schedule-view="day">Day</button>
+          <button class="tab active" type="button" data-schedule-view="week">Week</button>
+          <button class="tab" type="button" data-schedule-view="month">Month</button>
+        </div>
+        <div class="toolbar-actions">
+          <button class="icon-button" type="button" data-schedule-prev title="Previous period">&lt;</button>
+          <button class="secondary-button schedule-period-button" type="button" data-schedule-today data-schedule-toolbar-range title="Jump to today">Today</button>
+          <button class="icon-button" type="button" data-schedule-next title="Next period">&gt;</button>
+          <button class="secondary-button" type="button" data-schedule-filter>Filter</button>
+        </div>
+      </div>
+      <form class="panel form-grid schedule-filter-panel" data-schedule-filters hidden>
+        <div class="field">
+          <label for="scheduleWorkerFilter">Worker</label>
+          <select id="scheduleWorkerFilter" name="workerId" data-schedule-worker-filter>
+            <option value="">All workers</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="scheduleStatusFilter">Status</label>
+          <select id="scheduleStatusFilter" name="status" data-schedule-status-filter>
+            <option value="">All statuses</option>
+            <option value="SCHEDULED">Scheduled</option>
+            <option value="IN_PROGRESS">In Progress</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+        </div>
+        <div class="form-actions span-2">
+          <button class="primary-button" type="submit">Apply Filters</button>
+          <button class="secondary-button" type="button" data-schedule-clear-filters>Clear</button>
+        </div>
+      </form>
+      <section class="table-card">
+        <div class="panel-head card schedule-range-head">
+          <h3 data-schedule-range>Schedule</h3>
+          <span class="badge gray" data-schedule-count>0 jobs</span>
+        </div>
+        <div class="table-scroll">
+          <div class="schedule-grid" data-schedule-grid></div>
+        </div>
+        <div class="empty-state">
+          <div>
+            <strong>No scheduled work</strong>
+            <span>Jobs from the local API will appear on this calendar.</span>
+          </div>
+        </div>
+      </section>
+    </section>
+  </body>
+</html>
+

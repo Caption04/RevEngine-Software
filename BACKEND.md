@@ -1,0 +1,195 @@
+# FieldCore Backend
+
+This project has been upgraded from a fake in-memory local API to an Express, PostgreSQL, Prisma, Zod, bcrypt-compatible hashing with bcryptjs, and JWT-cookie backend.
+
+## Important Rules
+
+- Keep the existing static HTML/CSS UI intact.
+- Every business model belongs to a `companyId`.
+- API handlers scope reads and writes to the authenticated user's company.
+- Password hashes are never returned in API responses.
+- Write routes validate request bodies with Zod.
+- Auth routes are rate limited.
+- Errors are returned in a consistent JSON envelope.
+- Important writes create audit log records.
+
+## Main Files
+
+- `server.js`: starts the HTTP server.
+- `src/app.js`: Express middleware, CORS, logging, rate limiting, API mounting, static serving, and error handling.
+- `src/routes/api.js`: authenticated API routes.
+- `src/auth.js`: password hashing, JWT cookies, auth middleware, role middleware, and audit helper.
+- `src/db.js`: Prisma client singleton.
+- `prisma/schema.prisma`: PostgreSQL data model.
+- `prisma/seed.js`: demo data seed.
+- `assets/api.js`: frontend data loading, login modal, table rendering, and simple create modals.
+
+## Local Commands
+
+```bash
+npm install
+npm run build
+npm run migrate
+npm run seed
+npm run dev
+npm test
+```
+
+See `README.md` for environment variables and demo credentials.
+
+## TASK4 Offline Worker Sync Contract
+
+FieldCore now exposes a backend foundation for future Android/iOS technician apps that need to work with weak connectivity.
+
+Worker-only endpoints:
+
+```text
+POST /api/worker/devices/register
+POST /api/worker/sync/bootstrap
+GET  /api/worker/sync/pull?since=
+POST /api/worker/sync/push
+GET  /api/worker/sync/status/:idempotencyKey
+```
+
+Key rules:
+
+- Workers can only register and sync against their own worker profile.
+- Bootstrap/pull returns only the authenticated worker's assigned jobs.
+- Push accepts queued offline actions with idempotency keys.
+- Reusing the same idempotency key returns `DUPLICATE` and does not duplicate job activity, proof photos, signatures, location captures, or parts actions.
+- Actions against another worker's job are stored as `REJECTED`, not processed.
+- Proof photos, signatures, completion locations, and job activities can store offline metadata such as `capturedAt`, `offlineCreatedAt`, `deviceId`, GPS data, and `syncId`.
+
+Supported offline action types:
+
+```text
+JOB_ARRIVE
+JOB_START
+JOB_PAUSE
+JOB_RESUME
+JOB_COMPLETE
+JOB_NOTE
+PROOF_PHOTO_UPLOADED
+SIGNATURE_CAPTURED
+LOCATION_CAPTURED
+PART_USED
+PART_SHORTAGE
+```
+
+This task does not build a native mobile app. It provides the safe API contract that a native app can use later.
+
+
+## TASK6 offer-specific localization
+
+FieldCore now supports company-level localization for country, timezone, currency, allowed currencies, tax/VAT label, quote expiry, payment terms, date/number format preferences, and configurable manual payment methods. Quotes, invoices, receipts, finance exports, public service summaries, and client-facing data can carry localization metadata.
+
+Payment methods are configurable operational options only unless a real provider integration is separately configured. CSV export remains the accounting foundation; live Xero/Sage/QuickBooks sync is not claimed.
+
+Manual QA should verify: finance settings save, payment methods restrict payment capture, public services show currency/tax metadata, invoices get default due dates, quotes get default expiry dates, and new WhatsApp/email template names exist without breaking existing notifications.
+
+
+## TASK7 enterprise approvals
+
+Risky actions can be blocked by active approval policies until an authorized approver approves and executes the request. Permission keys and branch access are managed server-side; the frontend must not be trusted for company, user, branch, or approval decisions.
+
+## TASK8 accounting sync backend
+
+Accounting sync now uses `src/services/finance`:
+
+- provider abstraction under `src/services/finance/providers`
+- encrypted finance token storage through `FinanceIntegrationSecret`
+- finance mappings through `FinanceMapping`
+- sync logs through `FinanceSyncLog`
+- webhook logs through `FinanceWebhookEvent`
+- idempotent remote links through `ExternalRecordLink`
+
+Do not store provider access tokens, refresh tokens, OAuth secrets, webhook secrets, or API keys in plaintext responses or logs. CSV export remains supported when live accounting sync is not connected.
+
+## TASK9 payment rails, reconciliation, and collections
+
+New payment routes support provider configuration, payment link generation, webhook confirmation, reconciliation imports, aging dashboards, reminder throttling, and approval-gated refunds. Live providers remain disabled unless configured; mock mode is available for QA.
+
+Important routes:
+
+- `POST /api/payment-providers`
+- `POST /api/invoices/:id/payment-links`
+- `POST /api/payment-webhooks/:provider/:companyId`
+- `GET /api/collections`
+- `POST /api/reconciliation/imports`
+- `POST /api/reconciliation/items/:id/match`
+- `POST /api/payments/:id/refund`
+
+
+## TASK10 mobile/offline API
+
+Worker sync now supports `/api/worker/mobile/config`, `/api/worker/sync/v2/pull`, and `/api/worker/sync/v2/push`. Devices can be revoked through admin APIs, offline actions are idempotent, stale job snapshots become `CONFLICT`, and required checklist templates block job completion until answered.
+
+## TASK11 enterprise contract automation backend
+
+TASK11 adds backend support for recurring service obligations and SLA controls.
+
+New operational APIs:
+
+- `POST /api/service-contracts/:id/generate-planned-jobs`
+- `POST /api/service-contracts/:id/evaluate-entitlement`
+- `POST /api/jobs/:id/sla/evaluate`
+- `POST /api/jobs/:id/sla/waive`
+- `POST /api/jobs/:id/warranty`
+- `POST /api/assets/:id/incidents`
+- `POST /api/assets/:id/compliance-documents`
+- `GET /api/reports/contract-profitability`
+
+SLA waiver and warranty override flows preserve TASK7 approval behavior. Planned contract work records visit usage to distinguish included visits from overage.
+
+
+## TASK12 inventory/procurement/job costing API
+
+Added purchase request line items, low-stock replenishment request creation, worker vehicle-stock replenishment requests, PO approval/partial-receipt/backorder fields, job costing, inventory valuation, stock adjustment reports, parts-used reports, and supplier performance reporting. Tenant scoping remains company-based.
+
+## TASK13 Executive analytics
+
+Owner/admin analytics endpoints live under `/api/analytics/*`. They are company-scoped, support branch filters, and include CSV export plus a scheduled-report foundation endpoint. Workers and clients are blocked.
+
+## TASK14 enterprise onboarding APIs
+
+- `GET /api/onboarding/checklist` computes setup completion from company records.
+- `GET/PATCH /api/onboarding/implementation-settings` stores implementation mode, go-live date, notes, and reset policy.
+- `GET/PUT /api/onboarding/package` stores onboarding fee, migration fee, training package, implementation status, and go-live checklist metadata.
+- `GET /api/onboarding/import-templates` and `GET /api/onboarding/import-templates/:type.csv` provide CSV templates.
+- `POST /api/onboarding/imports/:type/preview` validates CSV rows without writing business data.
+- `POST /api/onboarding/imports/:type` runs dry-run by default; send `dryRun:false` for a real import.
+- `GET /api/onboarding/duplicates/:type` returns manual merge suggestions for customers, workers, assets, and inventory.
+- `POST /api/onboarding/demo-data/:vertical` creates sales demo data for supported verticals.
+
+## TASK15 security/compliance/reliability controls
+
+TASK15 adds enterprise security controls without claiming SOC 2/ISO certification:
+
+- `CompanySecuritySettings` now stores password, lockout, 2FA, session and data-retention policy settings.
+- `UserSession` allows active session listing and revocation; password changes revoke active sessions.
+- `SecurityEvent` captures failed login, lockout, 2FA failure, role change, export, and identity-provider changes.
+- `IdentityProviderConfig` stores OIDC/SAML-ready configuration metadata with providers disabled by default; `src/services/identity/oidcProvider.interface.js` defines the adapter boundary.
+- Admin data export is company-scoped and omits secret/password fields.
+- `/api/ops/status` reports operational readiness without leaking secrets.
+
+Backup/restore scripts:
+
+- `scripts/backup-db.sh`
+- `scripts/restore-db-nonprod.sh`
+
+Runbooks:
+
+- `docs/security-compliance-reliability.md`
+- `docs/disaster-recovery-runbook.md`
+
+## TASK16 Flutter technician app
+
+The native technician app scaffold lives in `apps/fieldcore_technician` and is intentionally separated from the Node/Express backend. It uses the existing TASK10 mobile/offline API contract:
+
+- `POST /api/auth/login`
+- `POST /api/worker/devices/register`
+- `GET /api/worker/mobile/config`
+- `GET /api/worker/sync/v2/pull`
+- `POST /api/worker/sync/v2/push`
+
+No generated Flutter build output, `.dart_tool`, Android Gradle cache, or iOS Pods should be committed. Use `scripts/bootstrap_flutter_technician_platforms.sh` to generate platform folders locally.

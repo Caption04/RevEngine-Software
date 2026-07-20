@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Mobile Sync · FieldCore</title><link rel="stylesheet" href="assets/app.css?v=ux-stabilization-1"><script defer src="assets/ui-feedback.js"></script><script defer src="assets/layout.js"></script><script defer src="assets/enterprise-pages.js?v=ux-stabilization-1"></script></head>
+  <body data-page="mobile-sync" data-title="Mobile Sync">
+    <section class="page">
+      <div class="hero-row"><div class="hero-copy"><p class="eyebrow">Technician app</p><h2>Mobile Sync</h2><p>Review offline technician actions, conflicts, and registered worker devices.</p></div><div class="toolbar-actions"><button class="secondary-button" data-refresh>Refresh</button><span class="api-status" data-status>Loading...</span></div></div>
+      <section class="grid two-column">
+        <article class="panel"><div class="panel-head"><div><h3>Sync problems</h3><p>Failed, rejected, and conflicted offline actions that need admin review.</p></div><span class="badge gray">Admin</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Status</th><th>Action</th><th>Worker</th><th>Device</th><th>Error</th><th>Received</th></tr></thead><tbody data-sync-rows><tr><td colspan="6">Loading…</td></tr></tbody></table></div></article>
+        <article class="panel"><div class="panel-head"><div><h3>Worker devices</h3><p>Active and revoked devices trusted for offline sync.</p></div><span class="badge gray">Devices</span></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Device</th><th>Platform</th><th>App</th><th>Active</th><th>Last sync</th></tr></thead><tbody data-device-rows><tr><td colspan="5">Loading…</td></tr></tbody></table></div></article>
+      </section>
+    </section>
+  </body>
+</html>

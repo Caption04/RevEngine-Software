@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Account Security · FieldCore</title>
+    <link rel="stylesheet" href="assets/app.css?v=account-security-2">
+    <script defer src="assets/ui-feedback.js"></script>
+    <script defer src="assets/layout.js"></script>
+    <script defer src="assets/enterprise-pages.js?v=account-security-2"></script>
+  </head>
+  <body data-page="security-center" data-title="Account Security">
+    <section class="page security-page">
+      <div class="hero-row security-hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Your account</p>
+          <h2>Account security</h2>
+          <p>Manage your password, two-step verification, and signed-in devices.</p>
+        </div>
+      </div>
+
+      <section class="grid two-column security-primary-grid">
+        <article class="panel security-simple-panel">
+          <div class="panel-head">
+            <div>
+              <h3>Password</h3>
+              <p class="muted security-panel-copy">Use a strong password that you do not use elsewhere.</p>
+            </div>
+            <button class="secondary-button compact" type="button" data-password-toggle>Change password</button>
+          </div>
+
+          <form class="security-password-form" data-password-form hidden>
+            <div class="field">
+              <label for="securityCurrentPassword">Current password</label>
+              <input id="securityCurrentPassword" name="currentPassword" type="password" autocomplete="current-password" required>
+            </div>
+            <div class="field">
+              <label for="securityNewPassword">New password</label>
+              <input id="securityNewPassword" name="newPassword" type="password" autocomplete="new-password" minlength="12" required>
+            </div>
+            <div class="field">
+              <label for="securityConfirmPassword">Confirm new password</label>
+              <input id="securityConfirmPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="12" required>
+            </div>
+            <p class="muted security-password-note">Changing your password signs you out on all devices.</p>
+            <div class="form-actions">
+              <button class="primary-button compact" type="submit">Save new password</button>
+              <button class="secondary-button compact" type="button" data-password-cancel>Cancel</button>
+            </div>
+            <p class="fc-form-error" data-password-message hidden></p>
+          </form>
+        </article>
+
+        <article class="panel security-simple-panel">
+          <div class="panel-head">
+            <div>
+              <h3>Two-step verification</h3>
+              <p class="muted security-panel-copy">Add an extra sign-in step to protect your account.</p>
+            </div>
+            <button class="primary-button compact" type="button" data-enable-2fa>Set up 2FA</button>
+          </div>
+          <div data-2fa-output class="security-action-result" hidden></div>
+        </article>
+      </section>
+
+      <section class="panel security-simple-panel security-devices-panel">
+        <div class="panel-head">
+          <div>
+            <h3>Signed-in devices</h3>
+            <p class="muted security-panel-copy">Review the devices using your account.</p>
+          </div>
+          <button class="secondary-button compact" type="button" data-load-sessions>Refresh</button>
+        </div>
+        <div data-sessions class="security-session-list"></div>
+      </section>
+
+      <section class="panel security-activity-panel">
+        <div class="panel-head">
+          <div>
+            <h3>Recent security activity</h3>
+            <p class="muted security-panel-copy">Important sign-ins and account changes appear here.</p>
+          </div>
+          <button class="secondary-button compact" type="button" data-load-events>Refresh</button>
+        </div>
+        <div class="table-wrap security-activity-table-wrap">
+          <table class="data-table security-activity-table">
+            <thead><tr><th>Date</th><th>Activity</th></tr></thead>
+            <tbody data-events></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </body>
+</html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldCore Branches</title>
+    <link rel="stylesheet" href="assets/app.css?v=ux-stabilization-1">
+    <script defer src="assets/ui-feedback.js"></script>
+    <script defer src="assets/layout.js"></script>
+    <script defer src="assets/enterprise-pages.js?v=ux-stabilization-1"></script>
+  </head>
+  <body data-page="branches" data-title="Branches">
+    <section class="page">
+      <div class="hero-row">
+        <div class="hero-copy">
+          <p class="eyebrow">Multi-location operations</p>
+          <h2>Branches</h2>
+          <p>Use branches when a business has multiple offices, depots, cities, or operating units. Branches let admins filter jobs, customers, stock, workers, reports, and approvals without mixing every location into one view.</p>
+        </div>
+        <span class="api-status" data-status>Loading...</span>
+      </div>
+      <section class="grid three compact-guide-grid">
+        <article class="card"><h3>What this is for</h3><p class="muted">Harare branch, Bulawayo branch, Johannesburg branch, warehouse team, or a regional depot.</p></article>
+        <article class="card"><h3>Why it matters</h3><p class="muted">Managers can see only the jobs, inventory, customers, and reports relevant to their location.</p></article>
+        <article class="card"><h3>When to skip it</h3><p class="muted">A small business with one office can use one default branch and ignore this page.</p></article>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h3>Create branch</h3><span class="badge gray">Admin</span></div>
+        <form class="form-grid" data-branch-form>
+          <div class="field"><label>Name</label><input name="name" required placeholder="Harare Operations"></div>
+          <div class="field"><label>Code</label><input name="code" placeholder="HRE"></div>
+          <div class="field"><label>Country</label><input name="country" placeholder="Zimbabwe"></div>
+          <div class="field"><label>City</label><input name="city" placeholder="Harare"></div>
+          <div class="field"><label>Timezone</label><input name="timezone" placeholder="Africa/Harare"></div>
+          <div class="field"><label>Address</label><input name="address" placeholder="Office address"></div>
+          <div class="form-actions span-2"><button type="submit" class="primary-button">Create branch</button></div>
+        </form>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h3>Branch list</h3><button class="secondary-button compact" type="button" data-refresh>Refresh</button></div>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Code</th><th>City</th><th>Country</th><th>Status</th></tr></thead><tbody data-branches></tbody></table></div>
+      </section>
+    </section>
+  </body>
+</html>

@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldCore Settings</title>
+    <link rel="stylesheet" href="assets/app.css">
+    <script defer src="assets/ui-feedback.js"></script>
+    <script defer src="assets/layout.js"></script>
+    <script defer src="assets/api.js?v=worker-activity-notes-1"></script>
+  </head>
+  <body data-page="settings" data-title="Settings">
+    <section class="page">
+      <div class="hero-row">
+        <div class="hero-copy">
+          <h2>Settings</h2>
+          <p>Manage your company details and how everyday work runs.</p>
+        </div>
+        <span class="api-status" data-api-status>Connecting...</span>
+      </div>
+      <section class="settings-layout">
+        <aside class="panel settings-tabs" aria-label="Settings sections">
+          <button class="settings-tab active" type="button" data-settings-target="company" data-required-any-permission="company.settings.view,company.settings.manage,company.branding.manage">Company Information</button>
+          <button class="settings-tab" type="button" data-settings-target="jobs" data-required-permission="company.settings.manage">Job Defaults</button>
+          <button class="settings-tab" type="button" data-settings-target="scheduling" data-required-permission="company.settings.manage">Scheduling</button>
+          <button class="settings-tab" type="button" data-settings-target="billing" data-required-permission="settings.finance.manage">Invoice Defaults</button>
+          <button class="settings-tab" type="button" data-settings-target="finance" data-required-any-permission="settings.finance.manage,finance.exports.manage">Money Settings &amp; Files</button>
+          <button class="settings-tab" type="button" data-settings-target="notifications" data-required-permission="notifications.view">Sent Messages</button>
+          <button class="settings-tab" type="button" data-settings-target="integrations" data-required-any-permission="integration.view,integration.manage">Connected Apps</button>
+          <button class="settings-tab" type="button" data-settings-target="admin-tools" data-required-permission="audit.view">Company Activity</button>
+        </aside>
+        <div class="settings-panels">
+          <div class="panel settings-panel active" data-settings-panel="company" data-required-any-permission="company.settings.view,company.settings.manage,company.branding.manage">
+            <div class="panel-head">
+              <h2>Company Information</h2>
+              <!-- <span class="badge blue">White-label</span> -->
+            </div>
+            <form class="form-grid" data-branding-form>
+              <div class="field span-2">
+                <label for="logoFile">Company Logo</label>
+
+                <div class="logo-upload">
+                  <div class="logo-preview" data-logo-preview>FC</div>
+
+                  <div class="logo-upload-controls">
+                    <div class="file-upload-row">
+                      <label class="file-upload-button" for="logoFile">Choose logo</label>
+                      <span class="file-name" data-logo-file-name>No file selected</span>
+                    </div>
+
+                    <input
+                      id="logoFile"
+                      name="logo"
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      data-logo-input
+                      hidden
+                    >
+
+                    <input
+                      id="logoUrl"
+                      name="logoUrl"
+                      type="hidden"
+                      data-branding-field="logoUrl"
+                    >
+
+                    <small>Upload a square PNG, JPG, or WEBP logo. Max 2MB.</small>
+                  </div>
+                </div>
+              </div>
+              <div class="field">
+                <label for="companyName">Company Name</label>
+                <input id="companyName" name="name" placeholder="Not set" data-profile-field="name" data-preview-name>
+              </div>
+              <div class="field">
+                <label for="brandName">Brand Name</label>
+                <input id="brandName" name="brandName" placeholder="Customer-facing name" data-branding-field="brandName">
+              </div>
+              <div class="field">
+                <label for="legalName">Legal Name</label>
+                <input id="legalName" name="legalName" placeholder="Registered legal name" data-profile-field="legalName">
+              </div>
+              <div class="field">
+                <label for="tradingName">Trading Name</label>
+                <input id="tradingName" name="tradingName" placeholder="Trading as" data-profile-field="tradingName">
+              </div>
+              <div class="field">
+                <label for="primaryColor">Primary Color</label>
+                <input id="primaryColor" name="primaryColor" type="color" value="#2363ff" data-branding-field="primaryColor" data-preview-color>
+              </div>
+              <div class="field">
+                <label for="secondaryColor">Secondary Color</label>
+                <input id="secondaryColor" name="secondaryColor" type="color" value="#263ff1" data-branding-field="secondaryColor">
+              </div>
+              <div class="field">
+                <label for="supportEmail">Support Email</label>
+                <input id="supportEmail" name="supportEmail" type="email" placeholder="support@example.com" data-branding-field="supportEmail">
+              </div>
+              <div class="field">
+                <label for="supportPhone">Support Phone</label>
+                <input id="supportPhone" name="supportPhone" placeholder="Not set" data-branding-field="supportPhone">
+              </div>
+              <div class="field">
+                <label for="websiteUrl">Website</label>
+                <input id="websiteUrl" name="websiteUrl" type="url" placeholder="https://example.com" data-branding-field="websiteUrl">
+              </div>
+              <div class="field">
+                <label for="companyEmail">Company Email</label>
+                <input id="companyEmail" name="email" type="email" placeholder="office@example.com" data-profile-field="email">
+              </div>
+              <div class="field span-2">
+                <label for="address">Business Address</label>
+                <input id="address" name="address" placeholder="Not set" data-profile-field="address">
+              </div>
+              <div class="brand-preview span-2" data-brand-preview>
+                <div class="brand-preview-head">
+                  <div class="logo-preview small" data-preview-logo>FC</div>
+                  <div>
+                    <strong data-preview-title>FieldCore</strong>
+                    <small>Brand preview</small>
+                  </div>
+                </div>
+                <div class="brand-preview-bar" data-preview-bar></div>
+              </div>
+              <div class="form-actions span-2">
+                <button class="primary-button" type="submit">Save Company Details</button>
+              </div>
+              <p class="fc-form-error span-2" data-branding-message hidden></p>
+            </form>
+          </div>
+
+          <div class="panel settings-panel" data-settings-panel="jobs" data-required-permission="company.settings.manage" hidden>
+            <div class="panel-head">
+              <h2>Job Defaults</h2>
+              <span class="badge gray">Operations</span>
+            </div>
+            <form class="form-grid" data-job-defaults-form>
+              <div class="field">
+                <label for="jobDuration">Default Job Duration</label>
+                <select id="jobDuration" name="defaultJobDurationMinutes" data-scheduling-field="defaultJobDurationMinutes">
+                  <option value="60">1 hour</option>
+                  <option value="120">2 hours</option>
+                  <option value="240">4 hours</option>
+                  <option value="480">Full day</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="jobStatus">Default Job Status</label>
+                <select id="jobStatus" name="defaultJobStatus" data-scheduling-field="defaultJobStatus">
+                  <option value="NEW">NEW</option>
+                  <option value="SCHEDULED">SCHEDULED</option>
+                  <option value="ON_HOLD">ON HOLD</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="workdayStart">Workday Start</label>
+                <input id="workdayStart" name="workingDayStart" type="time" data-scheduling-field="workingDayStart">
+              </div>
+              <div class="field">
+                <label for="workdayEnd">Workday End</label>
+                <input id="workdayEnd" name="workingDayEnd" type="time" data-scheduling-field="workingDayEnd">
+              </div>
+              <div class="settings-checks span-2">
+                <label><input type="checkbox" name="requireCompletionNotes" data-scheduling-field="requireCompletionNotes"> Require completion notes</label>
+                <label><input type="checkbox" name="requireProofPhotos" data-scheduling-field="requireProofPhotos"> Require proof-of-work photos</label>
+              </div>
+              <div class="form-actions span-2">
+                <button class="primary-button" type="submit">Save Job Defaults</button>
+              </div>
+              <p class="fc-form-error span-2" data-job-defaults-message hidden></p>
+            </form>
+          </div>
+          <div class="panel settings-panel" data-settings-panel="scheduling" data-required-permission="company.settings.manage" hidden>
+            <div class="panel-head">
+              <h3>Scheduling Engine</h3>
+            </div>
+            <form class="form-grid" data-scheduling-form>
+              <div class="field">
+                <label for="defaultJobDurationMinutes">Default Duration</label>
+                <input id="defaultJobDurationMinutes" name="defaultJobDurationMinutes" type="number" min="1" data-scheduling-field="defaultJobDurationMinutes">
+              </div>
+              <div class="field">
+                <label for="defaultTravelBufferMinutes">Travel Buffer</label>
+                <input id="defaultTravelBufferMinutes" name="defaultTravelBufferMinutes" type="number" min="0" data-scheduling-field="defaultTravelBufferMinutes">
+              </div>
+              <div class="field">
+                <label for="workingDayStart">Working Day Start</label>
+                <input id="workingDayStart" name="workingDayStart" type="time" data-scheduling-field="workingDayStart">
+              </div>
+              <div class="field">
+                <label for="workingDayEnd">Working Day End</label>
+                <input id="workingDayEnd" name="workingDayEnd" type="time" data-scheduling-field="workingDayEnd">
+              </div>
+              <div class="field span-2">
+                <label for="timezone">Timezone</label>
+                <input id="timezone" name="timezone" type="text" data-scheduling-field="timezone">
+              </div>
+              <div class="settings-checks span-2">
+                <label><input type="checkbox" name="allowOverbooking" data-scheduling-field="allowOverbooking"> Allow admin overbooking</label>
+              </div>
+              <div class="form-actions span-2">
+                <button class="primary-button" type="submit">Save Scheduling</button>
+              </div>
+              <p class="fc-form-error span-2" data-scheduling-message hidden></p>
+            </form>
+            <form class="form-grid settings-subform" data-availability-form>
+              <div class="panel-head span-2">
+                <h3>Role Availability</h3>
+              </div>
+              <div class="field">
+                <label for="availabilityRoleId">Role</label>
+                <select id="availabilityRoleId" name="roleId" data-availability-role required></select>
+              </div>
+              <div class="field">
+                <label for="availabilityDayOfWeek">Day</label>
+                <select id="availabilityDayOfWeek" name="dayOfWeek" required>
+                  <option value="1">Monday</option>
+                  <option value="2">Tuesday</option>
+                  <option value="3">Wednesday</option>
+                  <option value="4">Thursday</option>
+                  <option value="5">Friday</option>
+                  <option value="6">Saturday</option>
+                  <option value="0">Sunday</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="availabilityStartTime">Start</label>
+                <input id="availabilityStartTime" name="startTime" type="time" value="08:00" required>
+              </div>
+              <div class="field">
+                <label for="availabilityEndTime">End</label>
+                <input id="availabilityEndTime" name="endTime" type="time" value="17:00" required>
+              </div>
+              <div class="form-actions span-2">
+                <button class="secondary-button" type="submit">Save Availability</button>
+              </div>
+              <p class="fc-form-error span-2" data-availability-message hidden></p>
+            </form>
+          </div>
+          <div class="panel settings-panel" data-settings-panel="billing" data-required-permission="settings.finance.manage" hidden>
+            <div class="panel-head">
+              <h2>Invoice &amp; Payment Defaults</h2>
+              <span class="badge gray">Customer billing</span>
+            </div>
+            <form class="form-grid" data-invoice-defaults-form>
+              <div class="field">
+                <label for="invoiceDefaultCurrency">Currency</label>
+                <select id="invoiceDefaultCurrency" name="defaultCurrency" data-finance-field="defaultCurrency">
+                  <option value="USD">USD — US Dollar</option>
+                  <option value="ZAR">ZAR — South African Rand</option>
+                  <option value="ZWG">ZWG — Zimbabwe Gold</option>
+                  <option value="GBP">GBP — Pound Sterling</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="invoicePaymentTermsDays">Default Payment Terms</label>
+                <select id="invoicePaymentTermsDays" name="paymentTermsDays" data-finance-field="paymentTermsDays">
+                  <option value="0">Due on receipt</option>
+                  <option value="7">Net 7</option>
+                  <option value="14">Net 14</option>
+                  <option value="30">Net 30</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="invoiceDefaultPrefix">Invoice Prefix</label>
+                <input id="invoiceDefaultPrefix" name="invoicePrefix" value="INV" data-finance-field="invoicePrefix">
+              </div>
+              <div class="field">
+                <label for="invoiceDefaultTaxRate">Default Tax Rate</label>
+                <input id="invoiceDefaultTaxRate" name="taxRate" type="number" min="0" step="0.01" placeholder="0.00" data-finance-field="taxRate">
+              </div>
+              <div class="field span-2">
+                <label for="invoiceDefaultFooter">Invoice Footer</label>
+                <textarea id="invoiceDefaultFooter" name="invoiceFooter" placeholder="Payment instructions or legal footer." data-finance-field="invoiceFooter"></textarea>
+              </div>
+              <div class="form-actions span-2">
+                <button class="primary-button" type="submit">Save Invoice Defaults</button>
+              </div>
+              <p class="fc-form-error span-2" data-invoice-defaults-message hidden></p>
+            </form>
+          </div>
+
+          <div class="panel settings-panel" data-settings-panel="finance" data-required-any-permission="settings.finance.manage,finance.exports.manage" hidden>
+            <div class="panel-head">
+              <div>
+                <h2>Finance &amp; Exports</h2>
+                <p class="muted">Set how this business invoices customers, accepts customer payments, and exports finance data.</p>
+              </div>
+              <span class="badge gray">Customer finance</span>
+            </div>
+            <form class="form-grid finance-user-form" data-finance-settings-form data-required-permission="settings.finance.manage">
+              <div class="form-section-title span-2">
+                <strong>Tax &amp; Invoice Defaults</strong>
+                <span>Used on quotes, customer invoices, receipts, payment pages, and exports.</span>
+              </div>
+              <div class="field">
+                <label for="financeCountry">Country / Market</label>
+                <select id="financeCountry" name="country" data-finance-field="country">
+                  <option value="ZW">Zimbabwe</option>
+                  <option value="ZA">South Africa</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="financeTimezone">Timezone</label>
+                <input id="financeTimezone" name="timezone" maxlength="80" placeholder="Africa/Harare" data-finance-field="timezone">
+              </div>
+              <div class="field">
+                <label for="financeDefaultCurrency">Default Invoice Currency</label>
+                <select id="financeDefaultCurrency" name="defaultCurrency" data-finance-field="defaultCurrency">
+                  <option value="USD">USD — US dollar</option>
+                  <option value="ZAR">ZAR — South African rand</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="financeTaxRate">Tax/VAT Rate %</label>
+                <input id="financeTaxRate" name="taxRate" type="number" min="0" max="100" step="0.01" data-finance-field="taxRate" placeholder="0.00">
+              </div>
+              <div class="field">
+                <label for="financeTaxName">Tax/VAT Label</label>
+                <input id="financeTaxName" name="taxName" placeholder="VAT" data-finance-field="taxName">
+              </div>
+              <div class="field toggle-field">
+                <label for="financePricesIncludeTaxToggle">Prices include tax</label>
+                <label class="switch-row" for="financePricesIncludeTaxToggle">
+                  <input id="financePricesIncludeTaxToggle" type="checkbox" name="pricesIncludeTax" data-finance-field="pricesIncludeTax">
+                  <span class="switch-control" aria-hidden="true"></span>
+                  <span class="switch-copy">Line item prices already include VAT/tax.</span>
+                </label>
+              </div>
+              <div class="field">
+                <label for="financeInvoicePrefix">Invoice Prefix</label>
+                <input id="financeInvoicePrefix" name="invoicePrefix" maxlength="20" placeholder="INV" data-finance-field="invoicePrefix">
+              </div>
+              <div class="field">
+                <label for="financeReceiptPrefix">Receipt Prefix</label>
+                <input id="financeReceiptPrefix" name="receiptPrefix" maxlength="20" placeholder="RCT" data-finance-field="receiptPrefix">
+              </div>
+              <div class="field">
+                <label for="financeQuoteExpiryDays">Quote Expiry Days</label>
+                <input id="financeQuoteExpiryDays" name="quoteExpiryDays" type="number" min="1" max="365" data-finance-field="quoteExpiryDays">
+              </div>
+              <div class="field">
+                <label for="financePaymentTermsDays">Customer Payment Terms Days</label>
+                <input id="financePaymentTermsDays" name="paymentTermsDays" type="number" min="0" max="365" data-finance-field="paymentTermsDays">
+              </div>
+
+              <div class="form-section-title span-2">
+                <strong>Customer Payment Options</strong>
+                <span>Only local digital payment providers are shown for the selected market.</span>
+              </div>
+              <input type="hidden" name="allowedPaymentMethods" data-finance-field="allowedPaymentMethods">
+              <div class="payment-method-picker span-2 compact-payment-picker" data-payment-method-picker>
+                <div class="payment-method-heading span-2" data-market-method="ALL">Offline and manual methods</div>
+                <label class="payment-method-option" data-market-method="ALL">
+                  <input type="checkbox" value="CASH" data-payment-method-option>
+                  <span><strong>Cash</strong><small>Record customer cash payments manually.</small></span>
+                </label>
+                <label class="payment-method-option" data-market-method="ALL">
+                  <input type="checkbox" value="BANK_TRANSFER" data-payment-method-option>
+                  <span><strong>Bank transfer</strong><small>Show bank transfer instructions and verify manually.</small></span>
+                </label>
+                <label class="payment-method-option" data-market-method="ALL">
+                  <input type="checkbox" value="EXTERNAL_PAYMENT_LINK" data-payment-method-option>
+                  <span><strong>External payment link</strong><small>Use a payment link created outside FieldCore.</small></span>
+                </label>
+                <label class="payment-method-option" data-market-method="ALL">
+                  <input type="checkbox" value="CUSTOM_MANUAL" data-payment-method-option>
+                  <span><strong>Other manual method</strong><small>Fallback for local or custom manual payments.</small></span>
+                </label>
+
+                <div class="payment-method-heading span-2" data-market-method="ZW">Zimbabwe digital payment provider</div>
+                <label class="payment-method-option" data-market-method="ZW">
+                  <input type="checkbox" value="PAYNOW" data-payment-method-option>
+                  <span><strong>Paynow</strong><small>Zimbabwe customer online payments.</small></span>
+                </label>
+
+                <div class="payment-method-heading span-2" data-market-method="SA">South African digital payment providers</div>
+                <label class="payment-method-option" data-market-method="SA">
+                  <input type="checkbox" value="OZOW" data-payment-method-option>
+                  <span><strong>Ozow</strong><small>South African instant EFT payments.</small></span>
+                </label>
+                <label class="payment-method-option" data-market-method="SA">
+                  <input type="checkbox" value="YOCO" data-payment-method-option>
+                  <span><strong>Yoco</strong><small>South African card and payment-link option.</small></span>
+                </label>
+                <label class="payment-method-option" data-market-method="SA">
+                  <input type="checkbox" value="PAYFAST" data-payment-method-option>
+                  <span><strong>PayFast</strong><small>South African online payments.</small></span>
+                </label>
+                <label class="payment-method-option" data-market-method="SA">
+                  <input type="checkbox" value="SNAPSCAN" data-payment-method-option>
+                  <span><strong>SnapScan</strong><small>South African QR/manual payment option.</small></span>
+                </label>
+              </div>
+              <div class="field span-2 toggle-field">
+                <label for="financeBankProofToggle">Bank transfer proof of payment</label>
+                <label class="switch-row" for="financeBankProofToggle">
+                  <input id="financeBankProofToggle" type="checkbox" name="bankTransferProofRequired" data-finance-field="bankTransferProofRequired">
+                  <span class="switch-control" aria-hidden="true"></span>
+                  <span class="switch-copy">Ask customers to upload/send proof of payment for bank transfers.</span>
+                </label>
+              </div>
+              <div class="field span-2">
+                <label for="financePaymentInstructions">Customer Payment Instructions</label>
+                <textarea id="financePaymentInstructions" name="paymentInstructions" data-finance-field="paymentInstructions" placeholder="Shown on customer invoices and payment pages. Example: Please use your invoice number as the bank transfer reference."></textarea>
+              </div>
+              <div class="field span-2">
+                <label for="financeInvoiceFooter">Invoice Footer</label>
+                <textarea id="financeInvoiceFooter" name="invoiceFooter" data-finance-field="invoiceFooter" placeholder="Optional legal note shown at the bottom of customer invoices."></textarea>
+              </div>
+              <div class="form-actions span-2">
+                <button class="primary-button" type="submit">Save Finance Settings</button>
+              </div>
+              <p class="fc-form-error span-2" data-finance-message hidden></p>
+            </form>
+            <div class="settings-subform span-2" data-payment-providers-card data-required-permission="settings.finance.manage">
+              <div class="panel-head"><div><h3>Online payments</h3><p class="muted">Connect the payment service used in your country.</p></div></div>
+              <div class="empty-state"><div><strong>Payment setup unavailable.</strong><span>Open this section to load payment options.</span></div></div>
+            </div>
+            <div class="table-card span-2" data-finance-export-card data-required-permission="finance.exports.manage">
+              <div class="panel-head card">
+                <div>
+                  <h3>Accounting Exports</h3>
+                  <p class="muted">Download CSV files for your accountant or import them into accounting software manually.</p>
+                </div>
+                <span class="badge gray">Manual CSV</span>
+              </div>
+              <div class="settings-list">
+                <a class="list-item" href="/api/finance/export/invoices.csv"><span class="initials">INV</span><div><strong>Export invoices</strong><small>Invoice numbers, customers, tax, totals, balances.</small></div><span class="badge gray">CSV</span></a>
+                <a class="list-item" href="/api/finance/export/payments.csv"><span class="initials">PAY</span><div><strong>Export payments</strong><small>Confirmed and pending payment records.</small></div><span class="badge gray">CSV</span></a>
+                <a class="list-item" href="/api/finance/export/receipts.csv"><span class="initials">RCT</span><div><strong>Export receipts</strong><small>Receipt numbers and issued amounts.</small></div><span class="badge gray">CSV</span></a>
+                <a class="list-item" href="/api/finance/export/customers.csv"><span class="initials">CUS</span><div><strong>Export customers</strong><small>Company-scoped customer directory.</small></div><span class="badge gray">CSV</span></a>
+              </div>
+            </div>
+            <div class="table-card span-2" data-finance-export-logs-card data-required-permission="finance.exports.manage">
+              <div class="panel-head card"><h3>Export Logs</h3><span class="badge gray">Audit</span></div>
+              <div class="empty-state"><div><strong>No export logs loaded.</strong><span>CSV exports will appear here.</span></div></div>
+            </div>
+          </div>
+
+          <div class="panel settings-panel" data-settings-panel="notifications" data-required-permission="notifications.view" hidden>
+            <div class="panel-head">
+              <h2>Sent Messages</h2>
+              <span class="badge gray">Messaging</span>
+            </div>
+            <form class="form-grid">
+              <div class="field">
+                <label for="senderEmail">Sender Email</label>
+                <input id="senderEmail" type="email" placeholder="dispatch@example.com">
+              </div>
+              <div class="field">
+                <label for="senderName">Sender Name</label>
+                <input id="senderName" placeholder="Dispatch Team">
+              </div>
+            </form>
+            <div class="table-card span-2" data-notification-log-card>
+              <div class="panel-head card">
+                <h3>Recent Notifications</h3>
+                <span class="badge gray" data-notification-log-count>0</span>
+              </div>
+              <div class="notification-filters">
+                <label>
+                  <span>Channel</span>
+                  <select data-notification-channel-filter aria-label="Notification channel">
+                    <option value="">All channels</option>
+                    <option value="EMAIL">Email</option>
+                    <option value="WHATSAPP">WhatsApp</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Status</span>
+                  <select data-notification-status-filter aria-label="Notification status">
+                    <option value="">All statuses</option>
+                    <option value="SENT">Sent</option>
+                    <option value="FAILED">Failed</option>
+                    <option value="SKIPPED">Skipped</option>
+                  </select>
+                </label>
+              </div>
+              <div class="empty-state">
+                <div><strong>No notifications logged yet.</strong><span>Business event delivery attempts will appear here.</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel settings-panel" data-settings-panel="integrations" data-required-any-permission="integration.view,integration.manage" hidden>
+            <div class="panel-head">
+              <h2>Connected Apps</h2>
+              <span class="badge gray">Connect</span>
+            </div>
+            <div class="settings-list" data-integrations-card>
+              <div class="empty-state"><div><strong>Integrations unavailable.</strong><span>Open this panel to load provider settings.</span></div></div>
+            </div>
+            <div class="table-card span-2" data-message-log-card>
+              <div class="panel-head card"><h3>Message Logs</h3><span class="badge gray">Provider</span></div>
+              <div class="empty-state"><div><strong>No provider messages loaded.</strong><span>Message attempts will appear here.</span></div></div>
+            </div>
+            <div class="table-card span-2" data-storage-usage-card>
+              <div class="panel-head card"><h3>Storage Usage</h3><span class="badge gray">R2</span></div>
+              <div class="empty-state"><div><strong>No storage usage loaded.</strong><span>Cloud file usage will appear here.</span></div></div>
+            </div>
+          </div>
+
+          <div class="panel settings-panel" data-settings-panel="admin-tools" data-required-permission="audit.view" hidden>
+            <div class="panel-head">
+              <h2>Company Activity</h2>
+              <span class="badge blue">Production</span>
+            </div>
+            <div class="table-card span-2" data-audit-log-card>
+              <div class="panel-head card"><h3>Recent Audit Logs</h3><span class="badge gray" data-audit-log-count>0</span></div>
+              <div class="empty-state"><div><strong>No audit logs loaded.</strong><span>Recent admin and system actions will appear here.</span></div></div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+    </section>
+  </body>
+</html>

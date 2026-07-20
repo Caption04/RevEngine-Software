@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldCore Approvals</title>
+    <link rel="stylesheet" href="assets/app.css?v=ux-stabilization-1">
+    <script defer src="assets/ui-feedback.js"></script>
+    <script defer src="assets/layout.js"></script>
+    <script defer src="assets/enterprise-pages.js?v=ux-stabilization-1"></script>
+  </head>
+  <body data-page="approvals" data-title="Approvals">
+    <section class="page">
+      <div class="hero-row">
+        <div class="hero-copy"><p class="eyebrow">Risk gates</p><h2>Enterprise approvals</h2><p>Use approvals for sensitive actions: voiding invoices, refunds, purchase orders, stock adjustments, high discounts, SLA waivers, or reassignment after dispatch.</p></div>
+        <span class="api-status" data-status>Loading...</span>
+      </div>
+      <section class="grid three compact-guide-grid">
+        <article class="card"><h3>Policy</h3><p class="muted">Define which event needs approval and which role must approve it.</p></article>
+        <article class="card"><h3>Queue</h3><p class="muted">Review pending requests and approve/reject them with an audit trail.</p></article>
+        <article class="card"><h3>Execution</h3><p class="muted">Approved actions can be executed once so risky work is not duplicated.</p></article>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h3>Create manual approval request</h3><span class="badge gray">Admin</span></div>
+        <form class="form-grid" data-approval-form>
+          <div class="field"><label>Entity type</label><input name="entityType" required placeholder="PurchaseOrder"></div>
+          <div class="field"><label>Entity ID</label><input name="entityId" required placeholder="po_123"></div>
+          <div class="field"><label>Event type</label><select name="eventType"><option>QUOTE_DISCOUNT</option><option>QUOTE_SEND</option><option>INVOICE_DISCOUNT</option><option>INVOICE_VOID</option><option>PAYMENT_REFUND</option><option>PURCHASE_ORDER_SEND</option><option>PURCHASE_ORDER_APPROVE</option><option>STOCK_ADJUSTMENT</option><option>JOB_RESCHEDULE</option><option>JOB_REASSIGN_AFTER_DISPATCH</option><option>SLA_WAIVE</option><option>CONTRACT_CANCEL</option></select></div>
+          <div class="field"><label>Action key</label><input name="actionKey" placeholder="invoice.void"></div>
+          <div class="field"><label>Amount</label><input name="amount" type="number" step="0.01" min="0"></div>
+          <div class="field"><label>Reason</label><input name="reason" placeholder="Why approval is needed"></div>
+          <div class="form-actions span-2"><button type="submit" class="primary-button">Request approval</button></div>
+        </form>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h3>Approval policy</h3><span class="badge gray">Rules</span></div>
+        <form class="form-grid" data-policy-form>
+          <div class="field"><label>Name</label><input name="name" required placeholder="Invoice void approval"></div>
+          <div class="field"><label>Event type</label><select name="eventType"><option>INVOICE_VOID</option><option>PAYMENT_REFUND</option><option>PURCHASE_ORDER_SEND</option><option>STOCK_ADJUSTMENT</option><option>JOB_REASSIGN_AFTER_DISPATCH</option><option>CONTRACT_CANCEL</option></select></div>
+          <div class="field"><label>Threshold amount</label><input name="thresholdAmount" type="number" step="0.01" min="0" value="0"></div>
+          <div class="field"><label>Required role</label><select name="requiredApproverRole"><option>OWNER</option><option>ADMIN</option></select></div>
+          <div class="field"><label>Reason required</label><select name="reasonRequired"><option value="true">Yes</option><option value="false">No</option></select></div>
+          <div class="field"><label>Allow self approval</label><select name="allowSelfApproval"><option value="false">No</option><option value="true">Yes</option></select></div>
+          <div class="form-actions span-2"><button type="submit" class="primary-button">Save policy</button></div>
+        </form>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h3>Pending approvals</h3><button class="secondary-button compact" type="button" data-refresh>Refresh</button></div>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>Event</th><th>Entity</th><th>Reason</th><th>Requested</th><th>Action</th></tr></thead><tbody data-approvals></tbody></table></div>
+      </section>
+    </section>
+  </body>
+</html>
