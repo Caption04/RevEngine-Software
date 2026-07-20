@@ -14,6 +14,7 @@ const { sendEmail } = require('../services/emailProvider.service');
 const { billingSummary, cancelSubscription, changePlan, createCheckout, selectMockPlan } = require('../services/saasBilling.service');
 const { reportCsv, reportData } = require('../services/reporting.service');
 const { analyticsCsv, buildExecutiveAnalytics } = require('../services/executiveAnalytics.service');
+const { buildDispatchBoard } = require('../services/dispatch.service');
 const { billingCatalog, canUseFeature, getUsage, listPlans, requireFeature, requirePlanLimit } = require('../services/subscription.service');
 const { FULL_ACCESS_ONLY_PERMISSION_KEYS, PERMISSION_CATALOG, PERMISSION_DEPENDENCIES, PERMISSION_GROUPS, defaultPermissionBundles, delegatablePermissionKeys, effectiveAccessForUser, expandPermissionDependencies, hasFullBusinessAccess, isSubset, permissionKeys, scopeContains, uniquePermissions } = require('../services/accessControl.service');
 const { getStorageObjectForCompany, readStorageObject, storeUploadedFile } = require('../services/integrations/storage.service');
@@ -91,6 +92,8 @@ const jobStatusValues = ['NEW', 'SCHEDULED', 'DISPATCHED', 'ARRIVED', 'IN_PROGRE
 const activityTypeValues = ['ASSIGNED','ARRIVED','STARTED','PAUSED','RESUMED','COMPLETED','ADMIN_NOTE','STATUS_CHANGED','PROOF_PHOTO_ADDED','PROOF_PHOTO_REMOVED','SIGNATURE_ADDED','SIGNATURE_REMOVED','COMPLETION_LOCATION_CAPTURED'];
 const proofCategoryValues = ['BEFORE', 'AFTER', 'GENERAL', 'DAMAGE', 'ISSUE', 'EXTRA_WORK', 'CUSTOMER_APPROVAL'];
 const bookingRequestStatusValues = ['NEW', 'REVIEWED', 'CONVERTED', 'DECLINED', 'CANCELLED'];
+const leadStatusValues = ['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTED', 'WON', 'LOST'];
+const leadActivityTypeValues = ['NOTE', 'FOLLOW_UP', 'STATUS_CHANGE'];
 const integrationProviderValues = ['BREVO', 'META_WHATSAPP_CLOUD', 'CLICKATELL', 'AFRICAS_TALKING', 'CLOUDFLARE_R2'];
 const integrationChannelValues = ['EMAIL', 'WHATSAPP', 'SMS', 'STORAGE'];
 const assetStatusValues = ['ACTIVE', 'INACTIVE', 'UNDER_REPAIR', 'RETIRED'];
@@ -346,6 +349,13 @@ function customerScopeWhere(req) {
   return { jobs: { some: { workerId: req.user.worker ? req.user.worker.id : '__none__' } } };
 }
 
+function leadScopeWhere(req) {
+  const access = req.effectiveAccess || { scopeType: req.user.role === 'WORKER' ? 'SELF' : 'COMPANY', branchIds: [] };
+  if (access.scopeType === 'COMPANY') return {};
+  if (access.scopeType === 'BRANCH') return { branchId: { in: access.branchIds.length ? access.branchIds : ['__none__'] } };
+  return { id: '__none__' };
+}
+
 function workerProfileScopeWhere(req) {
   const access = req.effectiveAccess || { scopeType: req.user.role === 'WORKER' ? 'SELF' : 'COMPANY', branchIds: [], teamIds: [] };
   if (access.scopeType === 'COMPANY') return {};
@@ -459,6 +469,12 @@ async function requireApprovalOrProceed(req, config) {
 async function requireCustomer(req, id) {
   const record = await prisma.customer.findFirst({ where: { id, companyId: req.companyId, ...customerScopeWhere(req) } });
   if (!record) throw notFound('Customer not found');
+  return record;
+}
+
+async function requireLead(req, id) {
+  const record = await prisma.lead.findFirst({ where: { id, companyId: req.companyId, ...leadScopeWhere(req) }, include: leadInclude });
+  if (!record) throw notFound('Lead not found');
   return record;
 }
 
@@ -1237,6 +1253,13 @@ async function validateInvoiceRelations(req, body) {
   if (body.jobId) await requireJob(req, body.jobId, { assignedOnly: false });
 }
 
+const leadInclude = {
+  branch: true,
+  customer: true,
+  service: true,
+  assignedTo: { select: SAFE_USER_SELECT },
+  activities: { include: { createdBy: { select: SAFE_USER_SELECT } }, orderBy: { createdAt: 'desc' }, take: 20 }
+};
 const jobInclude = { customer: true, service: true, contract: true, worker: { include: SAFE_WORKER_INCLUDE }, jobAssets: { include: { asset: true } } };
 const jobDetailInclude = { ...jobInclude, completedBy: { select: { id: true, companyId: true, name: true, email: true, role: true } }, proofPhotos: { orderBy: { createdAt: 'desc' } }, signature: true, completionLocation: true };
 const jobActivityInclude = { worker: { include: SAFE_WORKER_INCLUDE }, user: { select: { id: true, companyId: true, email: true, name: true, role: true, createdAt: true, updatedAt: true } } };
@@ -3628,6 +3651,8 @@ router.use(asyncHandler(async (req, res, next) => {
 
 const resourcePermissionRules = [
   // Put action-specific rules before broad resource rules.
+  { method: 'POST', pattern: /^\/leads\/[^/]+\/convert$/, permission: 'leads.convert' },
+  { method: 'POST', pattern: /^\/leads\/[^/]+\/activities(?:\/[^/]+\/complete)?$/, permission: 'leads.edit' },
   { method: 'POST', pattern: /^\/jobs\/[^/]+\/assign-worker$/, permission: 'jobs.assign' },
   { method: 'POST', pattern: /^\/booking-requests\/[^/]+\/(?:review|decline|convert|create-quote)$/, permission: 'bookings.manage' },
   { method: 'POST', pattern: /^\/jobs\/[^/]+\/(?:schedule|reschedule|unschedule)$/, permission: 'schedule.manage' },
@@ -3696,6 +3721,10 @@ const resourcePermissionRules = [
   { method: 'DELETE', pattern: /^\/purchase-orders(?:\/|$)/, permission: 'purchaseOrder.manage' },
   { method: 'POST', pattern: /^\/jobs\/[^/]+\/sla\/(?:evaluate|waive)$/, permission: 'contract.sla.override' },
 
+  { method: 'GET', pattern: /^\/leads(?:\/|$)/, permission: 'leads.view' },
+  { method: 'POST', pattern: /^\/leads$/, permission: 'leads.create' },
+  { method: 'PATCH', pattern: /^\/leads\/[^/]+$/, permission: 'leads.edit' },
+  { method: 'GET', pattern: /^\/dispatch\/board$/, permission: 'schedule.view' },
   { method: 'GET', pattern: /^\/customers(?:\/|$)/, permission: 'customers.view' },
   { method: 'POST', pattern: /^\/customers$/, permission: 'customers.create' },
   { method: 'PATCH', pattern: /^\/customers\//, permission: 'customers.edit' },
@@ -4915,19 +4944,42 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
   ]);
 
   const totals = { jobsToday, activeWorkers };
+  const canViewLeads = access.permissions.includes('leads.view');
+  const hasLeadStore = prisma.lead && typeof prisma.lead.groupBy === 'function';
   let pipeline;
+  const [leadRows, quoteRows, unpaid] = await Promise.all([
+    canViewLeads && hasLeadStore
+      ? prisma.lead.groupBy({ by: ['status'], where: { companyId, ...leadScopeWhere(req), ...branchWhere }, _count: true })
+      : Promise.resolve([]),
+    canFinancial
+      ? prisma.quote.groupBy({ by: ['status'], where: { ...financeWhere, deletedAt: null }, _count: true })
+      : Promise.resolve([]),
+    canFinancial
+      ? prisma.invoice.findMany({ where: { ...financeWhere, status: { in: ['SENT', 'OVERDUE'] } }, select: { amount: true } })
+      : Promise.resolve([])
+  ]);
+
   if (canFinancial) {
-    const [pipelineRows, unpaid] = await Promise.all([
-      prisma.quote.groupBy({ by: ['status'], where: { ...financeWhere, deletedAt: null }, _count: true }),
-      prisma.invoice.findMany({ where: { ...financeWhere, status: { in: ['SENT', 'OVERDUE'] } }, select: { amount: true } })
-    ]);
     totals.revenueMonthToDate = 0;
     totals.unpaidInvoices = unpaid.reduce((sum, invoice) => sum + Number(invoice.amount), 0);
+  }
+
+  if (leadRows.length || canViewLeads && hasLeadStore) {
     pipeline = { leads: 0, quoted: 0, won: 0 };
-    for (const item of pipelineRows) {
-      if (item.status === 'DRAFT') pipeline.leads += item._count;
-      if (item.status === 'SENT') pipeline.quoted += item._count;
-      if (item.status === 'ACCEPTED') pipeline.won += item._count;
+    for (const item of leadRows) {
+      const count = Number(item._count && (item._count._all || item._count.id) || item._count || 0);
+      if (['NEW', 'CONTACTED', 'QUALIFIED'].includes(item.status)) pipeline.leads += count;
+      if (item.status === 'QUOTED') pipeline.quoted += count;
+      if (item.status === 'WON') pipeline.won += count;
+    }
+  } else if (canFinancial) {
+    // Preserve the older quote-only pipeline for installs that have not migrated yet.
+    pipeline = { leads: 0, quoted: 0, won: 0 };
+    for (const item of quoteRows) {
+      const count = Number(item._count && (item._count._all || item._count.id) || item._count || 0);
+      if (item.status === 'DRAFT') pipeline.leads += count;
+      if (item.status === 'SENT') pipeline.quoted += count;
+      if (item.status === 'ACCEPTED') pipeline.won += count;
     }
   }
 
@@ -5939,6 +5991,296 @@ router.delete('/customers/:id', validate(idParam, 'params'), asyncHandler(async 
   await prisma.customer.delete({ where: { id: req.params.id } });
   await audit(req, 'DELETE', 'Customer', req.params.id);
   sendData(res, { deleted: true });
+}));
+
+
+const leadSchema = z.object({
+  branchId: optionalText(160),
+  customerId: optionalText(160),
+  serviceId: optionalText(160),
+  assignedToId: optionalText(160),
+  name: z.string().trim().min(2).max(200),
+  companyName: optionalText(200),
+  email: optionalEmail,
+  phone: optionalText(80),
+  address: optionalText(500),
+  serviceNeed: optionalText(1000),
+  source: optionalText(120),
+  status: z.enum(leadStatusValues).optional(),
+  notes: optionalText(3000),
+  nextFollowUpAt: optionalDate,
+  lastContactedAt: optionalDate,
+  lostReason: optionalText(1000)
+});
+const leadActivitySchema = z.object({
+  type: z.enum(leadActivityTypeValues).default('NOTE'),
+  note: z.string().trim().min(1).max(2000),
+  dueAt: optionalDate
+});
+const leadConvertSchema = z.object({
+  target: z.enum(['CUSTOMER', 'QUOTE', 'JOB']),
+  title: optionalText(240),
+  amount: z.coerce.number().nonnegative().optional(),
+  serviceId: optionalText(160)
+});
+
+async function validateLeadRelations(req, body) {
+  if (body.branchId) await requireBranch(req, body.branchId);
+  if (body.customerId) await requireCustomer(req, body.customerId);
+  if (body.serviceId) await requireService(req, body.serviceId);
+  if (body.assignedToId) await requireCompanyUser(req, body.assignedToId);
+}
+
+async function customerForLead(tx, req, lead) {
+  if (lead.customerId) {
+    const existing = await tx.customer.findFirst({ where: { id: lead.customerId, companyId: req.companyId } });
+    if (existing) return existing;
+  }
+
+  const contactMatches = [];
+  if (lead.email) contactMatches.push({ email: lead.email });
+  if (lead.phone) contactMatches.push({ phone: lead.phone });
+  const existing = contactMatches.length
+    ? await tx.customer.findFirst({ where: { companyId: req.companyId, OR: contactMatches } })
+    : null;
+  if (existing) return existing;
+
+  return tx.customer.create({
+    data: {
+      companyId: req.companyId,
+      branchId: lead.branchId || undefined,
+      name: lead.name,
+      email: lead.email || undefined,
+      phone: lead.phone || undefined,
+      address: lead.address || undefined,
+      notes: lead.notes || lead.serviceNeed || undefined
+    }
+  });
+}
+
+router.get('/leads', asyncHandler(async (req, res) => {
+  if (req.query.branchId) await requireBranch(req, String(req.query.branchId));
+  const status = req.query.status && String(req.query.status).toUpperCase();
+  if (status && status !== 'ALL' && !leadStatusValues.includes(status)) throw new AppError(400, 'Invalid lead status');
+  const query = String(req.query.q || '').trim();
+  const where = {
+    companyId: req.companyId,
+    ...leadScopeWhere(req),
+    ...branchFilterFromQuery(req),
+    ...(status && status !== 'ALL' ? { status } : {}),
+    ...(query ? {
+      OR: [
+        { name: { contains: query, mode: 'insensitive' } },
+        { companyName: { contains: query, mode: 'insensitive' } },
+        { email: { contains: query, mode: 'insensitive' } },
+        { phone: { contains: query, mode: 'insensitive' } },
+        { serviceNeed: { contains: query, mode: 'insensitive' } }
+      ]
+    } : {})
+  };
+  const result = await paged(prisma.lead, req, { where, include: leadInclude, orderBy: [{ nextFollowUpAt: 'asc' }, { createdAt: 'desc' }] });
+  sendData(res, normalize(result.data), 200, result.meta);
+}));
+
+router.post('/leads', validate(leadSchema), asyncHandler(async (req, res) => {
+  await validateLeadRelations(req, req.body);
+  const data = await prisma.$transaction(async (tx) => {
+    const lead = await tx.lead.create({
+      data: {
+        ...req.body,
+        companyId: req.companyId,
+        status: req.body.status || 'NEW',
+        lastContactedAt: req.body.status === 'CONTACTED' ? (req.body.lastContactedAt || new Date()) : req.body.lastContactedAt
+      }
+    });
+    if (req.body.notes) {
+      await tx.leadActivity.create({ data: { companyId: req.companyId, leadId: lead.id, createdById: req.user.id, type: 'NOTE', note: req.body.notes } });
+    }
+    return tx.lead.findUnique({ where: { id: lead.id }, include: leadInclude });
+  });
+  await audit(req, 'CREATE', 'Lead', data.id);
+  sendData(res, normalize(data), 201);
+}));
+
+router.get('/leads/:id', validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  sendData(res, normalize(await requireLead(req, req.params.id)));
+}));
+
+router.patch('/leads/:id', validate(idParam, 'params'), validate(leadSchema.partial()), asyncHandler(async (req, res) => {
+  const existing = await requireLead(req, req.params.id);
+  await validateLeadRelations(req, req.body);
+  if (req.body.status === 'LOST' && !(req.body.lostReason || existing.lostReason)) throw new AppError(400, 'Add a short reason before marking this lead as lost.');
+  const changedStatus = req.body.status && req.body.status !== existing.status;
+  const data = await prisma.$transaction(async (tx) => {
+    await tx.lead.update({
+      where: { id: existing.id },
+      data: {
+        ...req.body,
+        lastContactedAt: req.body.status === 'CONTACTED' && !req.body.lastContactedAt ? new Date() : req.body.lastContactedAt
+      }
+    });
+    if (changedStatus) {
+      await tx.leadActivity.create({
+        data: {
+          companyId: req.companyId,
+          leadId: existing.id,
+          createdById: req.user.id,
+          type: 'STATUS_CHANGE',
+          note: `Status changed from ${existing.status} to ${req.body.status}`
+        }
+      });
+    }
+    return tx.lead.findUnique({ where: { id: existing.id }, include: leadInclude });
+  });
+  await audit(req, 'UPDATE', 'Lead', data.id, { status: data.status });
+  sendData(res, normalize(data));
+}));
+
+router.post('/leads/:id/activities', validate(idParam, 'params'), validate(leadActivitySchema), asyncHandler(async (req, res) => {
+  const lead = await requireLead(req, req.params.id);
+  const data = await prisma.$transaction(async (tx) => {
+    const activity = await tx.leadActivity.create({
+      data: {
+        companyId: req.companyId,
+        leadId: lead.id,
+        createdById: req.user.id,
+        type: req.body.type,
+        note: req.body.note,
+        dueAt: req.body.dueAt
+      }
+    });
+    const leadUpdate = {};
+    if (req.body.type === 'FOLLOW_UP' && req.body.dueAt) leadUpdate.nextFollowUpAt = req.body.dueAt;
+    if (req.body.type === 'NOTE') leadUpdate.lastContactedAt = new Date();
+    if (Object.keys(leadUpdate).length) await tx.lead.update({ where: { id: lead.id }, data: leadUpdate });
+    return activity;
+  });
+  await audit(req, 'CREATE', 'LeadActivity', data.id, { leadId: lead.id, type: data.type });
+  sendData(res, normalize(data), 201);
+}));
+
+router.post('/leads/:id/activities/:activityId/complete', validate(z.object({ id: z.string().min(1), activityId: z.string().min(1) }), 'params'), asyncHandler(async (req, res) => {
+  const lead = await requireLead(req, req.params.id);
+  const activity = await prisma.leadActivity.findFirst({ where: { id: req.params.activityId, leadId: lead.id, companyId: req.companyId } });
+  if (!activity) throw notFound('Lead activity not found');
+  const data = await prisma.$transaction(async (tx) => {
+    const updated = await tx.leadActivity.update({ where: { id: activity.id }, data: { completedAt: activity.completedAt || new Date() } });
+    if (activity.dueAt && lead.nextFollowUpAt && new Date(activity.dueAt).getTime() === new Date(lead.nextFollowUpAt).getTime()) {
+      const next = await tx.leadActivity.findFirst({ where: { companyId: req.companyId, leadId: lead.id, type: 'FOLLOW_UP', completedAt: null, id: { not: activity.id } }, orderBy: { dueAt: 'asc' } });
+      await tx.lead.update({ where: { id: lead.id }, data: { nextFollowUpAt: next && next.dueAt || null } });
+    }
+    return updated;
+  });
+  await audit(req, 'COMPLETE', 'LeadActivity', data.id, { leadId: lead.id });
+  sendData(res, normalize(data));
+}));
+
+router.post('/leads/:id/convert', validate(idParam, 'params'), validate(leadConvertSchema), asyncHandler(async (req, res) => {
+  const lead = await requireLead(req, req.params.id);
+  if (lead.status === 'LOST') throw new AppError(409, 'Restore this lead before turning it into work.');
+  if (req.body.target === 'CUSTOMER') await requirePermission(req, 'customers.create');
+  if (req.body.target === 'QUOTE') await requirePermission(req, 'quotes.create');
+  if (req.body.target === 'JOB') {
+    await requirePermission(req, 'jobs.create');
+    await requirePlanLimit(req.companyId, 'maxJobsPerMonth');
+  }
+
+  const selectedServiceId = req.body.serviceId || lead.serviceId;
+  const service = selectedServiceId ? await requireService(req, selectedServiceId) : null;
+  const settings = req.body.target === 'JOB' ? await getSchedulingSettings(req.companyId) : null;
+  const finance = req.body.target === 'QUOTE' ? await getCompanyFinanceSettings(req.companyId) : null;
+  const proofDefaults = settings ? {
+    requiresProofPhotos: Boolean(settings.requireProofPhotos),
+    requiresBeforePhotos: Boolean(settings.requireBeforePhotos),
+    requiresAfterPhotos: Boolean(settings.requireAfterPhotos),
+    requiresLocation: Boolean(settings.requireLocation),
+    minimumProofPhotos: settings.requireProofPhotos ? 1 : 0
+  } : null;
+  if (proofDefaults && Object.values(proofDefaults).some(Boolean)) await requireFeature(req.companyId, 'proofOfWork');
+
+  const result = await prisma.$transaction(async (tx) => {
+    const customer = await customerForLead(tx, req, lead);
+    let quote = null;
+    let job = null;
+    let nextStatus = lead.status;
+
+    if (req.body.target === 'QUOTE') {
+      const amountValue = req.body.amount == null ? Number(service && service.price || 0) : Number(req.body.amount);
+      const quoteTitle = req.body.title || lead.serviceNeed || `Quote for ${lead.name}`;
+      quote = await tx.quote.create({
+        data: {
+          companyId: req.companyId,
+          branchId: lead.branchId || undefined,
+          customerId: customer.id,
+          serviceId: selectedServiceId || undefined,
+          title: quoteTitle,
+          description: lead.notes || lead.serviceNeed || undefined,
+          status: 'DRAFT',
+          validUntil: addDaysFromNow(financeLocalization(finance).quoteExpiryDays)
+        }
+      });
+      await tx.quoteLineItem.create({
+        data: {
+          ...moneyLine({ quantity: 1, unitPrice: amountValue, discountAmount: 0, taxAmount: 0 }),
+          companyId: req.companyId,
+          quoteId: quote.id,
+          serviceId: selectedServiceId || undefined,
+          description: quoteTitle,
+          sortOrder: 0
+        }
+      });
+      await addQuoteStatusHistory(tx, req, { ...quote, status: null }, 'DRAFT', 'Created from lead');
+      quote = await recalcQuote(tx, req.companyId, quote.id);
+      nextStatus = 'QUOTED';
+    }
+
+    if (req.body.target === 'JOB') {
+      const jobTitle = req.body.title || lead.serviceNeed || `Job for ${lead.name}`;
+      job = await tx.job.create({
+        data: {
+          companyId: req.companyId,
+          branchId: lead.branchId || undefined,
+          customerId: customer.id,
+          serviceId: selectedServiceId || undefined,
+          title: jobTitle,
+          description: lead.notes || lead.serviceNeed || undefined,
+          status: 'NEW',
+          durationMinutes: settings.defaultJobDurationMinutes,
+          travelBufferMinutes: settings.defaultTravelBufferMinutes,
+          ...proofDefaults,
+          total: service && service.price || 0
+        },
+        include: jobInclude
+      });
+      nextStatus = 'WON';
+    }
+
+    if (req.body.target === 'CUSTOMER' && ['NEW', 'CONTACTED'].includes(lead.status)) nextStatus = 'QUALIFIED';
+
+    const updatedLead = await tx.lead.update({
+      where: { id: lead.id },
+      data: {
+        customerId: customer.id,
+        convertedCustomerId: customer.id,
+        convertedQuoteId: quote && quote.id || lead.convertedQuoteId,
+        convertedJobId: job && job.id || lead.convertedJobId,
+        status: nextStatus
+      }
+    });
+    await tx.leadActivity.create({
+      data: {
+        companyId: req.companyId,
+        leadId: lead.id,
+        createdById: req.user.id,
+        type: 'STATUS_CHANGE',
+        note: req.body.target === 'CUSTOMER' ? 'Customer record created or linked' : req.body.target === 'QUOTE' ? 'Quote created from lead' : 'Job created from lead'
+      }
+    });
+    const fullLead = await tx.lead.findUnique({ where: { id: updatedLead.id }, include: leadInclude });
+    return { lead: fullLead, customer, quote, job };
+  });
+  await audit(req, 'CONVERT', 'Lead', lead.id, { target: req.body.target, customerId: result.customer.id, quoteId: result.quote && result.quote.id, jobId: result.job && result.job.id });
+  sendData(res, normalize(result), 201);
 }));
 
 const assetSchema = z.object({
@@ -8403,6 +8745,53 @@ router.patch('/company/scheduling-settings', requireRole(...adminRoles), validat
 router.post('/schedule/check-conflicts', validate(conflictCheckSchema), asyncHandler(async (req, res) => {
   const result = await checkScheduleConflicts(req, req.body);
   sendData(res, normalize({ hasConflict: result.hasConflict, conflicts: result.conflicts }));
+}));
+
+router.get('/dispatch/board', requireRole(...adminRoles), asyncHandler(async (req, res) => {
+  if (req.query.branchId) await requireBranch(req, String(req.query.branchId));
+  const branchWhere = branchFilterFromQuery(req);
+  const now = new Date();
+  const horizon = addMinutes(now, 31 * 24 * 60);
+  const jobWhere = {
+    companyId: req.companyId,
+    ...workerJobScope(req),
+    ...branchWhere,
+    status: { notIn: ['COMPLETED', 'CANCELLED'] }
+  };
+  const workerWhere = { companyId: req.companyId, active: true, ...workerProfileScopeWhere(req), ...branchWhere };
+  const [settings, jobs, workers, scheduleItems] = await Promise.all([
+    getSchedulingSettings(req.companyId),
+    prisma.job.findMany({ where: jobWhere, include: { customer: true, service: true, worker: { include: SAFE_WORKER_INCLUDE } }, orderBy: [{ scheduledStart: 'asc' }, { createdAt: 'asc' }], take: 200 }),
+    prisma.workerProfile.findMany({ where: workerWhere, include: SAFE_WORKER_INCLUDE, orderBy: { createdAt: 'asc' }, take: 200 }),
+    prisma.scheduleItem.findMany({ where: { companyId: req.companyId, status: { in: activeScheduleStatuses }, startsAt: { lt: horizon }, ...scheduleScopeWhere(req) }, select: { id: true, workerId: true, jobId: true, startsAt: true, endsAt: true, status: true, travelBufferMinutes: true }, orderBy: { startsAt: 'asc' }, take: 1000 })
+  ]);
+
+  const workerIds = workers.map((worker) => worker.id);
+  const roleIds = [...new Set(workers.map((worker) => worker.roleId).filter(Boolean))];
+  const canViewWorkerLocations = await hasPermission(req, 'workers.location.view');
+  const [workerAvailability, roleAvailability, timeOff, serviceExperience, latestLocations] = await Promise.all([
+    workerIds.length ? prisma.workerAvailability.findMany({ where: { companyId: req.companyId, workerId: { in: workerIds }, active: true } }) : Promise.resolve([]),
+    roleIds.length ? prisma.roleAvailability.findMany({ where: { companyId: req.companyId, roleId: { in: roleIds }, active: true } }) : Promise.resolve([]),
+    workerIds.length ? prisma.workerTimeOff.findMany({ where: { companyId: req.companyId, workerId: { in: workerIds }, status: 'APPROVED', endsAt: { gte: now }, startsAt: { lte: horizon } } }) : Promise.resolve([]),
+    workerIds.length ? prisma.job.groupBy({ by: ['workerId', 'serviceId'], where: { companyId: req.companyId, workerId: { in: workerIds }, serviceId: { not: null }, status: 'COMPLETED', ...workerJobScope(req), ...branchWhere }, _count: { _all: true } }) : Promise.resolve([]),
+    workerIds.length && canViewWorkerLocations
+      ? prisma.workerLocation.findMany({ where: { companyId: req.companyId, workerId: { in: workerIds }, ...workerLocationScopeWhere(req) }, orderBy: { recordedAt: 'desc' }, take: Math.min(workerIds.length * 5, 1000) })
+      : Promise.resolve([])
+  ]);
+
+  const board = buildDispatchBoard({
+    now,
+    settings,
+    jobs,
+    workers,
+    scheduleItems,
+    workerAvailability,
+    roleAvailability,
+    timeOff,
+    serviceExperience,
+    latestLocations
+  });
+  sendData(res, normalize(board));
 }));
 
 router.get('/schedule/calendar', asyncHandler(async (req, res) => {

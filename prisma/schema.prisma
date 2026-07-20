@@ -234,6 +234,21 @@ enum BookingRequestStatus {
   CANCELLED
 }
 
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  QUOTED
+  WON
+  LOST
+}
+
+enum LeadActivityType {
+  NOTE
+  FOLLOW_UP
+  STATUS_CHANGE
+}
+
 enum ClientAccountStatus {
   ACTIVE
   DISABLED
@@ -560,6 +575,8 @@ model Company {
   scheduleConflicts                 ScheduleConflict[]
   recurringJobRules                 RecurringJobRule[]
   bookingRequests                   BookingRequest[]
+  leads                             Lead[]
+  leadActivities                    LeadActivity[]
   bookingRequestPhotos              BookingRequestPhoto[]
   clientAccounts                    ClientAccount[]
   customerProperties                CustomerProperty[]
@@ -745,6 +762,8 @@ model User {
   teamMemberships             TeamMembership[]
   invitationsSent             MemberInvitation[]       @relation("MemberInvitationInvitedBy")
   invitationsAccepted         MemberInvitation[]       @relation("MemberInvitationAcceptedBy")
+  assignedLeads               Lead[]                   @relation("LeadAssignedTo")
+  createdLeadActivities       LeadActivity[]           @relation("LeadActivityCreatedBy")
   twoFactorEnabled            Boolean                  @default(false)
   twoFactorSecretHash         String?
   twoFactorRecoveryCodes      Json?
@@ -795,6 +814,7 @@ model Branch {
   userBranchAccesses   UserBranchAccess[]
   accessGrants         UserAccessGrant[]
   teams                Team[]
+  leads                Lead[]
 
   @@unique([companyId, code])
   @@index([companyId, active])
@@ -1021,6 +1041,7 @@ model Customer {
   invoices          Invoice[]
   recurringJobRules RecurringJobRule[]
   bookingRequests   BookingRequest[]
+  leads             Lead[]
   clientAccounts    ClientAccount[]
   properties        CustomerProperty[]
   messageLogs       MessageLog[]
@@ -1149,6 +1170,7 @@ model Service {
   invoiceLineItems     InvoiceLineItem[]
   recurringJobRules    RecurringJobRule[]
   bookingRequests      BookingRequest[]
+  leads                Lead[]
   assets               Asset[]
   contractServiceLines ContractServiceLine[]
   checklistTemplates   JobChecklistTemplate[]
@@ -2594,6 +2616,61 @@ model RecurringJobRule {
   worker          WorkerProfile?     @relation(fields: [workerId], references: [id], onDelete: SetNull)
 
   @@index([companyId, nextRunAt])
+}
+
+model Lead {
+  id                  String        @id @default(cuid())
+  companyId           String
+  branchId            String?
+  customerId          String?
+  serviceId           String?
+  assignedToId        String?
+  name                String
+  companyName         String?
+  email               String?
+  phone               String?
+  address             String?
+  serviceNeed         String?
+  source              String?
+  status              LeadStatus    @default(NEW)
+  notes               String?
+  nextFollowUpAt      DateTime?
+  lastContactedAt     DateTime?
+  lostReason          String?
+  convertedCustomerId String?
+  convertedQuoteId    String?
+  convertedJobId      String?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  company             Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch              Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  customer            Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  service             Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  assignedTo          User?         @relation("LeadAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  activities          LeadActivity[]
+
+  @@index([companyId, status, createdAt])
+  @@index([companyId, branchId, status])
+  @@index([companyId, assignedToId, nextFollowUpAt])
+  @@index([companyId, customerId])
+}
+
+model LeadActivity {
+  id          String           @id @default(cuid())
+  companyId   String
+  leadId      String
+  createdById String?
+  type        LeadActivityType @default(NOTE)
+  note        String
+  dueAt       DateTime?
+  completedAt DateTime?
+  createdAt   DateTime         @default(now())
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lead        Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdBy   User?            @relation("LeadActivityCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, leadId, createdAt])
+  @@index([companyId, dueAt, completedAt])
 }
 
 model BookingRequest {

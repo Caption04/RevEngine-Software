@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldCore Leads</title>
+    <link rel="stylesheet" href="assets/app.css">
+    <script defer src="assets/ui-feedback.js"></script>
+    <script defer src="assets/layout.js"></script>
+    <script defer src="assets/api.js?v=leads-dispatch-1"></script>
+  </head>
+  <body data-page="leads" data-title="Leads">
+    <section class="page">
+      <div class="hero-row">
+        <div class="hero-copy">
+          <h2>Leads</h2>
+          <p>Keep new enquiries moving until they become a customer, quote, or job.</p>
+        </div>
+        <button class="primary-button" type="button" data-create-resource="leads">+ New Lead</button>
+      </div>
+      <section class="stats">
+        <article class="card stat-card"><div class="stat-label">Open Leads</div><div class="stat-value">0</div><div class="trend">Still in progress</div></article>
+        <article class="card stat-card"><div class="stat-label">Follow-ups Due</div><div class="stat-value">0</div><div class="trend">Need attention</div></article>
+        <article class="card stat-card"><div class="stat-label">Quotes Started</div><div class="stat-value">0</div><div class="trend">Moved to quote</div></article>
+        <article class="card stat-card"><div class="stat-label">Won</div><div class="stat-value">0</div><div class="trend">Turned into work</div></article>
+      </section>
+      <div class="toolbar">
+        <div class="tabs">
+          <button class="tab active" type="button" data-status-filter="all">All</button>
+          <button class="tab" type="button" data-status-filter="NEW">New</button>
+          <button class="tab" type="button" data-status-filter="CONTACTED">Contacted</button>
+          <button class="tab" type="button" data-status-filter="QUALIFIED">Qualified</button>
+          <button class="tab" type="button" data-status-filter="QUOTED">Quoted</button>
+          <button class="tab" type="button" data-status-filter="WON">Won</button>
+          <button class="tab" type="button" data-status-filter="LOST">Lost</button>
+        </div>
+        <div class="toolbar-actions"><span class="api-status" data-api-status>Connecting...</span></div>
+      </div>
+      <section class="table-card">
+        <div class="empty-state"><div><strong>No leads yet</strong><span>Add the first enquiry when someone calls, messages, or asks for a quote.</span></div></div>
+        <footer class="table-footer"><span>Showing 0 leads</span><div class="pager"><span class="page-dot active">1</span></div></footer>
+      </section>
+    </section>
+  </body>
+</html>

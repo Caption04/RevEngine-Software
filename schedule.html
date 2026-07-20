@@ -21,6 +21,32 @@
           <button class="primary-button">+ New Job</button>
         </div>
       </div>
+      <section class="dispatch-board" data-dispatch-board hidden>
+        <div class="panel-head dispatch-board-head">
+          <div><h3>Dispatch Board</h3><p>See work that needs a worker or a time.</p></div>
+          <span class="badge gray" data-dispatch-generated>Loading...</span>
+        </div>
+        <section class="stats dispatch-stats">
+          <article class="card stat-card"><div class="stat-label">Needs Dispatch</div><div class="stat-value" data-dispatch-count="queue">0</div><div class="trend">Worker or time missing</div></article>
+          <article class="card stat-card"><div class="stat-label">Unassigned</div><div class="stat-value" data-dispatch-count="unassigned">0</div><div class="trend">No worker</div></article>
+          <article class="card stat-card"><div class="stat-label">Unscheduled</div><div class="stat-value" data-dispatch-count="unscheduled">0</div><div class="trend">No start time</div></article>
+          <article class="card stat-card"><div class="stat-label">Needs Attention</div><div class="stat-value" data-dispatch-count="atRisk">0</div><div class="trend">Late or at risk</div></article>
+        </section>
+        <div class="dispatch-grid">
+          <section class="panel dispatch-queue-panel">
+            <div class="panel-head"><h3>Needs dispatch</h3><span class="badge gray" data-dispatch-queue-label>0 jobs</span></div>
+            <div class="dispatch-queue" data-dispatch-queue></div>
+          </section>
+          <section class="panel dispatch-suggestions-panel">
+            <div class="panel-head"><h3>Best workers</h3><span class="badge gray">Suggested</span></div>
+            <div class="dispatch-suggestions" data-dispatch-suggestions></div>
+          </section>
+        </div>
+        <section class="panel dispatch-risk-panel">
+          <div class="panel-head"><h3>Jobs needing attention</h3><span class="badge gray" data-dispatch-risk-label>0 jobs</span></div>
+          <div class="dispatch-risk-list" data-dispatch-risks></div>
+        </section>
+      </section>
       <div class="toolbar">
         <div class="tabs">
           <button class="tab" type="button" data-schedule-view="day">Day</button>

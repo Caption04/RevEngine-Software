@@ -1,7 +1,7 @@
 (function(){
   const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3000/api' : '/api';
   const page = document.body.dataset.page || 'dashboard';
-  const state = { user: null, profile: null, branding: null, customers: [], services: [], workers: [], roles: [], jobs: [], assets: [], serviceContracts: [], invoices: [], schedule: [], scheduleSettings: null, scheduleView: 'week', scheduleDate: new Date(), scheduleFilters: { workerId: '', status: '' }, listFilters: {}, availability: {}, notificationLogs: [], integrations: [], messageLogs: [], storageUsage: null, billing: null, financeSettings: null, financeIntegrations: [], financeExportLogs: [], reports: null, activeReportTab: 'overview' };
+  const state = { user: null, profile: null, branding: null, leads: [], dispatchBoard: null, selectedDispatchJobId: null, customers: [], services: [], workers: [], roles: [], jobs: [], assets: [], serviceContracts: [], invoices: [], schedule: [], scheduleSettings: null, scheduleView: 'week', scheduleDate: new Date(), scheduleFilters: { workerId: '', status: '' }, listFilters: {}, availability: {}, notificationLogs: [], integrations: [], messageLogs: [], storageUsage: null, billing: null, financeSettings: null, financeIntegrations: [], financeExportLogs: [], reports: null, activeReportTab: 'overview' };
 
   const MARKET_DEFAULTS = {
     ZW: { country: 'ZW', timezone: 'Africa/Harare', defaultCurrency: 'USD', numberFormat: 'en-ZW', taxName: 'VAT', allowedCurrencies: ['USD'], paymentMethods: ['CASH', 'BANK_TRANSFER', 'EXTERNAL_PAYMENT_LINK', 'CUSTOM_MANUAL', 'PAYNOW'] },
@@ -62,6 +62,20 @@
   const receiptMoney = { format(value) { const settings = effectiveFinanceSettings(); const currency = settings.defaultCurrency || 'USD'; const locale = settings.numberFormat || 'en-US'; return new Intl.NumberFormat(locale, { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0)); } };
 
   const tableConfigs = {
+    leads: {
+      columns: ['Lead', 'Need', 'Source', 'Follow-up', 'Status', 'Owner', 'Actions'],
+      emptyTitle: 'No leads yet',
+      emptyText: 'Add an enquiry when someone calls, messages, or asks for a quote.',
+      row: (item) => [
+        [item.name, item.companyName].filter(Boolean).join(' - '),
+        item.service && item.service.name || item.serviceNeed || '-',
+        item.source || '-',
+        formatDateTime(item.nextFollowUpAt),
+        badge(item.status),
+        item.assignedTo && (item.assignedTo.name || item.assignedTo.email) || '-',
+        rowActions('leads', item)
+      ]
+    },
     customers: {
       columns: ['Customer', 'Contact', 'Address', 'Jobs', 'Balance'],
       emptyTitle: 'No customers yet',
@@ -184,6 +198,7 @@
       if (href === 'schedule.html') setLinkLabel(link, isWorker() ? 'My Schedule' : 'Schedule');
     });
     document.body.classList.toggle('worker-role', Boolean(isWorker()));
+    document.querySelectorAll('[data-dispatch-board]').forEach((node) => { node.hidden = Boolean(isWorker()); });
     document.querySelectorAll('.quick-card').forEach((node) => {
       node.hidden = !(hasPermission('jobs.create') && hasPermission('jobs.view'));
     });
@@ -365,6 +380,15 @@
     const add = (label, action, primary, permission) => {
       if (!permission || hasPermission(permission)) actions.push({ label, action, primary: Boolean(primary) });
     };
+    if (resource === 'leads') {
+      add('View', 'lead-view', true, 'leads.view');
+      add('Add note', 'lead-note', false, 'leads.edit');
+      add('Set follow-up', 'lead-follow-up', false, 'leads.edit');
+      add('Change stage', 'lead-stage', false, 'leads.edit');
+      if (!item.convertedCustomerId) add('Create customer', 'lead-customer', false, 'leads.convert');
+      if (!item.convertedQuoteId) add('Create quote', 'lead-quote', false, 'leads.convert');
+      if (!item.convertedJobId) add('Create job', 'lead-job', false, 'leads.convert');
+    }
     if (resource === 'quotes') {
       const status = String(item.status || '').toUpperCase();
       if (item.deletedAt) {
@@ -415,6 +439,7 @@
 
   function actionMenuTitle(resource) {
     return {
+      leads: 'Lead Actions',
       jobs: 'Job Actions',
       quotes: 'Quote Actions',
       invoices: 'Invoice Actions',
@@ -423,6 +448,7 @@
   }
 
   function actionMenuSubtitle(resource, item) {
+    if (resource === 'leads') return [item.name, item.companyName].filter(Boolean).join(' - ') || 'Lead';
     if (resource === 'jobs') return item.title || 'Job';
     if (resource === 'quotes') return item.title || 'Quote';
     if (resource === 'invoices') return item.number || 'Invoice';
@@ -630,6 +656,64 @@
     });
     const footer = card.querySelector('.table-footer');
     if (footer) footer.remove();
+  }
+
+  function dispatchJobMeta(job) {
+    return [job.customer && job.customer.name, job.service && job.service.name, job.scheduledStart ? formatDateTime(job.scheduledStart) : 'No time set'].filter(Boolean).join(' - ');
+  }
+
+  function renderDispatchBoard(board) {
+    const root = document.querySelector('[data-dispatch-board]');
+    if (!root || isWorker()) return;
+    state.dispatchBoard = board || { counts: {}, queue: [], riskJobs: [], workers: [] };
+    const queue = state.dispatchBoard.queue || [];
+    if (!queue.some((job) => job.id === state.selectedDispatchJobId)) state.selectedDispatchJobId = queue[0] && queue[0].id || null;
+    root.hidden = false;
+    Object.entries(state.dispatchBoard.counts || {}).forEach(([key, value]) => {
+      const node = root.querySelector('[data-dispatch-count="' + key + '"]');
+      if (node) node.textContent = String(value || 0);
+    });
+    const generated = root.querySelector('[data-dispatch-generated]');
+    if (generated) generated.textContent = state.dispatchBoard.generatedAt ? 'Updated ' + formatDateTime(state.dispatchBoard.generatedAt) : 'Ready';
+    const queueLabel = root.querySelector('[data-dispatch-queue-label]');
+    if (queueLabel) queueLabel.textContent = queue.length + (queue.length === 1 ? ' job' : ' jobs');
+    const queueNode = root.querySelector('[data-dispatch-queue]');
+    if (queueNode) queueNode.innerHTML = queue.length ? queue.map((job) => '<button class="dispatch-queue-item' + (job.id === state.selectedDispatchJobId ? ' selected' : '') + '" type="button" data-dispatch-select="' + escapeHtml(job.id) + '"><span><strong>' + escapeHtml(job.title || 'Job') + '</strong><small>' + escapeHtml(dispatchJobMeta(job)) + '</small></span><span class="badge gray">' + escapeHtml(String(job.dispatchState || '').replace(/_/g, ' ')) + '</span></button>').join('') : '<div class="empty-state compact-empty"><div><strong>Everything is assigned and scheduled.</strong></div></div>';
+
+    const selected = queue.find((job) => job.id === state.selectedDispatchJobId);
+    const suggestionsNode = root.querySelector('[data-dispatch-suggestions]');
+    if (suggestionsNode) {
+      const suggestions = selected && selected.recommendations || [];
+      suggestionsNode.innerHTML = selected ? (suggestions.length ? '<div class="dispatch-selected-job"><strong>' + escapeHtml(selected.title || 'Job') + '</strong><small>' + escapeHtml(dispatchJobMeta(selected)) + '</small></div>' + suggestions.map((worker) => '<article class="dispatch-worker-card"><div class="dispatch-worker-copy"><strong>' + escapeHtml(worker.workerName || 'Worker') + '</strong><small>' + escapeHtml((worker.reasons || []).join(' - ') || 'Available worker') + '</small>' + ((worker.warnings || []).length ? '<small class="dispatch-warning">' + escapeHtml(worker.warnings.join(' - ')) + '</small>' : '') + '</div><div class="dispatch-worker-actions"><span class="dispatch-score">' + escapeHtml(worker.score) + '%</span><button class="primary-button compact" type="button" data-dispatch-schedule="' + escapeHtml(selected.id) + '" data-worker-id="' + escapeHtml(worker.workerId) + '" data-starts-at="' + escapeHtml(worker.suggestedStart) + '">Schedule</button></div></article>').join('') : '<div class="empty-state compact-empty"><div><strong>No worker suggestions yet.</strong></div></div>') : '<div class="empty-state compact-empty"><div><strong>Select a job to see worker suggestions.</strong></div></div>';
+    }
+
+    const risks = state.dispatchBoard.riskJobs || [];
+    const riskLabel = root.querySelector('[data-dispatch-risk-label]');
+    if (riskLabel) riskLabel.textContent = risks.length + (risks.length === 1 ? ' job' : ' jobs');
+    const riskNode = root.querySelector('[data-dispatch-risks]');
+    if (riskNode) riskNode.innerHTML = risks.length ? risks.map((job) => '<div class="dispatch-risk-item"><div><strong>' + escapeHtml(job.title || 'Job') + '</strong><small>' + escapeHtml(dispatchJobMeta(job)) + '</small></div><span class="badge red">' + escapeHtml((job.riskReasons || []).join(' - ')) + '</span></div>').join('') : '<div class="empty-state compact-empty"><div><strong>No late or at-risk jobs.</strong></div></div>';
+  }
+
+  async function loadDispatchBoard() {
+    if (isWorker() || !hasPermission('schedule.view')) return;
+    const board = await api('/dispatch/board');
+    renderDispatchBoard(board);
+  }
+
+  async function handleDispatchAction(event) {
+    const selectButton = event.target.closest('[data-dispatch-select]');
+    if (selectButton) {
+      state.selectedDispatchJobId = selectButton.dataset.dispatchSelect;
+      renderDispatchBoard(state.dispatchBoard);
+      return;
+    }
+    const scheduleButton = event.target.closest('[data-dispatch-schedule]');
+    if (!scheduleButton) return;
+    try {
+      await openScheduleModal(scheduleButton.dataset.dispatchSchedule, 'schedule', { workerId: scheduleButton.dataset.workerId, startsAt: scheduleButton.dataset.startsAt });
+    } catch (error) {
+      showToast(error.message || 'Could not open the schedule form.', false);
+    }
   }
 
   function itemMatchesListFilter(resource, item, filter) {
@@ -1310,6 +1394,14 @@
   }
 
   function updateListStats(resource, data) {
+    if (resource === 'leads') {
+      const now = new Date();
+      const open = data.filter((item) => !['WON', 'LOST'].includes(String(item.status || '').toUpperCase())).length;
+      const due = data.filter((item) => item.nextFollowUpAt && new Date(item.nextFollowUpAt) <= now && !['WON', 'LOST'].includes(String(item.status || '').toUpperCase())).length;
+      const quoted = data.filter((item) => item.status === 'QUOTED' || item.convertedQuoteId).length;
+      const won = data.filter((item) => item.status === 'WON').length;
+      setStats([{ label: 'Open Leads', value: open, trend: 'Still in progress' }, { label: 'Follow-ups Due', value: due, trend: 'Need attention' }, { label: 'Quotes Started', value: quoted, trend: 'Moved to quote' }, { label: 'Won', value: won, trend: 'Turned into work' }]);
+    }
     if (resource === 'customers') {
       const balance = data.reduce((sum, c) => sum + (c.invoices || []).filter((i) => i.status !== 'PAID').reduce((inner, i) => inner + Number(i.amount || 0), 0), 0);
       setStats([{ label: 'Total Customers', value: data.length, trend: 'Total records' }, { label: 'Active Accounts', value: data.length, trend: 'Active accounts' }, { label: 'Outstanding Balance', value: money.format(balance), trend: 'Outstanding' }, { label: 'Avg. Jobs', value: average(data.map((c) => (c.jobs || []).length)), trend: 'Per customer' }]);
@@ -1391,8 +1483,8 @@
 
   async function preloadLookups() {
     const requests = [];
-    if (['jobs', 'quotes', 'invoices', 'schedule', 'assets', 'service-contracts'].includes(page)) requests.push(api('/customers').then((d) => state.customers = d).catch(() => []));
-    if (['jobs', 'quotes', 'invoices', 'assets', 'service-contracts'].includes(page)) requests.push(api('/services').then((d) => state.services = d).catch(() => []));
+    if (['leads', 'jobs', 'quotes', 'invoices', 'schedule', 'assets', 'service-contracts'].includes(page)) requests.push(api('/customers').then((d) => state.customers = d).catch(() => []));
+    if (['leads', 'jobs', 'quotes', 'invoices', 'assets', 'service-contracts'].includes(page)) requests.push(api('/services').then((d) => state.services = d).catch(() => []));
     if (['jobs', 'schedule'].includes(page)) requests.push(api('/workers').then((d) => state.workers = d).catch(() => []));
     if (page === 'jobs' && !isWorker()) {
       requests.push(api('/assets').then((d) => state.assets = d).catch(() => []));
@@ -1432,6 +1524,18 @@
   }
 
   function formFor(resource) {
+    if (resource === 'leads') return {
+      title: 'New Lead',
+      action: '/leads',
+      fields: field('name', 'Contact Name', 'text', 'required') +
+        field('companyName', 'Company') +
+        field('email', 'Email', 'email') +
+        field('phone', 'Phone') +
+        select('serviceId', 'Service', optionList(state.services, 'No service selected'), false) +
+        field('source', 'How They Found You') +
+        '<div class="field span-2"><label for="fc-serviceNeed">What do they need?</label><textarea id="fc-serviceNeed" name="serviceNeed" maxlength="1000"></textarea></div>' +
+        field('nextFollowUpAt', 'Next Follow-up', 'datetime-local')
+    };
     if (resource === 'customers') return { title: 'New Customer', action: '/customers', fields: field('name', 'Name', 'text', 'required') + field('email', 'Email', 'email') + field('phone', 'Phone') + field('address', 'Address') };
     if (resource === 'workers') return { title: 'New Worker', action: '/workers', fields: field('name', 'Name', 'text', 'required') + field('email', 'Email', 'email', 'required') + field('password', 'Temporary Password', 'password', 'required minlength="12"') + field('title', 'Title') + field('phone', 'Phone') };
     if (resource === 'jobs') {
@@ -1668,7 +1772,7 @@
       };
     });
   }
-  async function openScheduleModal(jobId, mode) {
+  async function openScheduleModal(jobId, mode, defaults = {}) {
     await preloadLookups();
     const job = state.jobs.find((item) => item.id === jobId) || await api('/jobs/' + jobId);
     const title = mode === 'reschedule' ? 'Reschedule Job' : 'Schedule Job';
@@ -1683,8 +1787,8 @@
     });
     const modal = document.querySelector('.fc-modal');
     const form = modal.querySelector('form');
-    form.workerId.value = job.workerId || '';
-    form.startsAt.value = localDateTimeValue(job.scheduledStart);
+    form.workerId.value = defaults.workerId || job.workerId || '';
+    form.startsAt.value = localDateTimeValue(defaults.startsAt || job.scheduledStart);
     form.querySelector('.fc-form-actions').innerHTML = '<button class="secondary-button" type="button" data-close>Cancel</button><button class="primary-button" type="submit">Save</button>';
     form.onsubmit = async (event) => {
       event.preventDefault();
@@ -1756,12 +1860,12 @@
   }
 
   function createPermission(resource) {
-    return ({ customers: 'customers.create', workers: 'workers.manage', jobs: 'jobs.create', quotes: 'quotes.create', invoices: 'invoices.create' })[resource];
+    return ({ leads: 'leads.create', customers: 'customers.create', workers: 'workers.manage', jobs: 'jobs.create', quotes: 'quotes.create', invoices: 'invoices.create' })[resource];
   }
 
   function createResourceForButton(button) {
     const text = button.textContent.trim().toLowerCase();
-    return button.dataset.createResource || (text.includes('worker') ? 'workers' : text.includes('customer') ? 'customers' : text.includes('job') ? 'jobs' : text.includes('quote') ? 'quotes' : text.includes('invoice') ? 'invoices' : null);
+    return button.dataset.createResource || (text.includes('lead') ? 'leads' : text.includes('worker') ? 'workers' : text.includes('customer') ? 'customers' : text.includes('job') ? 'jobs' : text.includes('quote') ? 'quotes' : text.includes('invoice') ? 'invoices' : null);
   }
 
   function setupCreateButtons() {
@@ -2369,6 +2473,96 @@
     document.body.appendChild(modal);
   }
 
+  function leadActivityLabel(activity) {
+    if (activity.type === 'FOLLOW_UP') return activity.completedAt ? 'Follow-up completed' : 'Follow-up';
+    if (activity.type === 'STATUS_CHANGE') return 'Stage changed';
+    return 'Note';
+  }
+
+  async function openLeadDetail(id) {
+    const item = await api('/leads/' + id);
+    const activities = (item.activities || []).map((activity) => '<div class="lead-activity"><div><strong>' + escapeHtml(leadActivityLabel(activity)) + '</strong><small>' + escapeHtml(formatDateTime(activity.createdAt)) + '</small></div><p>' + escapeHtml(activity.note || '-') + '</p>' + (activity.dueAt ? '<span class="badge gray">Due ' + escapeHtml(formatDateTime(activity.dueAt)) + '</span>' : '') + '</div>').join('');
+    closeModal();
+    const modal = document.createElement('div');
+    modal.className = 'fc-modal';
+    modal.innerHTML = '<div class="fc-dialog lead-detail-dialog"><div class="panel-head"><div><h3>' + escapeHtml(item.name || 'Lead') + '</h3><p class="modal-copy">' + escapeHtml(item.companyName || item.serviceNeed || 'Lead details') + '</p></div><button class="icon-button" type="button" data-close>&times;</button></div><div class="booking-detail-list">' +
+      bookingDetail('Status', String(item.status || '-').replace(/_/g, ' ')) +
+      bookingDetail('Contact', [item.email, item.phone].filter(Boolean).join(' / ')) +
+      bookingDetail('Service', item.service && item.service.name || item.serviceNeed) +
+      bookingDetail('Source', item.source) +
+      bookingDetail('Next follow-up', formatDateTime(item.nextFollowUpAt)) +
+      bookingDetail('Owner', item.assignedTo && (item.assignedTo.name || item.assignedTo.email)) +
+      (item.address ? bookingDetail('Address', item.address) : '') +
+      (item.notes ? bookingDetail('Notes', item.notes) : '') +
+      '</div><div class="panel-head lead-activity-head"><h3>Activity</h3><span class="badge gray">' + (item.activities || []).length + '</span></div><div class="lead-activity-list">' + (activities || '<div class="empty-state compact-empty"><div><strong>No activity yet.</strong></div></div>') + '</div><div class="fc-form-actions"><button class="secondary-button" type="button" data-close>Close</button></div></div>';
+    modal.addEventListener('click', (event) => { if (event.target === modal || event.target.closest('[data-close]')) closeModal(); });
+    document.body.appendChild(modal);
+  }
+
+  function openLeadActivityModal(id, type) {
+    const isFollowUp = type === 'FOLLOW_UP';
+    openModal({
+      title: isFollowUp ? 'Set Follow-up' : 'Add Note',
+      fields: (isFollowUp ? field('dueAt', 'Follow-up Date', 'datetime-local', 'required') : '') + '<div class="field span-2"><label for="fc-lead-note">' + (isFollowUp ? 'What needs to happen?' : 'Note') + '</label><textarea id="fc-lead-note" name="note" required maxlength="2000"></textarea></div>'
+    });
+    const modal = document.querySelector('.fc-modal');
+    const form = modal.querySelector('form');
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const error = modal.querySelector('.fc-form-error');
+      error.hidden = true;
+      const body = Object.fromEntries(new FormData(form).entries());
+      body.type = type;
+      try {
+        await api('/leads/' + id + '/activities', { method: 'POST', body: JSON.stringify(body) });
+        closeModal();
+        showToast(isFollowUp ? 'Follow-up saved.' : 'Note added.', true);
+        await load();
+      } catch (err) {
+        error.textContent = err.message;
+        error.hidden = false;
+      }
+    };
+  }
+
+  function openLeadStageModal(id, currentStatus) {
+    const stages = ['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTED', 'WON', 'LOST'];
+    openModal({
+      title: 'Change Lead Stage',
+      fields: select('status', 'Stage', stages.map((stage) => '<option value="' + stage + '">' + stage.replace(/_/g, ' ') + '</option>').join(''), true) + '<div class="field span-2"><label for="fc-lostReason">Reason if lost</label><textarea id="fc-lostReason" name="lostReason" maxlength="1000"></textarea></div>'
+    });
+    const modal = document.querySelector('.fc-modal');
+    const form = modal.querySelector('form');
+    form.status.value = currentStatus || 'NEW';
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      const error = modal.querySelector('.fc-form-error');
+      error.hidden = true;
+      const body = Object.fromEntries(new FormData(form).entries());
+      if (!body.lostReason) delete body.lostReason;
+      try {
+        await api('/leads/' + id, { method: 'PATCH', body: JSON.stringify(body) });
+        closeModal();
+        showToast('Lead stage updated.', true);
+        await load();
+      } catch (err) {
+        error.textContent = err.message;
+        error.hidden = false;
+      }
+    };
+  }
+
+  async function convertLead(id, target) {
+    const labels = { CUSTOMER: 'customer', QUOTE: 'quote', JOB: 'job' };
+    const label = labels[target] || 'record';
+    const ok = await openConfirmModal({ title: 'Create ' + label, message: 'Create a ' + label + ' from this lead?', okLabel: 'Create ' + label });
+    if (!ok) return false;
+    await api('/leads/' + id + '/convert', { method: 'POST', body: JSON.stringify({ target }) });
+    showToast(label.charAt(0).toUpperCase() + label.slice(1) + ' created.', true);
+    await load();
+    return true;
+  }
+
   function actionSuccessMessage(action) {
     return {
       'booking-review': 'Booking request marked reviewed.',
@@ -2406,6 +2600,35 @@
     if (button.closest('[data-action-menu-modal]')) closeModal();
     button.disabled = true;
     try {
+      if (action === 'lead-view') {
+        await openLeadDetail(id);
+        return;
+      }
+      if (action === 'lead-note') {
+        openLeadActivityModal(id, 'NOTE');
+        return;
+      }
+      if (action === 'lead-follow-up') {
+        openLeadActivityModal(id, 'FOLLOW_UP');
+        return;
+      }
+      if (action === 'lead-stage') {
+        const lead = state.leads.find((record) => record.id === id) || await api('/leads/' + id);
+        openLeadStageModal(id, lead.status);
+        return;
+      }
+      if (action === 'lead-customer') {
+        await convertLead(id, 'CUSTOMER');
+        return;
+      }
+      if (action === 'lead-quote') {
+        await convertLead(id, 'QUOTE');
+        return;
+      }
+      if (action === 'lead-job') {
+        await convertLead(id, 'JOB');
+        return;
+      }
       if (action === 'booking-view') {
         const item = state['booking-requests'].find((record) => record.id === id) || await api('/booking-requests/' + id);
         openBookingRequestModal(item);
@@ -3589,11 +3812,16 @@
       if (page === 'dashboard') renderDashboard(await api('/dashboard'));
       if (page === 'reports') await loadReports();
       if (page === 'schedule') {
-        const [data, settings] = await Promise.all([api('/schedule'), api('/company/scheduling-settings').catch(() => ({ workingDayStart: '08:00', workingDayEnd: '17:00' }))]);
+        const [data, settings, dispatchBoard] = await Promise.all([
+          api('/schedule'),
+          api('/company/scheduling-settings').catch(() => ({ workingDayStart: '08:00', workingDayEnd: '17:00' })),
+          api('/dispatch/board').catch(() => null)
+        ]);
         state.schedule = data;
         state.scheduleSettings = settings;
         setupScheduleControls();
         renderSchedule(data, settings);
+        if (dispatchBoard) renderDispatchBoard(dispatchBoard);
       }
       if (page === 'customers') {
         setupPeopleTabs();
@@ -3643,6 +3871,7 @@
   window.addEventListener('fieldcore:market-change', rerenderAfterMarketChange);
 
   document.addEventListener('click', handleWorkerDashboardAction);
+  document.addEventListener('click', handleDispatchAction);
   document.addEventListener('click', handleRowAction);
   setupCreateButtons();
   setupSettings();

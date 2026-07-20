@@ -16,6 +16,7 @@
     ['schedule', 'Schedule', 'schedule.html', 'schedule'],
     ['map', 'Map', 'map.html', 'map'],
     ['booking-requests', 'Booking Requests', 'booking-requests.html', 'inbox'],
+    ['leads', 'Leads', 'leads.html', 'inbox'],
     ['customers', 'Customers', 'customers.html', 'users'],
     ['members', 'Company Members', 'members.html', 'users'],
     ['branches', 'Branches', 'branches.html', 'map'],
@@ -78,15 +79,15 @@
   }
 
   const adminNavGroups = [
-    ['Core', 'Daily work', ['dashboard', 'jobs', 'schedule', 'map', 'booking-requests', 'customers', 'members']],
+    ['Core', 'Daily work', ['dashboard', 'leads', 'jobs', 'schedule', 'map', 'booking-requests', 'customers', 'members']],
     ['Money', 'Quotes and payments', ['quotes', 'invoices', 'collections']],
     ['Reports', 'Business results', ['executive-dashboard', 'reports']],
-    ['Enterprise', 'Advanced operations', ['branches', 'approvals', 'assets', 'service-contracts', 'contract-automation', 'inventory', 'purchase-requests', 'purchase-orders', 'procurement-costing', 'mobile-sync', 'onboarding']],
+    ['Enterprise', 'Advanced operations', ['branches', 'approvals', 'assets', 'service-contracts', 'contract-automation', 'inventory', 'purchase-requests', 'purchase-orders', 'procurement-costing']],
     ['Workspace', 'Company setup', ['settings']]
   ];
 
   const pagePermissions = {
-    dashboard: ['dashboard.operational.view', 'dashboard.financial.view', 'dashboard.executive.view'], jobs: 'jobs.view', schedule: 'schedule.view', map: 'workers.location.view', 'booking-requests': 'bookings.view', customers: 'customers.view', members: 'members.view',
+    dashboard: ['dashboard.operational.view', 'dashboard.financial.view', 'dashboard.executive.view'], leads: 'leads.view', jobs: 'jobs.view', schedule: 'schedule.view', map: 'workers.location.view', 'booking-requests': 'bookings.view', customers: 'customers.view', members: 'members.view',
     quotes: 'quotes.view', invoices: 'invoices.view', collections: 'payments.view', branches: 'branch.view', approvals: 'approval.request.decide',
     assets: 'contract.automation.manage', 'service-contracts': 'contract.automation.manage', 'contract-automation': 'contract.automation.manage',
     inventory: 'inventory.view', 'purchase-requests': 'purchaseRequest.create', 'purchase-orders': 'purchaseOrder.manage', 'procurement-costing': 'inventory.manage',
@@ -143,8 +144,8 @@
   function quickCard() {
     return `<div class="quick-card" data-quick-card hidden>
       <strong>Quick Create</strong>
-      <p>Create a new job, quote, or invoice in seconds.</p>
-      <a href="jobs.html">+ New Job</a>
+      <p>Add a lead or create a job in seconds.</p>
+      <a href="leads.html">+ New Lead</a>
     </div>`;
   }
 
@@ -236,7 +237,6 @@
       </button>
       <div class="account-dropdown" role="menu" data-account-dropdown hidden>
         <a role="menuitem" href="settings.html" data-required-any-permission="company.settings.view,company.settings.manage,company.branding.manage,settings.finance.manage,finance.exports.manage,notifications.view,integration.view,integration.manage,audit.view" hidden>Settings</a>
-        <a role="menuitem" href="subscription.html" data-full-access-only hidden>FieldCore Subscription</a>
         <a role="menuitem" href="security-center.html" data-required-permission="security.view" hidden>Security</a>
         <button role="menuitem" type="button" data-logout>Log out</button>
       </div>
@@ -386,6 +386,7 @@
   }
 
   const searchResources = [
+    ['leads', '/leads', 'Leads', (item) => item.name || item.companyName || item.email || item.phone],
     ['jobs', '/jobs', 'Jobs', (item) => item.title || item.number || item.id],
     ['customers', '/customers', 'Customers', (item) => item.name || item.email || item.phone],
     ['quotes', '/quotes', 'Quotes', (item) => item.title || item.number || item.id],

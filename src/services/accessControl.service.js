@@ -22,6 +22,17 @@ const PERMISSION_CATALOG = [
     ]
   },
   {
+    key: 'Leads',
+    label: 'Leads',
+    help: 'Choose what they can do with new sales enquiries.',
+    permissions: [
+      { key: 'leads.view', label: 'View leads', targets: ['leads.html', 'GET /api/leads'] },
+      { key: 'leads.create', label: 'Add leads', targets: ['POST /api/leads'] },
+      { key: 'leads.edit', label: 'Update leads', targets: ['PATCH /api/leads/:id', 'POST /api/leads/:id/activities'] },
+      { key: 'leads.convert', label: 'Turn leads into work', help: 'Create a customer, quote, or job from a lead.', targets: ['POST /api/leads/:id/convert'] }
+    ]
+  },
+  {
     key: 'Jobs',
     label: 'Jobs',
     help: 'Choose what they can do with jobs.',
@@ -228,6 +239,9 @@ const PERMISSION_DEPENDENCIES = {
   'customers.create': ['customers.view'],
   'customers.edit': ['customers.view'],
   'customers.delete': ['customers.view'],
+  'leads.create': ['leads.view'],
+  'leads.edit': ['leads.view'],
+  'leads.convert': ['leads.view'],
   'jobs.create': ['jobs.view'],
   'jobs.edit': ['jobs.view'],
   'jobs.assign': ['jobs.view', 'workers.view'],
@@ -302,8 +316,8 @@ const SYSTEM_ROLE_TEMPLATES = [
   { key: 'finance-manager', name: 'Finance Manager', description: 'Invoices, payments, money reports, and exports.', systemRole: 'ADMIN', permissions: financePermissions.concat(['members.view']), scope: 'COMPANY' },
   { key: 'accountant', name: 'Accountant', description: 'Invoices, payments, money reports, exports, and accounting links.', systemRole: 'ADMIN', permissions: financePermissions.filter((key) => !['payment.refund', 'invoice.void', 'invoice.discount.approve'].includes(key)), scope: 'COMPANY' },
   { key: 'office-administrator', name: 'Office Administrator', description: 'Customers, bookings, quotes, jobs, and daily office work.', systemRole: 'ADMIN', permissions: operationsPermissions.concat(['company.settings.view', 'members.view']), scope: 'COMPANY' },
-  { key: 'dispatcher', name: 'Dispatcher / Scheduler', description: 'Schedules work, assigns workers, and follows active jobs.', systemRole: 'ADMIN', permissions: ['dashboard.operational.view', 'jobs.view', 'jobs.edit', 'jobs.assign', 'schedule.view', 'schedule.manage', 'workers.view', 'workers.location.view', 'customers.view'], scope: 'COMPANY' },
-  { key: 'customer-service', name: 'Customer Service', description: 'Customers, booking requests, quotes, and job updates.', systemRole: 'ADMIN', permissions: ['dashboard.operational.view', 'customers.view', 'customers.create', 'customers.edit', 'bookings.view', 'bookings.manage', 'quotes.view', 'quotes.create', 'jobs.view'], scope: 'COMPANY' },
+  { key: 'dispatcher', name: 'Dispatcher / Scheduler', description: 'Schedules work, assigns workers, and follows active jobs.', systemRole: 'ADMIN', permissions: ['dashboard.operational.view', 'leads.view', 'jobs.view', 'jobs.edit', 'jobs.assign', 'schedule.view', 'schedule.manage', 'workers.view', 'workers.location.view', 'customers.view'], scope: 'COMPANY' },
+  { key: 'customer-service', name: 'Customer Service', description: 'Leads, customers, booking requests, quotes, and job updates.', systemRole: 'ADMIN', permissions: ['dashboard.operational.view', 'leads.view', 'leads.create', 'leads.edit', 'leads.convert', 'customers.view', 'customers.create', 'customers.edit', 'bookings.view', 'bookings.manage', 'quotes.view', 'quotes.create', 'jobs.view'], scope: 'COMPANY' },
   { key: 'department-manager', name: 'Department Manager', description: 'Manages work in an assigned branch or team.', systemRole: 'ADMIN', permissions: operationsPermissions, scope: 'BRANCH' },
   { key: 'team-supervisor', name: 'Team Supervisor', description: 'Sees workers and jobs in an assigned team.', systemRole: 'ADMIN', permissions: ['dashboard.operational.view', 'jobs.view', 'jobs.edit', 'schedule.view', 'workers.view', 'team.view'], scope: 'TEAM' },
   { key: 'senior-field-worker', name: 'Senior Field Worker / Senior Technician', description: 'Completes field work and sees their team.', systemRole: 'WORKER', permissions: workerPermissions.concat(['team.view']), scope: 'TEAM' },
