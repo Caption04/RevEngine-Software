@@ -20,7 +20,7 @@ const rootDir = path.resolve(__dirname, '..');
 const clientOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:3000';
 const DEV_JWT_SECRET = 'dev-only-change-me';
 const JWT_SECRET = process.env.JWT_SECRET || DEV_JWT_SECRET;
-const CLIENT_COOKIE_NAME = process.env.CLIENT_COOKIE_NAME || 'fieldcore_client_token';
+const CLIENT_COOKIE_NAME = process.env.CLIENT_COOKIE_NAME || 'revengine_client_token';
 const CLIENT_JWT_SECRET = process.env.JWT_SECRET || DEV_JWT_SECRET;
 
 assertValidEnv();

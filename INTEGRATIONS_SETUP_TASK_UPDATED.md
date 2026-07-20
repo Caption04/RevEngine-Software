@@ -1,8 +1,8 @@
-# Codex Task: FieldCore Integration Infrastructure
+# Codex Task: Rev Engine Integration Infrastructure
 
 ## Important context
 
-This is a Codex implementation task for the FieldCore / service-business SaaS codebase.
+This is a Codex implementation task for the Rev Engine / service-business SaaS codebase.
 
 The app already has a Node.js / Express backend, Prisma, PostgreSQL, frontend admin screens, existing notification work, and provider-specific files such as Brevo / Paynow-style integrations.
 
@@ -485,7 +485,7 @@ Test that:
 - configured phone number can be accessed
 - webhook verify token is stored safely
 
-Do not assume the WhatsApp Business Account can be changed through FieldCore code.
+Do not assume the WhatsApp Business Account can be changed through Rev Engine code.
 The code should store and use the IDs/tokens configured inside Meta.
 Company/WABA/phone-number ownership changes must still happen inside Meta.
 
@@ -807,7 +807,7 @@ Update project documentation with:
 
 Make this clear:
 
-FieldCore can store and use provider IDs/keys/tokens, but some things must still be configured inside the provider platform itself.
+Rev Engine can store and use provider IDs/keys/tokens, but some things must still be configured inside the provider platform itself.
 
 Examples:
 
@@ -816,7 +816,7 @@ Examples:
 - SMS sender IDs, short codes, and approval rules happen inside Clickatell or Africa's Talking.
 - Cloudflare R2 buckets/access keys are created in Cloudflare.
 
-FieldCore should not pretend to create or transfer these external accounts by code.
+Rev Engine should not pretend to create or transfer these external accounts by code.
 It should only store the approved credentials/settings and use them safely.
 
 ---

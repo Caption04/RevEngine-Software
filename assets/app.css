@@ -3982,10 +3982,10 @@ body[data-market="ZW"] [data-south-africa-only] {
 }
 
 .section-search-highlight {
-  animation: fieldcoreSearchPulse 1.4s ease;
+  animation: revengineSearchPulse 1.4s ease;
 }
 
-@keyframes fieldcoreSearchPulse {
+@keyframes revengineSearchPulse {
   0%, 100% { background: transparent; }
   18%, 70% { background: rgba(35, 99, 255, .10); }
 }

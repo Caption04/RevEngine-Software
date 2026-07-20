@@ -1,6 +1,6 @@
 # TASK11 Contract, asset, warranty, SLA, and preventive maintenance automation
 
-TASK11 turns FieldCore contracts and assets into an operational automation layer.
+TASK11 turns Rev Engine contracts and assets into an operational automation layer.
 
 ## Added capabilities
 

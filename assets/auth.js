@@ -56,14 +56,14 @@
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
       message('');
-      if (window.FieldCoreFormUX && !window.FieldCoreFormUX.validateForm(form)) return;
+      if (window.RevEngineFormUX && !window.RevEngineFormUX.validateForm(form)) return;
       try {
         await api('/auth/login', { method: 'POST', body: JSON.stringify(formData(form)) });
         window.location.href = returnUrl();
       } catch (error) {
         const text = error.message || 'Invalid email or password.';
         message(text);
-        if (window.FieldCoreUI) window.FieldCoreUI.notify(text, { type: 'error' });
+        if (window.RevEngineUI) window.RevEngineUI.notify(text, { type: 'error' });
       }
     });
   }
@@ -82,7 +82,7 @@
     if (next) next.addEventListener('click', () => {
       message('');
       const firstStep = form.querySelector('[data-signup-step="1"]');
-      if (window.FieldCoreFormUX && !window.FieldCoreFormUX.validateForm(firstStep)) return;
+      if (window.RevEngineFormUX && !window.RevEngineFormUX.validateForm(firstStep)) return;
       const invalid = firstFields.find((field) => !field.checkValidity());
       if (invalid) return invalid.focus();
       if (form.password.value !== form.confirmPassword.value) return message('Passwords do not match.');
@@ -93,14 +93,14 @@
       event.preventDefault();
       message('');
       if (form.password.value !== form.confirmPassword.value) { showStep(1); return message('Passwords do not match.'); }
-      if (window.FieldCoreFormUX && !window.FieldCoreFormUX.validateForm(form.querySelector('[data-signup-step="2"]'))) return;
+      if (window.RevEngineFormUX && !window.RevEngineFormUX.validateForm(form.querySelector('[data-signup-step="2"]'))) return;
       try {
         await api('/auth/register', { method: 'POST', body: JSON.stringify(formData(form)) });
         window.location.href = 'plan-selection.html';
       } catch (error) {
         const text = error.message || 'Could not create account.';
         message(text);
-        if (window.FieldCoreUI) window.FieldCoreUI.notify(text, { type: 'error' });
+        if (window.RevEngineUI) window.RevEngineUI.notify(text, { type: 'error' });
       }
     });
   }

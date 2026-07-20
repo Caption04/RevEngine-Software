@@ -4,7 +4,7 @@ const ALGORITHM = 'aes-256-gcm';
 
 function masterKey() {
   const encoded = process.env.INTEGRATION_SECRET_MASTER_KEY_BASE64;
-  if (!encoded && process.env.NODE_ENV === 'test') return crypto.createHash('sha256').update('fieldcore-test-integration-secret-key').digest();
+  if (!encoded && process.env.NODE_ENV === 'test') return crypto.createHash('sha256').update('revengine-test-integration-secret-key').digest();
   if (!encoded) throw new Error('Integration secret master key is not configured');
   const key = Buffer.from(encoded, 'base64');
   if (key.length !== 32) throw new Error('Integration secret master key must decode to 32 bytes');

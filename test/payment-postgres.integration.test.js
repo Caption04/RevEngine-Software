@@ -9,7 +9,7 @@ if (!configured) {
   const testUrl = new URL(process.env.PAYMENT_TEST_DATABASE_URL);
   assert.ok(['localhost', '127.0.0.1'].includes(testUrl.hostname));
   assert.ok(testUrl.pathname.replace(/^\//, '').endsWith('_test'));
-  assert.ok(!['fieldcore_zw', 'fieldcore_sa'].includes(testUrl.pathname.replace(/^\//, '')));
+  assert.ok(!['revengine_zw', 'revengine_sa'].includes(testUrl.pathname.replace(/^\//, '')));
   process.env.DATABASE_URL = testUrl.toString();
 
   const { PrismaClient } = require('@prisma/client');

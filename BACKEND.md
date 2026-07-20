@@ -1,4 +1,4 @@
-# FieldCore Backend
+# Rev Engine Backend
 
 This project has been upgraded from a fake in-memory local API to an Express, PostgreSQL, Prisma, Zod, bcrypt-compatible hashing with bcryptjs, and JWT-cookie backend.
 
@@ -39,7 +39,7 @@ See `README.md` for environment variables and demo credentials.
 
 ## TASK4 Offline Worker Sync Contract
 
-FieldCore now exposes a backend foundation for future Android/iOS technician apps that need to work with weak connectivity.
+Rev Engine now exposes a backend foundation for future Android/iOS technician apps that need to work with weak connectivity.
 
 Worker-only endpoints:
 
@@ -81,7 +81,7 @@ This task does not build a native mobile app. It provides the safe API contract 
 
 ## TASK6 offer-specific localization
 
-FieldCore now supports company-level localization for country, timezone, currency, allowed currencies, tax/VAT label, quote expiry, payment terms, date/number format preferences, and configurable manual payment methods. Quotes, invoices, receipts, finance exports, public service summaries, and client-facing data can carry localization metadata.
+Rev Engine now supports company-level localization for country, timezone, currency, allowed currencies, tax/VAT label, quote expiry, payment terms, date/number format preferences, and configurable manual payment methods. Quotes, invoices, receipts, finance exports, public service summaries, and client-facing data can carry localization metadata.
 
 Payment methods are configurable operational options only unless a real provider integration is separately configured. CSV export remains the accounting foundation; live Xero/Sage/QuickBooks sync is not claimed.
 
@@ -184,7 +184,7 @@ Runbooks:
 
 ## TASK16 Flutter technician app
 
-The native technician app scaffold lives in `apps/fieldcore_technician` and is intentionally separated from the Node/Express backend. It uses the existing TASK10 mobile/offline API contract:
+The native technician app scaffold lives in `apps/revengine_technician` and is intentionally separated from the Node/Express backend. It uses the existing TASK10 mobile/offline API contract:
 
 - `POST /api/auth/login`
 - `POST /api/worker/devices/register`

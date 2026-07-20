@@ -60,7 +60,7 @@ function consolePayload(channel, message = {}, context = {}) {
 
 function logConsoleDelivery(channel, message = {}, context = {}) {
   const payload = consolePayload(channel, message, context);
-  console.info(`[fieldcore:${String(channel || '').toLowerCase()}:console]`, JSON.stringify(payload, null, 2));
+  console.info(`[revengine:${String(channel || '').toLowerCase()}:console]`, JSON.stringify(payload, null, 2));
   return {
     status: 'SENT',
     providerStatus: 'CONSOLE',

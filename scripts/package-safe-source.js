@@ -2,7 +2,7 @@ const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const output = path.join(root, 'fieldcore-source-safe.tar');
+const output = path.join(root, 'revengine-source-safe.tar');
 const temporaryOutput = `${output}.tmp`;
 const listed = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { cwd: root, encoding: 'buffer' });
 if (listed.status !== 0) throw new Error('Could not list source files');

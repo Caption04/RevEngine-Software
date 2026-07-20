@@ -1,4 +1,4 @@
-# FieldCore — Final Paynow and Ozow Completion Task
+# Rev Engine — Final Paynow and Ozow Completion Task
 
 ## Purpose
 
@@ -7,16 +7,16 @@ Read `AGENTS.md` and the current `TASK.md` first. Then replace the payment secti
 Work only inside:
 
 ```text
-/home/kuhlinji/code/FieldCore_Software
+/home/kuhlinji/code/RevEngine-Software
 ```
 
 This is a final, evidence-driven completion pass for **customer invoice payments through Paynow and Ozow**.
 
-It is not a request to add every imaginable payment product. It is a request to close every reasonably foreseeable failure path visible in the current FieldCore code and required by the documented Paynow/Ozow flows.
+It is not a request to add every imaginable payment product. It is a request to close every reasonably foreseeable failure path visible in the current Rev Engine code and required by the documented Paynow/Ozow flows.
 
 Do not expand this work to:
 
-- FieldCore SaaS subscription billing;
+- Rev Engine SaaS subscription billing;
 - unrelated payment providers;
 - recurring card tokenization;
 - automatic Paynow or Ozow refunds unless an official, tested API is intentionally added later;
@@ -41,12 +41,12 @@ Preserve all of these:
 - No tenant can set provider endpoints, callback URLs, test/live mode, hashes, or technical configuration.
 - No global merchant credential fallback may be used for an ordinary tenant.
 - No `alert()`, `confirm()`, or `prompt()`.
-- Use the existing FieldCore toast and modal systems.
+- Use the existing Rev Engine toast and modal systems.
 - Customer and company-facing wording must be plain and suitable for a Grade 5 reader.
 - Preserve tenant isolation, permission checks, and regional restrictions.
 - Never delete financial history to correct a state.
 - Never lose or roll back a real provider-confirmed payment merely because the invoice changed or was already paid.
-- Do not reset `fieldcore_zw`, `fieldcore_sa`, or any database containing QA data.
+- Do not reset `revengine_zw`, `revengine_sa`, or any database containing QA data.
 
 ---
 
@@ -91,7 +91,7 @@ Do not use “done”, “complete”, or “production-ready” loosely.
 Before editing:
 
 ```bash
-cd /home/kuhlinji/code/FieldCore_Software
+cd /home/kuhlinji/code/RevEngine-Software
 pwd
 git status --short
 git diff --check
@@ -350,11 +350,11 @@ These attempts cannot be restarted:
 - `FAILED`
 - `EXPIRED`
 
-A new attempt requires a new FieldCore reference and, for Paynow, a new merchant trace.
+A new attempt requires a new Rev Engine reference and, for Paynow, a new merchant trace.
 
 ## PL-07 — provider transaction uniqueness
 
-Add a nullable unique constraint that prevents one real provider transaction from being attached to two FieldCore attempts.
+Add a nullable unique constraint that prevents one real provider transaction from being attached to two Rev Engine attempts.
 
 Use a key appropriate to the architecture, such as:
 
@@ -512,7 +512,7 @@ Add fixtures based on current official examples.
 ## PN-03 — currency and market
 
 - Paynow connection is available only to the Zimbabwe regional tenant policy.
-- FieldCore Paynow invoice payments must use USD unless a separate officially supported currency policy is deliberately introduced later.
+- Rev Engine Paynow invoice payments must use USD unless a separate officially supported currency policy is deliberately introduced later.
 - Do not accept a caller-supplied currency override that conflicts with invoice/company/provider policy.
 - Do not hardcode callback currency without verifying the saved attempt’s currency.
 
@@ -611,7 +611,7 @@ A stale positive callback cannot reopen `REFUNDED` or `DISPUTED`.
 
 Paynow may include optional token or payment-instrument fields.
 
-FieldCore does not currently need recurring payment tokenization.
+Rev Engine does not currently need recurring payment tokenization.
 
 - Do not store tokens, instrument details, fraud payloads, or sensitive raw values unless explicitly required and reviewed later.
 - They must still be included where needed to validate the ordered hash.
@@ -1243,7 +1243,7 @@ Use `PAYMENT_TEST_DATABASE_URL` only when:
 
 - hostname is `localhost` or `127.0.0.1`;
 - database name ends in `_test`;
-- database is not `fieldcore_zw` or `fieldcore_sa`.
+- database is not `revengine_zw` or `revengine_sa`.
 
 The suite must run the same services used by production routes.
 
@@ -1299,13 +1299,13 @@ Do not guess the database credentials. Parse the existing local `.env` database 
 Create a dedicated test database safely, for example:
 
 ```bash
-sudo -u postgres createdb -O <real_local_db_owner> fieldcore_payments_test
+sudo -u postgres createdb -O <real_local_db_owner> revengine_payments_test
 ```
 
 Set in the current shell or a local ignored test environment file:
 
 ```text
-PAYMENT_TEST_DATABASE_URL=postgresql://<user>:<password>@localhost:5432/fieldcore_payments_test
+PAYMENT_TEST_DATABASE_URL=postgresql://<user>:<password>@localhost:5432/revengine_payments_test
 ```
 
 Never commit it.
@@ -1349,7 +1349,7 @@ Proceed only after every automated gate passes.
 ## Zimbabwe
 
 ```bash
-cd /home/kuhlinji/code/FieldCore_Software
+cd /home/kuhlinji/code/RevEngine-Software
 set -a
 source .env.zw
 set +a
@@ -1369,7 +1369,7 @@ Database schema is up to date!
 ## South Africa
 
 ```bash
-cd /home/kuhlinji/code/FieldCore_Software
+cd /home/kuhlinji/code/RevEngine-Software
 set -a
 source .env.sa
 set +a
@@ -1402,7 +1402,7 @@ Restart both servers.
 
 ```bash
 fuser -k 3000/tcp 2>/dev/null || true
-cd /home/kuhlinji/code/FieldCore_Software
+cd /home/kuhlinji/code/RevEngine-Software
 npm run dev:zw
 ```
 
@@ -1410,7 +1410,7 @@ In another terminal:
 
 ```bash
 fuser -k 3001/tcp 2>/dev/null || true
-cd /home/kuhlinji/code/FieldCore_Software
+cd /home/kuhlinji/code/RevEngine-Software
 npm run dev:sa
 ```
 

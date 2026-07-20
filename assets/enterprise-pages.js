@@ -26,7 +26,7 @@
   }
 
   function notifyAction(message, ok = true) {
-    if (window.FieldCoreUI) window.FieldCoreUI.notify(message, { type: ok ? 'success' : 'error' });
+    if (window.RevEngineUI) window.RevEngineUI.notify(message, { type: ok ? 'success' : 'error' });
   }
 
   function badge(value) {

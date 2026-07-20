@@ -1,6 +1,6 @@
 # Security, compliance, and reliability foundation
 
-FieldCore includes an enterprise-readiness security foundation. This is a practical control set for mid-market procurement conversations; it is not a SOC 2, ISO 27001, or PCI certification claim.
+Rev Engine includes an enterprise-readiness security foundation. This is a practical control set for mid-market procurement conversations; it is not a SOC 2, ISO 27001, or PCI certification claim.
 
 ## Controls added
 

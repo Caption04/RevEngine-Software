@@ -3,7 +3,7 @@
     const formUx = document.createElement('script');
     formUx.src = 'assets/form-ux.js';
     formUx.defer = true;
-    formUx.dataset.fieldcoreFormUx = 'true';
+    formUx.dataset.revengineFormUx = 'true';
     document.head.appendChild(formUx);
   }
 
@@ -457,8 +457,8 @@
     shell.className = 'app-shell';
     shell.innerHTML = `<aside class="sidebar" aria-label="Primary navigation">
       <a class="brand" href="index.html">
-        <span class="brand-mark">FC</span>
-        <span class="brand-name">FieldCore</span>
+        <span class="brand-mark"><img src="assets/rev-engine-mark.png" alt="Rev Engine logo"></span>
+        <span class="brand-name">Rev Engine</span>
       </a>
       ${searchBox()}
       <nav class="nav">${nav(current, null)}</nav>

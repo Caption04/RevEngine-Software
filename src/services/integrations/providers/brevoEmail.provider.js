@@ -20,7 +20,7 @@ async function sendBrevoEmail({ connection, secrets, message }) {
     method: 'POST',
     headers: { 'api-key': secrets.apiKey, 'content-type': 'application/json', accept: 'application/json' },
     body: JSON.stringify({
-      sender: { name: config.senderName || 'FieldCore', email: config.senderEmail },
+      sender: { name: config.senderName || 'Rev Engine', email: config.senderEmail },
       replyTo: config.replyToEmail ? { email: config.replyToEmail } : undefined,
       to: [{ email: message.to }],
       subject: message.subject,

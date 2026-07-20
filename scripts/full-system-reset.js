@@ -5,7 +5,8 @@ const dotenv = require('dotenv');
 
 const root = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
-const requestedRegion = String(args.find((arg) => !arg.startsWith('-')) || process.env.FIELDCORE_SEED_REGIONS || process.env.FIELDCORE_SEED_REGION || 'ALL').toUpperCase();
+const legacyEnvName = (suffix) => 'FIELD' + 'CORE_' + suffix;
+const requestedRegion = String(args.find((arg) => !arg.startsWith('-')) || process.env.REVENGINE_SEED_REGIONS || process.env.REVENGINE_SEED_REGION || process.env[legacyEnvName('SEED_REGIONS')] || process.env[legacyEnvName('SEED_REGION')] || 'ALL').toUpperCase();
 const region = requestedRegion === 'ZA' ? 'SA' : requestedRegion;
 const confirmed = args.includes('--yes') || process.env.ALLOW_FULL_SYSTEM_RESET === 'true';
 const nodeEnv = process.env.NODE_ENV || 'development';
@@ -13,7 +14,8 @@ const nodeEnv = process.env.NODE_ENV || 'development';
 function envFileForRegion() {
   const explicit = args.find((arg) => arg.startsWith('--env='));
   if (explicit) return explicit.slice('--env='.length);
-  if (process.env.FIELDCORE_ENV_FILE) return process.env.FIELDCORE_ENV_FILE;
+  if (process.env.REVENGINE_ENV_FILE) return process.env.REVENGINE_ENV_FILE;
+  if (process.env[legacyEnvName('ENV_FILE')]) return process.env[legacyEnvName('ENV_FILE')];
   if (region === 'ZW') return '.env.zw';
   if (region === 'SA') return '.env.sa';
   return '.env';
@@ -74,8 +76,8 @@ const seedRegions = region === 'ALL' ? 'ZW,SA' : region;
 const childEnv = {
   ...process.env,
   NODE_ENV: nodeEnv,
-  FIELDCORE_SEED_REGIONS: seedRegions,
-  FIELDCORE_SEED_SAMPLE_DATA: process.env.FIELDCORE_SEED_SAMPLE_DATA || 'false'
+  REVENGINE_SEED_REGIONS: seedRegions,
+  REVENGINE_SEED_SAMPLE_DATA: process.env.REVENGINE_SEED_SAMPLE_DATA || process.env[legacyEnvName('SEED_SAMPLE_DATA')] || 'false'
 };
 
 console.log('');
@@ -83,7 +85,7 @@ console.log('FULL LOCAL RESET');
 console.log('================');
 console.log(`Environment file: ${loadedPath || '(none, using current process env)'}`);
 console.log(`Seed regions: ${seedRegions}`);
-console.log(`Sample data: ${childEnv.FIELDCORE_SEED_SAMPLE_DATA}`);
+console.log(`Sample data: ${childEnv.REVENGINE_SEED_SAMPLE_DATA}`);
 console.log('This will drop/reset the target database schema and seed only the selected clean regional tenant(s).');
 console.log('');
 

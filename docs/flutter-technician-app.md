@@ -1,11 +1,11 @@
 # TASK16 Flutter technician app scaffold
 
-TASK16 adds a separated Flutter scaffold under `apps/fieldcore_technician`. The backend remains the system of record. The app consumes the existing mobile/offline API contract from `docs/mobile-api-contract.md`.
+TASK16 adds a separated Flutter scaffold under `apps/revengine_technician`. The backend remains the system of record. The app consumes the existing mobile/offline API contract from `docs/mobile-api-contract.md`.
 
 ## Directory
 
 ```text
-apps/fieldcore_technician/
+apps/revengine_technician/
   pubspec.yaml
   lib/
   test/
@@ -23,7 +23,7 @@ Generated Flutter output is intentionally excluded from Git and future zip uploa
 From the app directory:
 
 ```bash
-cd apps/fieldcore_technician
+cd apps/revengine_technician
 ../../scripts/bootstrap_flutter_technician_platforms.sh
 flutter pub get
 flutter analyze
@@ -33,7 +33,7 @@ flutter test
 Run against local backend:
 
 ```bash
-flutter run --dart-define=FIELDCORE_API_BASE_URL=http://10.0.2.2:3000
+flutter run --dart-define=REVENGINE_API_BASE_URL=http://10.0.2.2:3000
 ```
 
 For a physical Android device, replace `10.0.2.2` with the computer LAN IP that can reach the Node backend.

@@ -1,6 +1,6 @@
-# FieldCore
+# Rev Engine
 
-FieldCore is a field-service SaaS foundation for companies that manage customers, workers, jobs, quotes, invoices, schedules, worker locations, and proof-of-work photos.
+Rev Engine is a field-service SaaS foundation for companies that manage customers, workers, jobs, quotes, invoices, schedules, worker locations, and proof-of-work photos.
 
 The existing static HTML/CSS UI is preserved. `server.js` now starts an Express backend, serves the static pages, and mounts the production-oriented API under `/api`.
 
@@ -63,7 +63,7 @@ Open `http://localhost:3000`.
 - `NODE_ENV`: use `production` in production. Production startup validates critical config.
 - `DATABASE_URL`: PostgreSQL connection string used by Prisma.
 - `JWT_SECRET`: long random secret for signing auth tokens. Production refuses weak/default values.
-- `COOKIE_NAME`: auth cookie name, defaults to `fieldcore_token`.
+- `COOKIE_NAME`: auth cookie name, defaults to `revengine_token`.
 - `CLIENT_ORIGIN`: allowed browser origin for CORS, usually `http://localhost:3000` locally.
 - `DEMO_OWNER_EMAIL`: seed owner email, defaults to `owner@fieldcore.test`.
 - `DEMO_PASSWORD`: seed user password, defaults to `FieldCoreDemo2026!`.
@@ -137,7 +137,7 @@ All business data is scoped by `companyId` in Prisma queries. API handlers never
 
 ## TASK6 offer-specific localization
 
-FieldCore now supports company-level localization for country, timezone, currency, allowed currencies, tax/VAT label, quote expiry, payment terms, date/number format preferences, and configurable manual payment methods. Quotes, invoices, receipts, finance exports, public service summaries, and client-facing data can carry localization metadata.
+Rev Engine now supports company-level localization for country, timezone, currency, allowed currencies, tax/VAT label, quote expiry, payment terms, date/number format preferences, and configurable manual payment methods. Quotes, invoices, receipts, finance exports, public service summaries, and client-facing data can carry localization metadata.
 
 Payment methods are configurable operational options only unless a real provider integration is separately configured. CSV export remains the accounting foundation; live Xero/Sage/QuickBooks sync is not claimed.
 
@@ -146,26 +146,26 @@ Manual QA should verify: finance settings save, payment methods restrict payment
 
 ## Enterprise approval gates
 
-FieldCore includes enforceable enterprise approval gates, granular permission overrides, branch-scoped access, and audit hardening. See `docs/enterprise-approvals-rbac-audit.md`.
+Rev Engine includes enforceable enterprise approval gates, granular permission overrides, branch-scoped access, and audit hardening. See `docs/enterprise-approvals-rbac-audit.md`.
 
 ### Enterprise accounting integrations
 
-FieldCore includes an accounting-sync foundation for Xero, Sage, and QuickBooks. Xero has the first full provider path and local mock mode; Sage and QuickBooks use the same provider abstraction as safe stubs. Manual CSV export remains available as a fallback. See `docs/accounting-integrations.md`.
+Rev Engine includes an accounting-sync foundation for Xero, Sage, and QuickBooks. Xero has the first full provider path and local mock mode; Sage and QuickBooks use the same provider abstraction as safe stubs. Manual CSV export remains available as a fallback. See `docs/accounting-integrations.md`.
 
 ## TASK9 payment rails and collections
 
-FieldCore now includes a provider-ready payment rails layer for PayFast, Yoco, Ozow, Paynow/manual bank rails, and mock payment QA. Invoices can generate payment links, provider webhooks can confirm trusted payments, reconciliation imports can be matched manually, reminders are throttled, and refunds are tied into TASK7 approval gates.
+Rev Engine now includes a provider-ready payment rails layer for PayFast, Yoco, Ozow, Paynow/manual bank rails, and mock payment QA. Invoices can generate payment links, provider webhooks can confirm trusted payments, reconciliation imports can be matched manually, reminders are throttled, and refunds are tied into TASK7 approval gates.
 
 See `docs/payment-rails-reconciliation-collections.md`.
 
 
 ## TASK10 mobile/offline foundation
 
-FieldCore now includes a native-app-ready mobile API contract, device revoke/trust metadata, sync v2 pull/push endpoints, per-action offline results, conflict detection, checklist templates/answers, and an admin Mobile Sync page for failed or conflicted offline actions. See `docs/mobile-api-contract.md`.
+Rev Engine now includes a native-app-ready mobile API contract, device revoke/trust metadata, sync v2 pull/push endpoints, per-action offline results, conflict detection, checklist templates/answers, and an admin Mobile Sync page for failed or conflicted offline actions. See `docs/mobile-api-contract.md`.
 
 ## TASK11 contract, asset, warranty, SLA, and preventive maintenance automation
 
-FieldCore now supports enterprise contract automation on top of assets and service contracts:
+Rev Engine now supports enterprise contract automation on top of assets and service contracts:
 
 - asset service history with jobs, proof, invoices, incidents, compliance documents, and parts used;
 - preventive maintenance generation from active contract service lines;
@@ -179,7 +179,7 @@ See `docs/contract-asset-sla-automation.md`.
 
 ### TASK12 enterprise inventory and job costing
 
-FieldCore now includes deeper inventory/procurement controls: preferred suppliers, min stock, vehicle stock, purchase request lines, PO approval lifecycle, partial receipts/backorders, inventory valuation, supplier performance, and job costing.
+Rev Engine now includes deeper inventory/procurement controls: preferred suppliers, min stock, vehicle stock, purchase request lines, PO approval lifecycle, partial receipts/backorders, inventory valuation, supplier performance, and job costing.
 
 - TASK13 executive dashboards add owner/admin analytics for revenue leakage, branch performance, technician productivity, quote-to-cash, contract/SLA, and inventory/procurement risk.
 
@@ -189,7 +189,7 @@ Adds `onboarding.html` plus tenant-scoped onboarding checklist, implementation m
 
 ### TASK15 — Security, compliance, reliability foundation
 
-FieldCore now includes a practical enterprise security foundation: owner/admin 2FA, recovery codes, revocable sessions, password/lockout policies, identity-provider configuration records, scoped data exports, security event monitoring, and an internal operations status page. This is a compliance-ready foundation, not a certification claim.
+Rev Engine now includes a practical enterprise security foundation: owner/admin 2FA, recovery codes, revocable sessions, password/lockout policies, identity-provider configuration records, scoped data exports, security event monitoring, and an internal operations status page. This is a compliance-ready foundation, not a certification claim.
 
 Security Center: `security-center.html`
 
@@ -208,6 +208,6 @@ Key endpoints:
 
 ### TASK16 — Flutter technician app scaffold
 
-FieldCore now includes an isolated Flutter technician app scaffold under `apps/fieldcore_technician`. The app consumes the TASK10 mobile/offline API contract, registers worker devices, pulls assigned jobs, queues offline field actions, and syncs them back through `/api/worker/sync/v2/push`.
+Rev Engine now includes an isolated Flutter technician app scaffold under `apps/revengine_technician`. The app consumes the TASK10 mobile/offline API contract, registers worker devices, pulls assigned jobs, queues offline field actions, and syncs them back through `/api/worker/sync/v2/push`.
 
-See `docs/flutter-technician-app.md` and `apps/fieldcore_technician/README.md`.
+See `docs/flutter-technician-app.md` and `apps/revengine_technician/README.md`.

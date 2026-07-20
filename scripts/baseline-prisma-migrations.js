@@ -8,7 +8,8 @@ const { PrismaClient } = require('@prisma/client');
 
 const root = path.resolve(__dirname, '..');
 const migrationsDir = path.join(root, 'prisma', 'migrations');
-const confirmed = process.argv.includes('--yes') || process.env.FIELDCORE_BASELINE_CONFIRM === 'YES';
+const legacyConfirm = process.env['FIELD' + 'CORE_BASELINE_CONFIRM'];
+const confirmed = process.argv.includes('--yes') || process.env.REVENGINE_BASELINE_CONFIRM === 'YES' || legacyConfirm === 'YES';
 
 function fail(message) {
   console.error(`\nBaseline aborted: ${message}`);

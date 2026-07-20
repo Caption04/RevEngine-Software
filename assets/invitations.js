@@ -27,7 +27,7 @@
       heading.textContent = 'Join ' + invitation.company.name;
       copy.textContent = `You were invited as ${invitation.jobTitle || invitation.roleTemplate && invitation.roleTemplate.name || 'a team member'}. Set your password to join.`;
       form.hidden = false;
-      if (window.FieldCoreFormUX) window.FieldCoreFormUX.refresh();
+      if (window.RevEngineFormUX) window.RevEngineFormUX.refresh();
     } catch (error) {
       heading.textContent = 'Invitation unavailable';
       copy.textContent = error.message || 'Ask the sender to resend the invitation.';
@@ -37,11 +37,11 @@
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     setMessage('');
-    if (window.FieldCoreFormUX && !window.FieldCoreFormUX.validateForm(form)) return;
+    if (window.RevEngineFormUX && !window.RevEngineFormUX.validateForm(form)) return;
     const values = Object.fromEntries(new FormData(form).entries());
     if (values.password !== values.confirmPassword) {
       setMessage('Passwords do not match.');
-      if (window.FieldCoreUI) window.FieldCoreUI.notify('Passwords do not match.', { type: 'error' });
+      if (window.RevEngineUI) window.RevEngineUI.notify('Passwords do not match.', { type: 'error' });
       return;
     }
     try {
@@ -50,7 +50,7 @@
     } catch (error) {
       const text = error.message || 'The invitation could not be accepted. Ask the sender to resend it.';
       setMessage(text);
-      if (window.FieldCoreUI) window.FieldCoreUI.notify(text, { type: 'error' });
+      if (window.RevEngineUI) window.RevEngineUI.notify(text, { type: 'error' });
     }
   });
 

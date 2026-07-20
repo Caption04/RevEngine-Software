@@ -29,5 +29,5 @@ test('frontend does not use browser-native alert, confirm, or prompt dialogs', (
     }
   }
 
-  assert.deepEqual(violations, [], `Use FieldCoreUI notifications and modals instead:\n${violations.join('\n')}`);
+  assert.deepEqual(violations, [], `Use RevEngineUI notifications and modals instead:\n${violations.join('\n')}`);
 });

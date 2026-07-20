@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { prisma } = require('./db');
 const { AppError } = require('./errors');
 
-const COOKIE_NAME = process.env.COOKIE_NAME || 'fieldcore_token';
+const COOKIE_NAME = process.env.COOKIE_NAME || 'revengine_token';
 const DEV_JWT_SECRET = 'dev-only-change-me';
 const JWT_SECRET = process.env.JWT_SECRET || DEV_JWT_SECRET;
 

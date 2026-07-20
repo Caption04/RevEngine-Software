@@ -6,8 +6,8 @@ const root = path.resolve(__dirname, '..');
 const rootEnvPath = path.join(root, '.env');
 
 const REGION_TARGETS = {
-  ZW: { file: '.env.zw', database: 'fieldcore_zw', port: '3000', seedRegions: 'ZW' },
-  SA: { file: '.env.sa', database: 'fieldcore_sa', port: '3001', seedRegions: 'SA' }
+  ZW: { file: '.env.zw', database: 'revengine_zw', port: '3000', seedRegions: 'ZW' },
+  SA: { file: '.env.sa', database: 'revengine_sa', port: '3001', seedRegions: 'SA' }
 };
 
 function readEnvFile(filePath) {
@@ -66,9 +66,9 @@ function mergeRegionEnv(target, rootParsed, targetText) {
     WHATSAPP_PROVIDER: targetText.includes('WHATSAPP_PROVIDER=') ? null : rootParsed.WHATSAPP_PROVIDER || 'console',
     SMS_PROVIDER: targetText.includes('SMS_PROVIDER=') ? null : rootParsed.SMS_PROVIDER || 'console',
     DATABASE_URL: databaseUrlFor(parseDatabaseUrl(rootParsed.DATABASE_URL), target.database),
-    FIELDCORE_REGION: target.seedRegions,
-    FIELDCORE_SEED_REGIONS: target.seedRegions,
-    FIELDCORE_SEED_SAMPLE_DATA: 'false',
+    REVENGINE_REGION: target.seedRegions,
+    REVENGINE_SEED_REGIONS: target.seedRegions,
+    REVENGINE_SEED_SAMPLE_DATA: 'false',
     PORT: target.port,
     APP_BASE_URL: `http://localhost:${target.port}`
   };

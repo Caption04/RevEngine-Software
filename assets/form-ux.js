@@ -136,8 +136,8 @@
   }
 
   function bindInput(input) {
-    if (input.dataset.fieldcoreValidationBound === 'true') return;
-    input.dataset.fieldcoreValidationBound = 'true';
+    if (input.dataset.revengineValidationBound === 'true') return;
+    input.dataset.revengineValidationBound = 'true';
     input.addEventListener('blur', function () { validateInput(input, true); });
     input.addEventListener('input', function () {
       if (input.classList.contains('field-input-invalid') || /confirm/i.test(input.name || input.id || '')) validateInput(input, true);
@@ -184,7 +184,7 @@
     return true;
   }
 
-  window.FieldCoreFormUX = { refresh, validateForm };
+  window.RevEngineFormUX = { refresh, validateForm };
 
   function start() {
     refresh(document);

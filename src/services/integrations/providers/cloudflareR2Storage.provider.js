@@ -108,8 +108,8 @@ async function testCloudflareR2({ connection, secrets }) {
     return { ok: true, status: 'CONFIGURED', verified: false, message: 'R2 credentials are configured; real upload verification is disabled in tests.' };
   }
   try {
-    const key = `fieldcore-r2-test-${Date.now()}-${crypto.randomUUID()}.txt`;
-    await uploadR2Object({ connection, secrets, objectKey: key, body: Buffer.from('fieldcore'), mimeType: 'text/plain' });
+    const key = `revengine-r2-test-${Date.now()}-${crypto.randomUUID()}.txt`;
+    await uploadR2Object({ connection, secrets, objectKey: key, body: Buffer.from('revengine'), mimeType: 'text/plain' });
     await deleteR2Object({ connection, secrets, objectKey: key });
     return { ok: true, status: 'ACTIVE' };
   } catch (error) {

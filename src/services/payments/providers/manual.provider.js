@@ -15,7 +15,7 @@ function verifyManualWebhook(connection, req, mockMode) {
   const secret = connection && connection.config && connection.config.webhookSecret;
   if (!secret) return mockMode;
   const signature = req && req.headers && (
-    req.headers['x-fieldcore-payment-signature'] ||
+    req.headers['x-revengine-payment-signature'] ||
     req.headers['x-payfast-signature'] ||
     req.headers['x-yoco-signature'] ||
     req.headers['x-ozow-signature'] ||
@@ -37,7 +37,7 @@ function createManualProvider({ provider = 'MANUAL_BANK', connection = {} } = {}
       return {
         provider,
         externalId: `${String(provider).toLowerCase()}-link-${reference}`,
-        checkoutUrl: `https://payments.fieldcore.local/${String(provider).toLowerCase()}/${encodeURIComponent(reference)}`,
+        checkoutUrl: `https://payments.revengine.local/${String(provider).toLowerCase()}/${encodeURIComponent(reference)}`,
         status: 'CREATED',
         amount,
         currency,

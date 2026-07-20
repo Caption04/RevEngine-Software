@@ -17,7 +17,7 @@
   }
 
   function validateForm(form) {
-    if (window.FieldCoreFormUX) return window.FieldCoreFormUX.validateForm(form);
+    if (window.RevEngineFormUX) return window.RevEngineFormUX.validateForm(form);
     if (form && form.checkValidity()) return true;
     const invalid = form && form.querySelector(':invalid');
     if (invalid) invalid.focus();
@@ -244,7 +244,7 @@
       const needsChoice = ['BRANCH', 'TEAM'].includes(form.scopeType.value);
       scopeWrap.hidden = !needsChoice;
       scopeWrap.innerHTML = needsChoice ? scopePickerHtml(form.scopeType.value, selectedIds) : '';
-      if (window.FieldCoreFormUX) window.FieldCoreFormUX.refresh();
+      if (window.RevEngineFormUX) window.RevEngineFormUX.refresh();
     }
 
     function applyTemplate(template) {
@@ -287,7 +287,7 @@
       fullAccess.checked = true;
       fullAccess.dispatchEvent(new Event('change'));
     }
-    if (window.FieldCoreFormUX) window.FieldCoreFormUX.refresh();
+    if (window.RevEngineFormUX) window.RevEngineFormUX.refresh();
   }
 
   function renderMembers() {
@@ -324,7 +324,7 @@
     </tr>`).join('') || '<tr><td colspan="5">No pending invitations.</td></tr>';
     document.querySelectorAll('[data-resend]').forEach((button) => button.onclick = () => resendInvitation(data.invitations.find((invite) => invite.id === button.dataset.resend)));
     document.querySelectorAll('[data-revoke]').forEach((button) => button.onclick = async () => {
-      const confirmed = await window.FieldCoreUI.confirm({
+      const confirmed = await window.RevEngineUI.confirm({
         title: 'Revoke invitation?',
         message: 'This person will no longer be able to use the invitation link.',
         confirmLabel: 'Revoke invitation',
@@ -346,8 +346,8 @@
   }
 
   function notice(text, ok = true) {
-    if (window.FieldCoreUI) {
-      window.FieldCoreUI.notify(text, { type: ok ? 'success' : 'error' });
+    if (window.RevEngineUI) {
+      window.RevEngineUI.notify(text, { type: ok ? 'success' : 'error' });
       return;
     }
     console[ok ? 'info' : 'error'](text);
@@ -382,7 +382,7 @@
     document.body.appendChild(modal);
     const close = () => modal.remove();
     modal.querySelectorAll('[data-close]').forEach((button) => button.onclick = close);
-    if (window.FieldCoreFormUX) window.FieldCoreFormUX.refresh();
+    if (window.RevEngineFormUX) window.RevEngineFormUX.refresh();
     return { modal, close };
   }
 
@@ -504,7 +504,7 @@
   async function toggleMember(member) {
     if (!member || member.role === 'OWNER') return;
     const disabled = !member.disabledAt;
-    const confirmed = await window.FieldCoreUI.confirm({
+    const confirmed = await window.RevEngineUI.confirm({
       title: `${disabled ? 'Disable' : 'Reactivate'} ${member.name}?`,
       message: disabled ? 'They will not be able to sign in until you reactivate them.' : 'They will be able to sign in again.',
       confirmLabel: disabled ? 'Disable member' : 'Reactivate member',

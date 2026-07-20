@@ -1,6 +1,6 @@
 # Offer-Specific Localization
 
-TASK6 adds practical localization for South Africa, Zimbabwe, and similar field-service markets without making FieldCore hardcoded to one country.
+TASK6 adds practical localization for South Africa, Zimbabwe, and similar field-service markets without making Rev Engine hardcoded to one country.
 
 Implemented foundation:
 

@@ -173,7 +173,7 @@ const PERMISSION_CATALOG = [
   {
     key: 'Messages',
     label: 'Sent messages',
-    help: 'Choose who can check messages sent by FieldCore.',
+    help: 'Choose who can check messages sent by Rev Engine.',
     permissions: [
       { key: 'notifications.view', label: 'View sent messages', targets: ['settings.html#notifications', 'GET /api/notification-logs'] }
     ]

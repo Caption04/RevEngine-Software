@@ -1,6 +1,6 @@
 # TASK13 — Executive dashboards, analytics, and leakage reporting
 
-FieldCore now exposes enterprise analytics endpoints for owners and admins. The dashboards are company-scoped, support branch filtering, and are designed to surface revenue leakage, SLA risk, proof gaps, stock issues, and quote-to-cash bottlenecks.
+Rev Engine now exposes enterprise analytics endpoints for owners and admins. The dashboards are company-scoped, support branch filtering, and are designed to surface revenue leakage, SLA risk, proof gaps, stock issues, and quote-to-cash bottlenecks.
 
 ## API
 
@@ -13,7 +13,7 @@ FieldCore now exposes enterprise analytics endpoints for owners and admins. The 
 - `GET /api/analytics/export.csv?section=executive|branches|technicians|quote-to-cash|inventory`
 - `POST /api/analytics/report-schedules`
 
-Supported filters: `startDate`, `endDate`, and `branchId`. The implementation keeps definitions with the payload so incomplete metrics are not presented as precise truth when FieldCore does not yet have the underlying source data.
+Supported filters: `startDate`, `endDate`, and `branchId`. The implementation keeps definitions with the payload so incomplete metrics are not presented as precise truth when Rev Engine does not yet have the underlying source data.
 
 ## UI
 

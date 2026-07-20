@@ -1,5 +1,6 @@
 (function(){
   const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3000/api' : '/api';
+  const REV_ENGINE_LOGO = 'assets/rev-engine-mark.png';
   const form = document.querySelector('[data-booking-form]');
   const message = document.querySelector('[data-booking-message]');
   const serviceSelect = document.querySelector('[data-service-select]');
@@ -69,16 +70,24 @@
     prefillClient();
     try {
       const company = await publicApi('/public/company');
-      document.querySelectorAll('[data-public-brand]').forEach((node) => { node.textContent = company.brandName || 'FieldCore'; });
+      document.querySelectorAll('[data-public-brand]').forEach((node) => { node.textContent = company.brandName || 'Rev Engine'; });
       document.documentElement.style.setProperty('--blue', company.primaryColor || '#2363ff');
       document.documentElement.style.setProperty('--blue2', company.secondaryColor || '#263ff1');
       document.documentElement.style.setProperty('--green', company.accentColor || '#12a96d');
       const logo = document.querySelector('[data-public-logo]');
+      const brandName = company.brandName || 'Rev Engine';
       if (logo && company.logoUrl) {
         const image = document.createElement('img');
         image.src = company.logoUrl;
-        image.alt = 'Company logo';
+        image.alt = brandName + ' logo';
         logo.replaceChildren(image);
+      } else if (logo && brandName.trim().toLowerCase() === 'rev engine') {
+        const image = document.createElement('img');
+        image.src = REV_ENGINE_LOGO;
+        image.alt = 'Rev Engine logo';
+        logo.replaceChildren(image);
+      } else if (logo) {
+        logo.textContent = brandName.slice(0, 2).toUpperCase();
       }
     } catch (error) {}
     if (serviceSelect) serviceSelect.replaceChildren();

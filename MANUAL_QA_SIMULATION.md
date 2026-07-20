@@ -1,18 +1,18 @@
-# FieldCore Manual QA Simulation & Test Plan
+# Rev Engine Manual QA Simulation & Test Plan
 
-Use this file after the automated tests pass. It is designed to prove the full FieldCore MVP works as a real business flow, not just isolated pages.
+Use this file after the automated tests pass. It is designed to prove the full Rev Engine MVP works as a real business flow, not just isolated pages.
 
 Recommended location:
 
 ```bash
-~/code/FieldCore_Software/MANUAL_QA_SIMULATION.md
+~/code/RevEngine-Software/MANUAL_QA_SIMULATION.md
 ```
 
 ---
 
 ## 0. Goal
 
-Run one full FieldCore simulation:
+Run one full Rev Engine simulation:
 
 ```text
 Public request → admin review → quote → client portal → job scheduling → worker proof-of-work → invoice/payment/receipt → reports → billing/security checks
@@ -27,7 +27,7 @@ This confirms the final MVP after Phases 1–12.
 From Ubuntu/WSL:
 
 ```bash
-cd ~/code/FieldCore_Software
+cd ~/code/RevEngine-Software
 ```
 
 Start PostgreSQL:
@@ -68,7 +68,7 @@ Seed demo data:
 npm run seed
 ```
 
-Optional full local reset only if you are okay wiping your local FieldCore database:
+Optional full local reset only if you are okay wiping your local Rev Engine database:
 
 ```bash
 npx prisma migrate reset --force
@@ -164,7 +164,7 @@ The public client registration does not automatically link by raw email/phone. T
 For full client portal QA using the seeded customer, run this helper once:
 
 ```bash
-cd ~/code/FieldCore_Software
+cd ~/code/RevEngine-Software
 
 node - <<'NODE'
 const { PrismaClient } = require('@prisma/client');
@@ -174,7 +174,7 @@ const prisma = new PrismaClient();
 
 async function main() {
   const company = await prisma.company.findFirst({
-    where: { name: 'FieldCore Demo Services' }
+    where: { name: 'Rev Engine Demo Services' }
   });
 
   if (!company) throw new Error('Demo company not found. Run npm run seed first.');
@@ -263,7 +263,7 @@ Expected:
 Run:
 
 ```bash
-cd ~/code/FieldCore_Software
+cd ~/code/RevEngine-Software
 
 node --check src/services/reporting.service.js
 node --check src/routes/api.js
@@ -1179,17 +1179,17 @@ Optional quick API check.
 ```bash
 BASE=http://localhost:3000
 
-curl -s -c /tmp/fieldcore-owner.jar \
+curl -s -c /tmp/revengine-owner.jar \
   -H "Content-Type: application/json" \
   -d '{"email":"owner@fieldcore.test","password":"FieldCoreDemo2026!"}' \
   "$BASE/api/auth/login"
 
-curl -s -b /tmp/fieldcore-owner.jar "$BASE/api/auth/me"
-curl -s -b /tmp/fieldcore-owner.jar "$BASE/api/dashboard"
-curl -s -b /tmp/fieldcore-owner.jar "$BASE/api/billing/subscription"
-curl -s -b /tmp/fieldcore-owner.jar "$BASE/api/reports"
-curl -s -b /tmp/fieldcore-owner.jar "$BASE/api/system/status"
-curl -s -b /tmp/fieldcore-owner.jar "$BASE/api/audit-logs"
+curl -s -b /tmp/revengine-owner.jar "$BASE/api/auth/me"
+curl -s -b /tmp/revengine-owner.jar "$BASE/api/dashboard"
+curl -s -b /tmp/revengine-owner.jar "$BASE/api/billing/subscription"
+curl -s -b /tmp/revengine-owner.jar "$BASE/api/reports"
+curl -s -b /tmp/revengine-owner.jar "$BASE/api/system/status"
+curl -s -b /tmp/revengine-owner.jar "$BASE/api/audit-logs"
 ```
 
 Expected:
@@ -1253,7 +1253,7 @@ Minimum launch-readiness checklist:
 
 # Final Result
 
-If every section passes, FieldCore is manually validated as:
+If every section passes, Rev Engine is manually validated as:
 
 ```text
 Feature-complete MVP
@@ -1308,7 +1308,7 @@ Do not treat manual QA as optional. Automated tests prove code paths; this simul
 
 ## TASK6 offer-specific localization
 
-FieldCore now supports company-level localization for country, timezone, currency, allowed currencies, tax/VAT label, quote expiry, payment terms, date/number format preferences, and configurable manual payment methods. Quotes, invoices, receipts, finance exports, public service summaries, and client-facing data can carry localization metadata.
+Rev Engine now supports company-level localization for country, timezone, currency, allowed currencies, tax/VAT label, quote expiry, payment terms, date/number format preferences, and configurable manual payment methods. Quotes, invoices, receipts, finance exports, public service summaries, and client-facing data can carry localization metadata.
 
 Payment methods are configurable operational options only unless a real provider integration is separately configured. CSV export remains the accounting foundation; live Xero/Sage/QuickBooks sync is not claimed.
 
@@ -1423,10 +1423,10 @@ Manual QA should verify: finance settings save, payment methods restrict payment
 
 ## TASK16 manual QA — Flutter technician app scaffold
 
-1. Apply the patch and confirm `apps/fieldcore_technician` exists.
-2. Run `cd apps/fieldcore_technician` and `../../scripts/bootstrap_flutter_technician_platforms.sh` if Android/iOS platform folders are missing.
+1. Apply the patch and confirm `apps/revengine_technician` exists.
+2. Run `cd apps/revengine_technician` and `../../scripts/bootstrap_flutter_technician_platforms.sh` if Android/iOS platform folders are missing.
 3. Run `flutter pub get`, `flutter analyze`, and `flutter test`.
-4. Start the backend locally and run the app with `--dart-define=FIELDCORE_API_BASE_URL=http://10.0.2.2:3000` for an Android emulator.
+4. Start the backend locally and run the app with `--dart-define=REVENGINE_API_BASE_URL=http://10.0.2.2:3000` for an Android emulator.
 5. Log in as a worker and confirm device registration succeeds.
 6. Pull assigned jobs and open a job detail screen.
 7. Queue start, checklist, proof photo metadata, signature, parts-used, and complete actions while offline.

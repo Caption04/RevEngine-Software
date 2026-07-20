@@ -72,7 +72,7 @@ function privateOrLocalHost(hostname) {
 
 function providerBaseUrl(base, options = {}) {
   let value = String(base || '').trim();
-  if (!value && options.allowTestFallback) value = 'https://fieldcore.test';
+  if (!value && options.allowTestFallback) value = 'https://revengine.test';
   if (!value) throw new Error('Public payment address is not configured');
   let url;
   try { url = new URL(value); } catch { throw new Error('Public payment address is invalid'); }

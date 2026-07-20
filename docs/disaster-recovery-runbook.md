@@ -7,7 +7,7 @@ This runbook is for operational readiness. Do not store passwords, connection st
 Use the environment-provided database URL and write to a secure private backup location:
 
 ```bash
-./scripts/backup-db.sh /secure/backups/fieldcore-$(date +%F).dump
+./scripts/backup-db.sh /secure/backups/revengine-$(date +%F).dump
 ```
 
 ## Non-production restore command
@@ -15,7 +15,7 @@ Use the environment-provided database URL and write to a secure private backup l
 Never restore production data into production using this script. Use it only for test/staging verification:
 
 ```bash
-./scripts/restore-db-nonprod.sh /secure/backups/fieldcore-2026-07-07.dump
+./scripts/restore-db-nonprod.sh /secure/backups/revengine-2026-07-07.dump
 ```
 
 ## Verification checklist

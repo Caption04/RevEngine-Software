@@ -1,4 +1,4 @@
-# FieldCore mobile API contract
+# Rev Engine mobile API contract
 
 TASK10 hardens the backend contract for a native offline-first technician app. The current priority is deterministic backend sync behaviour; Flutter/iOS implementation can consume this contract later.
 
@@ -91,7 +91,7 @@ The response always includes per-action results. Successful and failed actions c
 
 ## Conflict format
 
-If a pushed action includes `snapshotUpdatedAt` older than the server job `updatedAt`, FieldCore records the action as `CONFLICT` and returns details:
+If a pushed action includes `snapshotUpdatedAt` older than the server job `updatedAt`, Rev Engine records the action as `CONFLICT` and returns details:
 
 ```json
 {
@@ -134,6 +134,6 @@ Required checklist items block `JOB_COMPLETE` until answered. Items with `photoR
 
 ## Flutter app scaffold
 
-The TASK16 Flutter scaffold lives in `apps/fieldcore_technician`. It is a consumer of this contract and should not be mixed into the backend root. Generated Flutter platform/build/cache output is excluded from Git so project zips remain under upload limits.
+The TASK16 Flutter scaffold lives in `apps/revengine_technician`. It is a consumer of this contract and should not be mixed into the backend root. Generated Flutter platform/build/cache output is excluded from Git so project zips remain under upload limits.
 
 See `docs/flutter-technician-app.md` for app bootstrap and manual QA.

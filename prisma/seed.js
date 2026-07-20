@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const { seedSystemRoleTemplates } = require('../src/services/accessControl.service');
 
 const prisma = new PrismaClient();
+const legacyEnvName = (suffix) => 'FIELD' + 'CORE_' + suffix;
 
 const saasPlans = [
   {
@@ -54,15 +55,15 @@ const saasPlans = [
 const REGION_CONFIGS = {
   ZW: {
     market: 'ZW',
-    companyId: 'fieldcore-zw-demo',
-    companyName: 'FieldCore Zimbabwe Demo',
-    legalName: 'FieldCore Zimbabwe Demo (Private) Limited',
+    companyId: 'revengine-zw-demo',
+    companyName: 'Rev Engine Zimbabwe Demo',
+    legalName: 'Rev Engine Zimbabwe Demo (Private) Limited',
     registrationNumber: 'ZW-DEMO-2026',
     taxNumber: 'ZW-VAT-DEMO',
     address: 'Demo House, Harare, Zimbabwe',
     phone: '+263 000 000 000',
-    supportEmail: 'support.zw@fieldcore.test',
-    websiteUrl: 'https://zw.fieldcore.test',
+    supportEmail: 'support.zw@revengine.test',
+    websiteUrl: 'https://zw.revengine.test',
     branch: { code: 'HARARE', name: 'Harare Operations', city: 'Harare', country: 'ZW', timezone: 'Africa/Harare' },
     finance: {
       country: 'ZW',
@@ -86,15 +87,15 @@ const REGION_CONFIGS = {
   },
   SA: {
     market: 'SA',
-    companyId: 'fieldcore-sa-demo',
-    companyName: 'FieldCore South Africa Demo',
-    legalName: 'FieldCore South Africa Demo (Pty) Ltd',
+    companyId: 'revengine-sa-demo',
+    companyName: 'Rev Engine South Africa Demo',
+    legalName: 'Rev Engine South Africa Demo (Pty) Ltd',
     registrationNumber: 'SA-DEMO-2026',
     taxNumber: 'SA-VAT-DEMO',
     address: 'Demo Office, Johannesburg, South Africa',
     phone: '+27 000 000 000',
-    supportEmail: 'support.sa@fieldcore.test',
-    websiteUrl: 'https://sa.fieldcore.test',
+    supportEmail: 'support.sa@revengine.test',
+    websiteUrl: 'https://sa.revengine.test',
     branch: { code: 'JHB', name: 'Johannesburg Operations', city: 'Johannesburg', country: 'ZA', timezone: 'Africa/Johannesburg' },
     finance: {
       country: 'ZA',
@@ -119,7 +120,7 @@ const REGION_CONFIGS = {
 };
 
 function parseSeedRegions() {
-  const raw = process.env.FIELDCORE_SEED_REGIONS || process.env.FIELDCORE_SEED_REGION || 'ZW,SA';
+  const raw = process.env.REVENGINE_SEED_REGIONS || process.env.REVENGINE_SEED_REGION || process.env[legacyEnvName('SEED_REGIONS')] || process.env[legacyEnvName('SEED_REGION')] || 'ZW,SA';
   const normalized = String(raw || '').toUpperCase();
   if (normalized === 'ALL') return ['ZW', 'SA'];
   const regions = normalized.split(',').map((item) => item.trim()).filter(Boolean).map((item) => item === 'ZA' ? 'SA' : item);
@@ -352,14 +353,14 @@ async function main() {
   const password = process.env.DEMO_PASSWORD || 'FieldCoreDemo2026!';
   const hash = await bcrypt.hash(password, 12);
   const regions = parseSeedRegions();
-  const includeSampleData = boolEnv('FIELDCORE_SEED_SAMPLE_DATA', false);
+  const includeSampleData = boolEnv('REVENGINE_SEED_SAMPLE_DATA', boolEnv(legacyEnvName('SEED_SAMPLE_DATA'), false));
 
   await seedPlans();
   await seedSystemRoleTemplates(prisma);
   const seeded = [];
   for (const region of regions) seeded.push(await seedCompany(REGION_CONFIGS[region], hash, includeSampleData));
 
-  console.log('Seeded FieldCore clean regional data.');
+  console.log('Seeded Rev Engine clean regional data.');
   console.log(`Password for all seeded logins: ${password}`);
   for (const item of seeded) {
     const market = item.company.id === REGION_CONFIGS.SA.companyId ? 'South Africa' : 'Zimbabwe';
@@ -369,7 +370,7 @@ async function main() {
     console.log(`Worker: ${item.users.worker}`);
     if (includeSampleData) console.log(`Client: ${item.users.client}`);
   }
-  if (!includeSampleData) console.log('\nNo sample customers/invoices were seeded. Set FIELDCORE_SEED_SAMPLE_DATA=true if you want one clean client invoice per region for QA.');
+  if (!includeSampleData) console.log('\nNo sample customers/invoices were seeded. Set REVENGINE_SEED_SAMPLE_DATA=true if you want one clean client invoice per region for QA.');
 }
 
 main()

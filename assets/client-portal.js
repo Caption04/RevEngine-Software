@@ -1,6 +1,7 @@
 const API = "/api";
 const page = document.body.dataset.clientPage;
 const state = { dashboard: null, requests: [], quotes: [], jobs: [], assets: [], contracts: [], invoices: [], receipts: [], payments: [], properties: [], profile: null, localization: { defaultCurrency: "USD", numberFormat: "en-US" } };
+const REV_ENGINE_LOGO = "assets/rev-engine-mark.png";
 
 async function api(path, options) {
   const response = await fetch(API + path, { credentials: "include", headers: { "Content-Type": "application/json" }, ...(options || {}) });
@@ -24,8 +25,8 @@ function message(el, text, ok) {
 }
 
 function notify(text, ok) {
-  if (window.FieldCoreUI) {
-    window.FieldCoreUI.notify(text, { type: ok === false ? "error" : "success" });
+  if (window.RevEngineUI) {
+    window.RevEngineUI.notify(text, { type: ok === false ? "error" : "success" });
     return;
   }
   console[ok === false ? "error" : "info"](text);
@@ -69,12 +70,14 @@ async function brand() {
   try {
     const company = await api("/public/company");
     state.localization = company.localization || state.localization;
-    document.querySelectorAll("[data-client-brand]").forEach(function(el) { el.textContent = company.brandName || "FieldCore"; });
+    document.querySelectorAll("[data-client-brand]").forEach(function(el) { el.textContent = company.brandName || "Rev Engine"; });
     document.querySelectorAll("[data-client-logo]").forEach(function(el) {
-      const brandName = company.brandName || "FieldCore";
+      const brandName = company.brandName || "Rev Engine";
       el.style.backgroundImage = "";
       if (company.logoUrl) {
         el.innerHTML = '<img src="' + escapeHtml(company.logoUrl) + '" alt="' + escapeHtml(brandName) + ' logo">';
+      } else if (brandName.trim().toLowerCase() === "rev engine") {
+        el.innerHTML = '<img src="' + REV_ENGINE_LOGO + '" alt="Rev Engine logo">';
       } else {
         el.textContent = brandName.slice(0, 2).toUpperCase();
       }
@@ -547,7 +550,7 @@ document.addEventListener("click", async function(event) {
       return;
     }
     if (action === "quote-accept") {
-      const confirmed = await window.FieldCoreUI.confirm({
+      const confirmed = await window.RevEngineUI.confirm({
         title: "Accept this quote?",
         message: "The company will be told that you accepted it.",
         confirmLabel: "Accept quote"
@@ -561,7 +564,7 @@ document.addEventListener("click", async function(event) {
       return;
     }
     if (action === "quote-reject") {
-      const reason = await window.FieldCoreUI.requestText({
+      const reason = await window.RevEngineUI.requestText({
         title: "Reject this quote?",
         message: "You can add a short reason so the company knows what to change.",
         fieldLabel: "Reason (optional)",
@@ -590,7 +593,7 @@ document.addEventListener("click", async function(event) {
       return;
     }
     if (action === "property-delete") {
-      const confirmed = await window.FieldCoreUI.confirm({
+      const confirmed = await window.RevEngineUI.confirm({
         title: "Delete this property?",
         message: "This address will be removed from your account.",
         confirmLabel: "Delete property",

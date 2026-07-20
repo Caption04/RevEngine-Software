@@ -30,7 +30,7 @@ test('customer-facing payment setup hides QA and developer configuration', () =>
 test('payment setup uses simple regional connection wording', () => {
   const block = providerUiBlock();
   assert.match(block, /Online payments/);
-  assert.match(block, /FieldCore handles the technical setup in the background/);
+  assert.match(block, /Rev Engine handles the technical setup in the background/);
   assert.match(block, /Save connection/);
   assert.match(block, /Check connection/);
 });

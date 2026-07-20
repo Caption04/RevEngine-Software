@@ -1,5 +1,5 @@
 (function () {
-  if (window.FieldCoreUI) return;
+  if (window.RevEngineUI) return;
 
   const escapeHtml = (value) => String(value == null ? '' : value).replace(/[&<>'"]/g, (char) => ({
     '&': '&amp;',
@@ -145,7 +145,7 @@
     }
   }
 
-  window.FieldCoreUI = {
+  window.RevEngineUI = {
     notify,
     confirm: confirmAction,
     requestText,

@@ -1,6 +1,6 @@
 # Finance and Local Accounting Foundation
 
-TASK3 adds a safe finance foundation for FieldCore without pretending to provide live accounting sync.
+TASK3 adds a safe finance foundation for Rev Engine without pretending to provide live accounting sync.
 
 ## What is implemented
 
@@ -26,7 +26,7 @@ TASK3 adds a safe finance foundation for FieldCore without pretending to provide
   - receipts
   - customers
 - Finance export logs.
-- External record links so exported FieldCore records can later be mapped to accounting records.
+- External record links so exported Rev Engine records can later be mapped to accounting records.
 
 ## What is not implemented yet
 

@@ -1,8 +1,8 @@
-# FieldCore Agent Instructions
+# Rev Engine Agent Instructions
 
 ## Project
 
-FieldCore is a field-service SaaS system for businesses that manage:
+Rev Engine is a field-service SaaS system for businesses that manage:
 
 * customers
 * workers
@@ -22,13 +22,13 @@ The system is multi-tenant. Multiple companies use the same software, but each c
 Work only inside this repository:
 
 ```bash
-/home/kuhlinji/code/FieldCore_Software
+/home/kuhlinji/code/RevEngine-Software
 ```
 
 Do not work from:
 
 ```bash
-/mnt/c/Dev/FieldCore_Software
+/mnt/c/Dev/RevEngine-Software
 /mnt/c/Users
 /mnt/c/Windows
 /mnt/c/Users/USER/OneDrive
@@ -57,7 +57,7 @@ This project is being developed inside Ubuntu through WSL.
 The correct repo location is:
 
 ```bash
-/home/kuhlinji/code/FieldCore_Software
+/home/kuhlinji/code/RevEngine-Software
 ```
 
 Before editing or running commands, confirm the current directory:
@@ -69,13 +69,13 @@ pwd
 Good:
 
 ```bash
-/home/kuhlinji/code/FieldCore_Software
+/home/kuhlinji/code/RevEngine-Software
 ```
 
 Bad:
 
 ```bash
-/mnt/c/Dev/FieldCore_Software
+/mnt/c/Dev/RevEngine-Software
 ```
 
 Do not run Codex, Prisma, npm install, builds, or tests from `/mnt/c/...`.
@@ -114,7 +114,7 @@ Do not redesign the whole app unless explicitly instructed.
 
 ## User-Facing Simplicity Rule
 
-FieldCore is built for busy field-service businesses, not software engineers.
+Rev Engine is built for busy field-service businesses, not software engineers.
 
 Assume many users have ordinary everyday computer skills and little patience for technical language. User-facing copy should usually be understandable at roughly a Grade 5 reading level.
 
@@ -160,7 +160,7 @@ Prefer:
 * fewer cards and fewer always-visible inputs
 * simple summaries with an explicit `Edit` or `View details` action
 
-Do not make each module feel like a separate complex product. Reuse familiar FieldCore page patterns so users always know where they are and what to do next.
+Do not make each module feel like a separate complex product. Reuse familiar Rev Engine page patterns so users always know where they are and what to do next.
 
 ## Backend Standards
 
@@ -308,7 +308,7 @@ WSL: Ubuntu
 The project should be opened from:
 
 ```bash
-/home/kuhlinji/code/FieldCore_Software
+/home/kuhlinji/code/RevEngine-Software
 ```
 
 Do not assume the project is inside Windows, OneDrive, or `/mnt/c`.
@@ -711,15 +711,15 @@ Workers must never receive admin dashboard financial data from `/api/dashboard`.
 
 ## UI Feedback Law
 
-Never use browser-native `alert()`, `confirm()`, or `prompt()` anywhere in FieldCore.
+Never use browser-native `alert()`, `confirm()`, or `prompt()` anywhere in Rev Engine.
 
 This is a strict product rule.
 
-Use the shared FieldCore feedback system instead:
+Use the shared Rev Engine feedback system instead:
 
 * standard in-app notifications/toasts for action success and failure
-* proper FieldCore modals for confirmation before destructive, sensitive, or irreversible actions
-* proper FieldCore form modals when the user must enter a reason or other information
+* proper Rev Engine modals for confirmation before destructive, sensitive, or irreversible actions
+* proper Rev Engine form modals when the user must enter a reason or other information
 * clear inline field errors for validation problems, with a notification when the overall action fails
 
 Every user-triggered action must give clear feedback. Do not leave the user wondering whether an action worked.
@@ -785,7 +785,7 @@ No cross-company access
 
 ## Permission Checkbox Law
 
-Every access checkbox shown to a company must control a real FieldCore function.
+Every access checkbox shown to a company must control a real Rev Engine function.
 
 For each visible checkbox, all four layers must agree:
 
@@ -802,7 +802,7 @@ The Owner must always retain access to Reports and every owner page, even if old
 
 ## Payment Setup UI Law
 
-Normal FieldCore users must never see internal payment setup details such as:
+Normal Rev Engine users must never see internal payment setup details such as:
 
 * mock or QA payment providers
 * webhook, callback, result, success, error, or cancel URLs
@@ -811,11 +811,11 @@ Normal FieldCore users must never see internal payment setup details such as:
 * raw test/live flags
 * raw provider configuration objects
 
-Show only the payment service available in the company's market and the small number of account credentials the provider gives the business. FieldCore must create callback URLs, regional defaults, and provider request settings in the backend or environment configuration.
+Show only the payment service available in the company's market and the small number of account credentials the provider gives the business. Rev Engine must create callback URLs, regional defaults, and provider request settings in the backend or environment configuration.
 
 ### Secret field safety
 
 - API keys, provider keys, tokens, and other reusable secrets must be encrypted at rest, never stored in frontend code, localStorage, or readable API responses.
-- Reusable provider secrets must not be hashed because FieldCore must use the original value when calling the provider. Use authenticated encryption instead.
+- Reusable provider secrets must not be hashed because Rev Engine must use the original value when calling the provider. Use authenticated encryption instead.
 - After a secret is saved, the UI may show only a masked suffix. It must never refill the saved value or provide a show/reveal control.
 - Replacing a saved secret requires entering a completely new value.

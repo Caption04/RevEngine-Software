@@ -6,7 +6,7 @@ const { reconcileDuePaymentLinks } = require('./src/services/payments/paymentRec
 const PORT = Number(process.env.PORT || 3000);
 
 const server = app.listen(PORT, () => {
-  console.log(`FieldCore server running at http://localhost:${PORT}`);
+  console.log(`Rev Engine server running at http://localhost:${PORT}`);
 });
 
 let paymentJobsRunning = false;

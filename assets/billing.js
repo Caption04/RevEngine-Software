@@ -75,7 +75,7 @@
         const message = modal.querySelector('[data-confirm-error]');
         message.textContent = error.message;
         message.hidden = false;
-        if (window.FieldCoreUI) window.FieldCoreUI.notify(error.message, { type: 'error' });
+        if (window.RevEngineUI) window.RevEngineUI.notify(error.message, { type: 'error' });
         button.disabled = false;
       }
     });

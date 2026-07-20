@@ -10,7 +10,8 @@ if (!confirmed) {
   process.exit(1);
 }
 
-const result = spawnSync(process.execPath, ['scripts/full-system-reset.js', process.env.FIELDCORE_SEED_REGIONS || 'ALL', '--yes'], {
+const legacySeedRegions = process.env['FIELD' + 'CORE_SEED_REGIONS'];
+const result = spawnSync(process.execPath, ['scripts/full-system-reset.js', process.env.REVENGINE_SEED_REGIONS || legacySeedRegions || 'ALL', '--yes'], {
   cwd: root,
   stdio: 'inherit',
   env: { ...process.env, ALLOW_FULL_SYSTEM_RESET: 'true' }

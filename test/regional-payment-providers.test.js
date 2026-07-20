@@ -67,7 +67,7 @@ test('Paynow omits test authemail without the environment value and never uses i
     return textResponse(new URLSearchParams(response).toString());
   };
   await createPaynowProvider({ connection: paynowConnection(), secrets: paynowSecrets(), env: { NODE_ENV: 'test' }, fetchImpl }).createPaymentLink({ invoice: invoice(), amount: 10, currency: 'USD', reference: 'FC-2', merchantTrace: 'TRACE-2' });
-  await createPaynowProvider({ connection: paynowConnection(), secrets: paynowSecrets(), env: { APP_BASE_URL: 'https://fieldcore.test', PAYNOW_MODE: 'live', PAYNOW_TEST_AUTH_EMAIL: 'merchant@example.com', PAYNOW_TEST_COMPANY_ID: 'company-a', PAYNOW_TEST_INTEGRATION_ID: '123' }, fetchImpl }).createPaymentLink({ invoice: invoice('customer@example.com'), amount: 10, currency: 'USD', reference: 'FC-3', merchantTrace: 'TRACE-3' });
+  await createPaynowProvider({ connection: paynowConnection(), secrets: paynowSecrets(), env: { APP_BASE_URL: 'https://revengine.test', PAYNOW_MODE: 'live', PAYNOW_TEST_AUTH_EMAIL: 'merchant@example.com', PAYNOW_TEST_COMPANY_ID: 'company-a', PAYNOW_TEST_INTEGRATION_ID: '123' }, fetchImpl }).createPaymentLink({ invoice: invoice('customer@example.com'), amount: 10, currency: 'USD', reference: 'FC-3', merchantTrace: 'TRACE-3' });
   assert.equal('authemail' in bodies[0], false);
   assert.equal(bodies[1].authemail, 'customer@example.com');
   assert.notEqual(bodies[1].authemail, 'merchant@example.com');
@@ -117,7 +117,7 @@ test('Paynow provider source has no personal or fake fallback and frontend files
   const source = fs.readFileSync(path.join(root, 'src/services/payments/providers/paynow.provider.js'), 'utf8');
   const frontend = fs.readFileSync(path.join(root, 'assets/api.js'), 'utf8');
   assert.equal(source.includes('kgkatunga04@gmail.com'), false);
-  assert.equal(source.includes('payments@fieldcore.local'), false);
+  assert.equal(source.includes('payments@revengine.local'), false);
   assert.equal(source.includes('EMAIL_FROM'), false);
   assert.equal(frontend.includes('PAYNOW_TEST_AUTH_EMAIL'), false);
 });

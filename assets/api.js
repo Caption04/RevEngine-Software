@@ -1,6 +1,7 @@
 (function(){
   const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3000/api' : '/api';
   const page = document.body.dataset.page || 'dashboard';
+  const REV_ENGINE_LOGO = 'assets/rev-engine-mark.png';
   const state = { user: null, profile: null, branding: null, leads: [], dispatchBoard: null, selectedDispatchJobId: null, customers: [], services: [], workers: [], roles: [], jobs: [], assets: [], serviceContracts: [], invoices: [], schedule: [], scheduleSettings: null, scheduleView: 'week', scheduleDate: new Date(), scheduleFilters: { workerId: '', status: '' }, listFilters: {}, availability: {}, notificationLogs: [], integrations: [], messageLogs: [], storageUsage: null, billing: null, financeSettings: null, financeIntegrations: [], financeExportLogs: [], reports: null, activeReportTab: 'overview' };
 
   const MARKET_DEFAULTS = {
@@ -153,8 +154,8 @@
   }
 
   function showToast(message, ok = true) {
-    if (window.FieldCoreUI) {
-      window.FieldCoreUI.notify(message, { type: ok ? 'success' : 'error' });
+    if (window.RevEngineUI) {
+      window.RevEngineUI.notify(message, { type: ok ? 'success' : 'error' });
       return;
     }
     console[ok ? 'info' : 'error'](message);
@@ -245,7 +246,7 @@
 
   function defaultBranding() {
     return {
-      brandName: 'FieldCore',
+      brandName: 'Rev Engine',
       logoUrl: '',
       primaryColor: '#2363ff',
       secondaryColor: '#263ff1',
@@ -268,14 +269,19 @@
 
   function applyBranding() {
     const branding = currentBranding();
-    const name = branding.brandName || state.profile && (state.profile.tradingName || state.profile.name) || 'FieldCore';
+    const name = branding.brandName || state.profile && (state.profile.tradingName || state.profile.name) || 'Rev Engine';
     document.documentElement.style.setProperty('--blue', branding.primaryColor || '#2363ff');
     document.documentElement.style.setProperty('--blue2', branding.secondaryColor || '#263ff1');
     document.documentElement.style.setProperty('--green', branding.accentColor || '#12a96d');
     document.querySelectorAll('.brand-name').forEach((node) => { node.textContent = name; });
     document.querySelectorAll('.brand-mark').forEach((node) => {
-      if (branding.logoUrl) node.innerHTML = `<img src="${escapeHtml(branding.logoUrl)}" alt="${escapeHtml(name)} logo">`;
-      else node.textContent = initials(name);
+      if (branding.logoUrl) {
+        node.innerHTML = `<img src="${escapeHtml(branding.logoUrl)}" alt="${escapeHtml(name)} logo">`;
+      } else if (String(name).trim().toLowerCase() === 'rev engine') {
+        node.innerHTML = `<img src="${REV_ENGINE_LOGO}" alt="Rev Engine logo">`;
+      } else {
+        node.textContent = initials(name);
+      }
     });
     if (page === 'dashboard') {
       const heading = document.querySelector('.hero-copy h2');
@@ -324,7 +330,7 @@
     const logoInput = document.querySelector('[data-branding-field="logoUrl"]');
     const colorInput = document.querySelector('[data-branding-field="primaryColor"]');
     const footerInput = document.querySelector('[data-branding-field="invoiceFooter"]');
-    const name = nameInput && nameInput.value || companyInput && companyInput.value || branding.brandName || 'FieldCore';
+    const name = nameInput && nameInput.value || companyInput && companyInput.value || branding.brandName || 'Rev Engine';
     const logoUrl = logoInput && logoInput.value || branding.logoUrl;
     const primaryColor = colorInput && colorInput.value || branding.primaryColor || '#2363ff';
     const footer = footerInput && footerInput.value || branding.invoiceFooter || 'Invoice footer preview will appear here.';
@@ -1137,7 +1143,7 @@
     const services = data.services || [];
     const canSeeMoney = (data.allowedReports || []).includes('money');
     const cards = [
-      reportMetricCard('Services', services.length, 'Set up in FieldCore'),
+      reportMetricCard('Services', services.length, 'Set up in Rev Engine'),
       reportMetricCard('Booking requests', services.reduce((sum, item) => sum + Number(item.bookingRequests || 0), 0), 'New requests'),
       reportMetricCard('Jobs', services.reduce((sum, item) => sum + Number(item.jobs || 0), 0), 'All work')
     ];
@@ -1690,7 +1696,7 @@
   function openReceiptModal(invoice, receipts) {
     closeModal();
     const branding = currentBranding();
-    const companyName = branding.brandName || state.profile && (state.profile.tradingName || state.profile.name) || 'FieldCore';
+    const companyName = branding.brandName || state.profile && (state.profile.tradingName || state.profile.name) || 'Rev Engine';
     const modal = document.createElement('div');
     modal.className = 'fc-modal';
     const receiptContent = receipts.length ? receipts.map((receipt) => receiptCard(receipt, invoice)).join('') : '<div class="empty-state receipt-empty"><div><strong>No receipt found for this invoice yet.</strong></div></div>';
@@ -2002,7 +2008,7 @@
   }
 
   function renderActivityTimelineItem(item) {
-    const actor = item.user && (item.user.name || item.user.email) || item.worker && item.worker.user && item.worker.user.name || 'FieldCore';
+    const actor = item.user && (item.user.name || item.user.email) || item.worker && item.worker.user && item.worker.user.name || 'Rev Engine';
     return `<div class="job-timeline-item"><span class="job-timeline-dot"></span><div><div class="job-timeline-head"><strong>${escapeHtml(activityTitle(item))}</strong><small>${escapeHtml(formatDateTime(item.createdAt))}</small></div><small>${escapeHtml(actor)}</small>${item.note ? `<p>${escapeHtml(item.note)}</p>` : ''}</div></div>`;
   }
 
@@ -2689,7 +2695,7 @@
   }
 
   function workerPreferenceKey() {
-    return 'fieldcore-worker-preferences-' + (state.user && state.user.id || 'user');
+    return 'revengine-worker-preferences-' + (state.user && state.user.id || 'user');
   }
 
   function workerPreferences() {
@@ -2700,7 +2706,7 @@
     const pageEl = document.querySelector('.page');
     if (!pageEl) return;
     const prefs = workerPreferences();
-    pageEl.innerHTML = '<div class="hero-row"><div class="hero-copy"><h2>Settings</h2><p>Manage your account, job alerts, and sign-in security.</p></div><span class="api-status" data-api-status>Connected</span></div><section class="settings-layout worker-settings"><aside class="panel settings-tabs" aria-label="Settings sections"><button class="settings-tab active" type="button" data-settings-target="account">Account</button><button class="settings-tab" type="button" data-settings-target="notifications">Notifications</button><button class="settings-tab" type="button" data-settings-target="security">Security</button></aside><div class="settings-panels"><div class="panel settings-panel active" data-settings-panel="account"><div class="panel-head"><h2>Account</h2><span class="badge gray">Worker</span></div><form class="form-grid" data-worker-account-form><div class="field"><label for="workerName">Name</label><input id="workerName" name="name" required maxlength="120" value="' + escapeHtml(state.user && state.user.name || '') + '"></div><div class="field"><label for="workerEmail">Email</label><input id="workerEmail" name="email" type="email" required value="' + escapeHtml(state.user && state.user.email || '') + '"></div><div class="field"><label>Role</label><input value="' + escapeHtml(state.user && state.user.role || 'WORKER') + '" disabled></div><div class="field"><label>Workspace</label><input value="' + escapeHtml(state.user && state.user.company && state.user.company.name || 'FieldCore') + '" disabled></div><div class="form-actions span-2"><button class="primary-button" type="submit">Save Account</button></div><p class="fc-form-error span-2" data-worker-account-message hidden></p></form></div><div class="panel settings-panel" data-settings-panel="notifications" hidden><div class="panel-head"><h2>Notifications</h2><span class="badge gray">Jobs</span></div><form class="form-grid" data-worker-preferences-form><div class="settings-checks span-2"><label><input type="checkbox" name="jobAssigned" ' + (prefs.jobAssigned !== false ? 'checked' : '') + '> New assigned jobs</label><label><input type="checkbox" name="scheduleChanged" ' + (prefs.scheduleChanged !== false ? 'checked' : '') + '> Schedule changes</label><label><input type="checkbox" name="completionReminders" ' + (prefs.completionReminders !== false ? 'checked' : '') + '> Completion evidence reminders</label></div><div class="field span-2"><label for="workerReminderLead">Reminder Lead Time</label><select id="workerReminderLead" name="reminderLead"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option></select></div><div class="form-actions span-2"><button class="primary-button" type="submit">Save Preferences</button></div><p class="fc-form-error span-2" data-worker-preferences-message hidden></p></form></div><div class="panel settings-panel" data-settings-panel="security" hidden><div class="panel-head"><h2>Security</h2><span class="badge blue">Protected</span></div><form class="form-grid" data-worker-password-form><div class="field"><label for="currentPassword">Current Password</label><input id="currentPassword" name="currentPassword" type="password" autocomplete="current-password" required></div><div class="field"><label for="newPassword">New Password</label><input id="newPassword" name="newPassword" type="password" autocomplete="new-password" minlength="12" required></div><div class="field span-2"><label for="confirmPassword">Confirm New Password</label><input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="12" required></div><div class="settings-checks span-2"><label><input type="checkbox" checked disabled> Secure HTTP-only session cookie</label><label><input type="checkbox" checked disabled> Company-scoped account access</label></div><div class="form-actions span-2"><button class="primary-button" type="submit">Update Password</button></div><p class="fc-form-error span-2" data-worker-password-message hidden></p></form></div></div></section>';
+    pageEl.innerHTML = '<div class="hero-row"><div class="hero-copy"><h2>Settings</h2><p>Manage your account, job alerts, and sign-in security.</p></div><span class="api-status" data-api-status>Connected</span></div><section class="settings-layout worker-settings"><aside class="panel settings-tabs" aria-label="Settings sections"><button class="settings-tab active" type="button" data-settings-target="account">Account</button><button class="settings-tab" type="button" data-settings-target="notifications">Notifications</button><button class="settings-tab" type="button" data-settings-target="security">Security</button></aside><div class="settings-panels"><div class="panel settings-panel active" data-settings-panel="account"><div class="panel-head"><h2>Account</h2><span class="badge gray">Worker</span></div><form class="form-grid" data-worker-account-form><div class="field"><label for="workerName">Name</label><input id="workerName" name="name" required maxlength="120" value="' + escapeHtml(state.user && state.user.name || '') + '"></div><div class="field"><label for="workerEmail">Email</label><input id="workerEmail" name="email" type="email" required value="' + escapeHtml(state.user && state.user.email || '') + '"></div><div class="field"><label>Role</label><input value="' + escapeHtml(state.user && state.user.role || 'WORKER') + '" disabled></div><div class="field"><label>Workspace</label><input value="' + escapeHtml(state.user && state.user.company && state.user.company.name || 'Rev Engine') + '" disabled></div><div class="form-actions span-2"><button class="primary-button" type="submit">Save Account</button></div><p class="fc-form-error span-2" data-worker-account-message hidden></p></form></div><div class="panel settings-panel" data-settings-panel="notifications" hidden><div class="panel-head"><h2>Notifications</h2><span class="badge gray">Jobs</span></div><form class="form-grid" data-worker-preferences-form><div class="settings-checks span-2"><label><input type="checkbox" name="jobAssigned" ' + (prefs.jobAssigned !== false ? 'checked' : '') + '> New assigned jobs</label><label><input type="checkbox" name="scheduleChanged" ' + (prefs.scheduleChanged !== false ? 'checked' : '') + '> Schedule changes</label><label><input type="checkbox" name="completionReminders" ' + (prefs.completionReminders !== false ? 'checked' : '') + '> Completion evidence reminders</label></div><div class="field span-2"><label for="workerReminderLead">Reminder Lead Time</label><select id="workerReminderLead" name="reminderLead"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option></select></div><div class="form-actions span-2"><button class="primary-button" type="submit">Save Preferences</button></div><p class="fc-form-error span-2" data-worker-preferences-message hidden></p></form></div><div class="panel settings-panel" data-settings-panel="security" hidden><div class="panel-head"><h2>Security</h2><span class="badge blue">Protected</span></div><form class="form-grid" data-worker-password-form><div class="field"><label for="currentPassword">Current Password</label><input id="currentPassword" name="currentPassword" type="password" autocomplete="current-password" required></div><div class="field"><label for="newPassword">New Password</label><input id="newPassword" name="newPassword" type="password" autocomplete="new-password" minlength="12" required></div><div class="field span-2"><label for="confirmPassword">Confirm New Password</label><input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="12" required></div><div class="settings-checks span-2"><label><input type="checkbox" checked disabled> Secure HTTP-only session cookie</label><label><input type="checkbox" checked disabled> Company-scoped account access</label></div><div class="form-actions span-2"><button class="primary-button" type="submit">Update Password</button></div><p class="fc-form-error span-2" data-worker-password-message hidden></p></form></div></div></section>';
     const reminder = pageEl.querySelector('[name="reminderLead"]');
     if (reminder) reminder.value = prefs.reminderLead || '30';
     setupSettings();
@@ -3041,7 +3047,7 @@
     if (!card) return;
     const market = currentMarket();
     const definitions = paymentProviderDefinitions.filter((definition) => definition.market === market);
-    const intro = '<div class="panel-head"><div><h3>Online payments</h3><p class="muted">Connect the payment service used in your country. FieldCore handles the technical setup in the background.</p></div></div>';
+    const intro = '<div class="panel-head"><div><h3>Online payments</h3><p class="muted">Connect the payment service used in your country. Rev Engine handles the technical setup in the background.</p></div></div>';
     if (!definitions.length) {
       card.innerHTML = intro + '<div class="empty-state"><div><strong>Online payments are not available yet.</strong><span>You can still use cash or bank transfer.</span></div></div>';
       return;
@@ -3200,7 +3206,7 @@
     const sortedPlans = plans.slice().sort((a, b) => regionalEffectivePrice(a) - regionalEffectivePrice(b));
     const upgradePlans = sortedPlans.filter((item) => item.id !== currentPlanId && regionalEffectivePrice(item) > currentPrice);
     const providerText = provider.configured ? (provider.mode === 'manual' ? 'Manual/internal billing mode' : 'Billing provider configured') : 'Billing provider not configured yet';
-    const providerCta = provider.configured ? (provider.mode === 'manual' ? 'Plan changes create a manual FieldCore billing request.' : 'Live checkout can process configured provider payments.') : 'Checkout is disabled until a SaaS billing provider is configured. Use manual plan-change requests during QA.';
+    const providerCta = provider.configured ? (provider.mode === 'manual' ? 'Plan changes create a manual Rev Engine billing request.' : 'Live checkout can process configured provider payments.') : 'Checkout is disabled until a SaaS billing provider is configured. Use manual plan-change requests during QA.';
     const interval = plan.interval || subscription.interval || 'month';
     const nextBillingDate = formatDate(subscription.currentPeriodEnd || subscription.trialEndsAt);
     const trial = subscription.trialDaysRemaining == null ? null : subscription.trialDaysRemaining + ' days remaining';
@@ -3264,10 +3270,10 @@
           : provider.mode === 'manual'
             ? '<button class="primary-button compact" type="button" data-billing-change-plan="' + escapeHtml(item.id) + '">Request change</button>'
             : '<button class="secondary-button compact" type="button" data-billing-checkout="' + escapeHtml(item.id) + '">Checkout</button><button class="primary-button compact" type="button" data-billing-change-plan="' + escapeHtml(item.id) + '">Change</button>';
-      return '<div class="billing-upgrade-card"><div class="billing-plan-head"><div><strong>' + escapeHtml(item.name) + '</strong><span>' + escapeHtml(item.description || 'Upgrade your FieldCore workspace.') + '</span></div></div><div class="billing-plan-price"><strong>' + escapeHtml(planPriceText(item)) + '</strong></div>' + annualNote + benefitList + '<div class="billing-plan-actions">' + action + '</div></div>';
+      return '<div class="billing-upgrade-card"><div class="billing-plan-head"><div><strong>' + escapeHtml(item.name) + '</strong><span>' + escapeHtml(item.description || 'Upgrade your Rev Engine workspace.') + '</span></div></div><div class="billing-plan-price"><strong>' + escapeHtml(planPriceText(item)) + '</strong></div>' + annualNote + benefitList + '<div class="billing-plan-actions">' + action + '</div></div>';
     }).join('') : '<div class="empty-state compact-empty"><div><strong>No upgrade available.</strong><span>This workspace is already on the highest available plan.</span></div></div>';
 
-    card.innerHTML = '<div class="panel-head billing-main-head"><div><h3>FieldCore Subscription</h3><p>' + escapeHtml(providerText) + '</p><p class="muted">' + escapeHtml(billingMarketLabel()) + ' · ' + escapeHtml(providerCta) + '</p></div>' + statusBadge + '</div><div class="billing-essential-grid"><div class="billing-summary-item"><span>Current Plan</span><strong>' + escapeHtml(plan.name || 'No plan') + '</strong><small>' + escapeHtml(priceText) + '</small></div><div class="billing-summary-item"><span>Billing Cycle</span><strong>' + escapeHtml(interval ? 'Every ' + interval : 'Not set') + '</strong><small>' + escapeHtml(nextBillingDate === '-' ? 'Next billing date not set' : 'Next bill: ' + nextBillingDate) + '</small></div><div class="billing-summary-item"><span>Trial / Renewal</span><strong>' + escapeHtml(trial || (subscription.cancelAtPeriodEnd ? 'Cancelling' : 'Active')) + '</strong><small>' + escapeHtml(subscription.cancelAtPeriodEnd ? 'Ends at current period close' : 'Managed by FieldCore') + '</small></div></div><div class="billing-section billing-upgrade-section"><div class="billing-section-head"><div><h3>Upgrade Benefits</h3><p class="muted">Only the useful plan differences are shown here.</p></div>' + cancelAction + '</div><div class="billing-upgrade-grid">' + upgradeCards + '</div></div><p class="fc-form-error billing-message" data-billing-message hidden></p>';
+    card.innerHTML = '<div class="panel-head billing-main-head"><div><h3>Rev Engine Subscription</h3><p>' + escapeHtml(providerText) + '</p><p class="muted">' + escapeHtml(billingMarketLabel()) + ' · ' + escapeHtml(providerCta) + '</p></div>' + statusBadge + '</div><div class="billing-essential-grid"><div class="billing-summary-item"><span>Current Plan</span><strong>' + escapeHtml(plan.name || 'No plan') + '</strong><small>' + escapeHtml(priceText) + '</small></div><div class="billing-summary-item"><span>Billing Cycle</span><strong>' + escapeHtml(interval ? 'Every ' + interval : 'Not set') + '</strong><small>' + escapeHtml(nextBillingDate === '-' ? 'Next billing date not set' : 'Next bill: ' + nextBillingDate) + '</small></div><div class="billing-summary-item"><span>Trial / Renewal</span><strong>' + escapeHtml(trial || (subscription.cancelAtPeriodEnd ? 'Cancelling' : 'Active')) + '</strong><small>' + escapeHtml(subscription.cancelAtPeriodEnd ? 'Ends at current period close' : 'Managed by Rev Engine') + '</small></div></div><div class="billing-section billing-upgrade-section"><div class="billing-section-head"><div><h3>Upgrade Benefits</h3><p class="muted">Only the useful plan differences are shown here.</p></div>' + cancelAction + '</div><div class="billing-upgrade-grid">' + upgradeCards + '</div></div><p class="fc-form-error billing-message" data-billing-message hidden></p>';
     bindBillingActions();
   }
 
@@ -3305,7 +3311,7 @@
     const cancel = document.querySelector('[data-billing-cancel]');
     if (cancel) cancel.onclick = () => run(() => api('/billing/cancel', { method: 'POST', body: JSON.stringify({}) }));
     document.querySelectorAll('[data-billing-contact]').forEach((button) => {
-      button.onclick = () => showToast('Enterprise is custom priced. Contact FieldCore to scope onboarding, integrations, SLA controls, and annual terms.', true);
+      button.onclick = () => showToast('Enterprise is custom priced. Contact Rev Engine to scope onboarding, integrations, SLA controls, and annual terms.', true);
     });
   }
 
@@ -3848,7 +3854,7 @@
   document.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-logout]');
     if (!button) return;
-    const ok = await openConfirmModal({ title: 'Log Out', message: 'Log out of FieldCore and return to the login screen?', okLabel: 'Log Out' });
+    const ok = await openConfirmModal({ title: 'Log Out', message: 'Log out of Rev Engine and return to the login screen?', okLabel: 'Log Out' });
     if (!ok) return;
     await api('/auth/logout', { method: 'POST', body: '{}' });
     state.user = null;
@@ -3868,7 +3874,7 @@
     }
   }
 
-  window.addEventListener('fieldcore:market-change', rerenderAfterMarketChange);
+  window.addEventListener('revengine:market-change', rerenderAfterMarketChange);
 
   document.addEventListener('click', handleWorkerDashboardAction);
   document.addEventListener('click', handleDispatchAction);

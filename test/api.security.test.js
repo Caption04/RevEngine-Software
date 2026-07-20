@@ -879,7 +879,7 @@ function assertNoPasswordHash(value) {
 
 test('phase 10 env validation health readiness and safe errors', async () => {
   const { validateEnv } = require('../src/config/env');
-  const production = validateEnv({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://db', JWT_SECRET: 'short', APP_BASE_URL: 'https://fieldcore.test', EMAIL_PROVIDER: 'webhook', EMAIL_FROM: '' });
+  const production = validateEnv({ NODE_ENV: 'production', DATABASE_URL: 'postgresql://db', JWT_SECRET: 'short', APP_BASE_URL: 'https://revengine.test', EMAIL_PROVIDER: 'webhook', EMAIL_FROM: '' });
   assert.equal(production.ok, false);
   assert.equal(JSON.stringify(production.errors).includes('short'), false);
 
@@ -2866,8 +2866,8 @@ test('integration providers resolve and create provider message logs', async () 
     ['BREVO', { senderEmail: 'dispatch@a.test' }, { apiKey: 'brevo-key' }, 'EMAIL'],
     ['META_WHATSAPP_CLOUD', { phoneNumberId: 'phone-a' }, { accessToken: 'meta-token', webhookVerifyToken: 'verify-token' }, 'WHATSAPP'],
     ['CLICKATELL', { senderId: 'FIELD' }, { apiKey: 'click-key' }, 'SMS'],
-    ['AFRICAS_TALKING', { environment: 'sandbox', senderId: 'FIELD' }, { username: 'fieldcore', apiKey: 'at-key' }, 'SMS'],
-    ['CLOUDFLARE_R2', { bucket: 'fieldcore-a', endpoint: 'https://r2.example.test' }, { accessKeyId: 'r2-key', secretAccessKey: 'r2-secret' }, 'STORAGE']
+    ['AFRICAS_TALKING', { environment: 'sandbox', senderId: 'FIELD' }, { username: 'revengine', apiKey: 'at-key' }, 'SMS'],
+    ['CLOUDFLARE_R2', { bucket: 'revengine-a', endpoint: 'https://r2.example.test' }, { accessKeyId: 'r2-key', secretAccessKey: 'r2-secret' }, 'STORAGE']
   ];
   for (const [provider, config, secrets] of providerPayloads) {
     const response = await owner.post('/api/admin/integrations').send({ provider, config, secrets });
@@ -2896,7 +2896,7 @@ test('storage objects update monthly usage rollups', async () => {
   const { recordStorageObject } = require('../src/services/integrations/storageUsage.service');
   await recordStorageObject({
     companyId: 'company-a',
-    bucket: 'fieldcore-a',
+    bucket: 'revengine-a',
     objectKey: 'companies/company-a/jobs/job-a/photo.jpg',
     fileName: 'photo.jpg',
     mimeType: 'image/jpeg',
@@ -2915,7 +2915,7 @@ test('R2 proof uploads create storage object and monthly usage records', async (
   const owner = await login(app, 'owner-a@test.local');
   const integration = await owner.post('/api/admin/integrations').send({
     provider: 'CLOUDFLARE_R2',
-    config: { bucket: 'fieldcore-a', endpoint: 'https://account.r2.cloudflarestorage.com', publicDomain: 'https://files.a.test', region: 'auto' },
+    config: { bucket: 'revengine-a', endpoint: 'https://account.r2.cloudflarestorage.com', publicDomain: 'https://files.a.test', region: 'auto' },
     secrets: { accessKeyId: 'r2-key', secretAccessKey: 'r2-secret' }
   });
   assert.equal(integration.status, 201);
@@ -2925,7 +2925,7 @@ test('R2 proof uploads create storage object and monthly usage records', async (
     .attach('photo', Buffer.from('fake-image'), { filename: 'before.jpg', contentType: 'image/jpeg' });
   assert.equal(upload.status, 201);
   assert.equal(app.locals.testDb.storageObjects.length, 1);
-  assert.equal(app.locals.testDb.storageObjects[0].bucket, 'fieldcore-a');
+  assert.equal(app.locals.testDb.storageObjects[0].bucket, 'revengine-a');
   assert.equal(app.locals.testDb.storageObjects[0].jobId, 'job-a');
   assert.equal(app.locals.testDb.storageObjects[0].objectKey.includes('company-a'), true);
   assert.equal(Object.prototype.hasOwnProperty.call(app.locals.testDb.storageObjects[0], 'secretAccessKey'), false);
@@ -2981,13 +2981,13 @@ test('R2 provider test performs upload and cleanup outside test mode', async () 
   try {
     const { testCloudflareR2 } = require('../src/services/integrations/providers/cloudflareR2Storage.provider');
     const result = await testCloudflareR2({
-      connection: { config: { bucket: 'fieldcore-a', endpoint: 'https://account.r2.cloudflarestorage.com', region: 'auto' } },
+      connection: { config: { bucket: 'revengine-a', endpoint: 'https://account.r2.cloudflarestorage.com', region: 'auto' } },
       secrets: { accessKeyId: 'r2-key', secretAccessKey: 'r2-secret' }
     });
     assert.equal(result.ok, true);
     assert.equal(result.status, 'ACTIVE');
     assert.deepEqual(calls.map((call) => call.method), ['PUT', 'DELETE']);
-    assert.equal(calls.every((call) => String(call.url).includes('/fieldcore-a/fieldcore-r2-test-')), true);
+    assert.equal(calls.every((call) => String(call.url).includes('/revengine-a/revengine-r2-test-')), true);
   } finally {
     process.env.NODE_ENV = previousNodeEnv;
     global.fetch = previousFetch;
@@ -3000,7 +3000,7 @@ test('production env requires a valid integration encryption master key', () => 
     NODE_ENV: 'production',
     DATABASE_URL: 'postgresql://example',
     JWT_SECRET: 'this-is-a-strong-secret-with-more-than-32-chars',
-    APP_BASE_URL: 'https://fieldcore.test',
+    APP_BASE_URL: 'https://revengine.test',
     EMAIL_PROVIDER: 'console'
   };
   const missing = validateEnv(base);
@@ -3619,12 +3619,12 @@ test('task8 accounting webhooks reject bad signatures and record good events', a
   assert.equal(integration.status, 201);
   await admin.post('/api/finance/integrations/' + integration.body.data.id + '/connect').send({ mockMode: true });
 
-  const bad = await request(app).post('/api/finance/webhooks/XERO/company-a').set('x-fieldcore-signature', 'bad').send({ eventId: 'evt-bad', eventType: 'invoice.updated' });
+  const bad = await request(app).post('/api/finance/webhooks/XERO/company-a').set('x-revengine-signature', 'bad').send({ eventId: 'evt-bad', eventType: 'invoice.updated' });
   assert.equal(bad.status, 401);
 
   const payload = { eventId: 'evt-good', eventType: 'invoice.updated' };
   const signature = crypto.createHmac('sha256', 'whsec-test').update(JSON.stringify(payload)).digest('hex');
-  const good = await request(app).post('/api/finance/webhooks/XERO/company-a').set('x-fieldcore-signature', signature).send(payload);
+  const good = await request(app).post('/api/finance/webhooks/XERO/company-a').set('x-revengine-signature', signature).send(payload);
   assert.equal(good.status, 200);
   assert.equal(good.body.data.event.status, 'PROCESSED');
   assert.equal(app.locals.testDb.financeWebhookEvents.some((event) => event.status === 'REJECTED'), true);
@@ -3649,18 +3649,18 @@ test('task9 payment link webhook confirms trusted provider payment idempotently'
   assert.equal(link.body.data.status, 'SENT');
   assert.equal(link.body.data.checkoutUrl.includes(link.body.data.reference), true);
 
-  const bad = await request(app).post('/api/payment-webhooks/MOCK/company-a').set('x-fieldcore-payment-signature', 'bad').send({ eventId: 'payevt-bad', reference: link.body.data.reference, providerPaymentId: 'pp-bad', amount: 40, status: 'CONFIRMED' });
+  const bad = await request(app).post('/api/payment-webhooks/MOCK/company-a').set('x-revengine-payment-signature', 'bad').send({ eventId: 'payevt-bad', reference: link.body.data.reference, providerPaymentId: 'pp-bad', amount: 40, status: 'CONFIRMED' });
   assert.equal(bad.status, 401);
 
   const payload = { eventId: 'payevt-good', eventType: 'payment.succeeded', reference: link.body.data.reference, providerPaymentId: 'pp-good', amount: 40, currency: 'USD', status: 'CONFIRMED' };
   const signature = crypto.createHmac('sha256', 'pay-whsec').update(JSON.stringify(payload)).digest('hex');
-  const good = await request(app).post('/api/payment-webhooks/MOCK/company-a').set('x-fieldcore-payment-signature', signature).send(payload);
+  const good = await request(app).post('/api/payment-webhooks/MOCK/company-a').set('x-revengine-payment-signature', signature).send(payload);
   assert.equal(good.status, 200);
   assert.equal(app.locals.testDb.payments.filter((payment) => payment.providerPaymentId === 'pp-good').length, 1);
   assert.equal(app.locals.testDb.receipts.some((receipt) => receipt.paymentId === app.locals.testDb.payments.find((payment) => payment.providerPaymentId === 'pp-good').id), true);
   assert.equal(Number(app.locals.testDb.invoices.find((invoice) => invoice.id === 'invoice-a').balanceDue), 60);
 
-  const duplicate = await request(app).post('/api/payment-webhooks/MOCK/company-a').set('x-fieldcore-payment-signature', signature).send(payload);
+  const duplicate = await request(app).post('/api/payment-webhooks/MOCK/company-a').set('x-revengine-payment-signature', signature).send(payload);
   assert.equal(duplicate.status, 200);
   assert.equal(duplicate.body.data.duplicate, true);
   assert.equal(app.locals.testDb.payments.filter((payment) => payment.providerPaymentId === 'pp-good').length, 1);
@@ -3776,7 +3776,7 @@ test('payment provider FAILED event resumes and completes on a valid retry', asy
   const payload = { eventId: 'retry-event', eventType: 'payment.succeeded', reference: link.body.data.reference, providerPaymentId: 'retry-payment', amount: 40, currency: 'USD', status: 'CONFIRMED' };
   app.locals.testDb.paymentProviderEvents.push({ id: 'failed-event', companyId: 'company-a', providerConnectionId: providerId, provider: 'MOCK', eventId: payload.eventId, status: 'FAILED', signatureValid: true, errorMessage: 'Earlier processing failed' });
   const signature = crypto.createHmac('sha256', 'retry-secret').update(JSON.stringify(payload)).digest('hex');
-  const response = await request(app).post('/api/payment-webhooks/MOCK/company-a').set('x-fieldcore-payment-signature', signature).send(payload);
+  const response = await request(app).post('/api/payment-webhooks/MOCK/company-a').set('x-revengine-payment-signature', signature).send(payload);
   assert.equal(response.status, 200);
   assert.equal(app.locals.testDb.paymentProviderEvents.find((event) => event.id === 'failed-event').status, 'PROCESSED');
   assert.equal(app.locals.testDb.payments.filter((payment) => payment.paymentLinkId === link.body.data.id).length, 1);
@@ -3790,7 +3790,7 @@ test('concurrent exact payment callbacks create one event and one payment credit
   const link = await admin.post('/api/invoices/invoice-a/payment-links').send({ providerConnectionId: providerId, amount: 40, currency: 'USD', sendNow: true });
   const payload = { eventId: 'race-event', eventType: 'payment.succeeded', reference: link.body.data.reference, providerPaymentId: 'race-payment', amount: 40, currency: 'USD', status: 'CONFIRMED' };
   const signature = crypto.createHmac('sha256', 'race-secret').update(JSON.stringify(payload)).digest('hex');
-  const send = () => request(app).post('/api/payment-webhooks/MOCK/company-a').set('x-fieldcore-payment-signature', signature).send(payload);
+  const send = () => request(app).post('/api/payment-webhooks/MOCK/company-a').set('x-revengine-payment-signature', signature).send(payload);
   const responses = await Promise.all([send(), send()]);
   assert.deepEqual(responses.map((response) => response.status), [200, 200]);
   assert.equal(app.locals.testDb.paymentProviderEvents.filter((event) => event.eventId === payload.eventId).length, 1);

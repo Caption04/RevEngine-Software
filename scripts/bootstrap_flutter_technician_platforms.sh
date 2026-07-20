@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../apps/fieldcore_technician" && pwd)"
+APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../apps/revengine_technician" && pwd)"
 BACKUP_DIR="$(mktemp -d)"
 
 cleanup() {
@@ -15,7 +15,7 @@ cp "$APP_DIR/README.md" "$BACKUP_DIR/README.md"
 cp -R "$APP_DIR/test" "$BACKUP_DIR/test"
 
 cd "$APP_DIR"
-flutter create --project-name fieldcore_technician --org com.fieldcore --platforms=android,ios .
+flutter create --project-name revengine_technician --org com.revengine --platforms=android,ios .
 
 rm -rf "$APP_DIR/lib" "$APP_DIR/test"
 cp -R "$BACKUP_DIR/lib" "$APP_DIR/lib"
@@ -25,4 +25,4 @@ cp "$BACKUP_DIR/README.md" "$APP_DIR/README.md"
 
 flutter pub get
 
-echo "Flutter platforms bootstrapped for apps/fieldcore_technician."
+echo "Flutter platforms bootstrapped for apps/revengine_technician."

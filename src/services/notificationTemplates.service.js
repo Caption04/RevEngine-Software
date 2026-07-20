@@ -25,7 +25,7 @@ function buildNotificationTemplate(eventType, context = {}) {
   const record = context.record || {};
   const customer = record.customer || {};
   const serviceName = record.service && record.service.name || record.serviceName || record.title || 'Service request';
-  const prefix = company.tradingName || company.name || 'FieldCore';
+  const prefix = company.tradingName || company.name || 'Rev Engine';
 
   if (eventType === 'BOOKING_CREATED') return textTemplate(prefix + ': new booking request', [
     'A new booking request was submitted.',
@@ -101,7 +101,7 @@ function buildNotificationTemplate(eventType, context = {}) {
   ]);
 
   if (eventType === 'PAYMENT_NEEDS_REVIEW') return textTemplate(prefix + ': payment needs review', [
-    'A payment needs review in FieldCore.',
+    'A payment needs review in Rev Engine.',
     'Reference: ' + (record.reference || record.id || 'Payment'),
     'Please open the payment record for details.'
   ]);
@@ -127,7 +127,7 @@ function buildNotificationTemplate(eventType, context = {}) {
     'Job: ' + record.title,
     'Service: ' + serviceName,
     'Completed: ' + date(record.completedAt || new Date(), context),
-    record.proofCompletedAt || record.signatureCompletedAt ? 'Proof of work is available in FieldCore.' : null
+    record.proofCompletedAt || record.signatureCompletedAt ? 'Proof of work is available in Rev Engine.' : null
   ]);
 
 
@@ -153,7 +153,7 @@ function buildNotificationTemplate(eventType, context = {}) {
   if (eventType === 'JOB_PROOF_READY') return textTemplate(prefix + ': job proof ready', [
     'Proof of work is ready for review.',
     'Job: ' + (record.title || record.id || 'Job'),
-    'Open FieldCore to view photos, signatures, and completion details.'
+    'Open Rev Engine to view photos, signatures, and completion details.'
   ]);
 
   if (eventType === 'INVOICE_OVERDUE') return textTemplate(prefix + ': invoice overdue', [
@@ -170,7 +170,7 @@ function buildNotificationTemplate(eventType, context = {}) {
   ]);
 
 
-  return textTemplate(prefix + ': notification', ['A FieldCore notification was generated.']);
+  return textTemplate(prefix + ': notification', ['A Rev Engine notification was generated.']);
 }
 
 function buildWhatsAppTemplate(eventType, context = {}) {
@@ -197,10 +197,10 @@ function buildWhatsAppTemplate(eventType, context = {}) {
     MAINTENANCE_VISIT_DUE: ['Maintenance visit due', record.title || record.assetName || reference, record.nextDueAt ? date(record.nextDueAt, context) : null],
     SLA_AT_RISK: ['SLA at risk', record.title || reference, record.completionDueAt ? date(record.completionDueAt, context) : null],
     SLA_BREACHED: ['SLA breached', record.title || reference, record.completionDueAt ? date(record.completionDueAt, context) : null],
-    JOB_PROOF_READY: ['Job proof ready', record.title || reference, 'Proof is available in FieldCore'],
+    JOB_PROOF_READY: ['Job proof ready', record.title || reference, 'Proof is available in Rev Engine'],
     INVOICE_OVERDUE: ['Invoice overdue', record.number || reference, money(record.balanceDue || record.total || record.amount, context)],
     PURCHASE_SHORTAGE_BLOCKING_JOB: ['Stock shortage blocking job', record.job && record.job.title || record.title || reference]
-  }[eventType] || ['FieldCore notification', reference];
+  }[eventType] || ['Rev Engine notification', reference];
   return { label: String(lines[0] || eventType).slice(0, 120), text: lines.filter(Boolean).join(' - ').slice(0, 900) };
 }
 

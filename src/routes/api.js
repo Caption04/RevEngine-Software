@@ -1157,7 +1157,7 @@ function safeFinanceWebhookEvent(record) {
 function validFinanceWebhookSignature(integration, req) {
   const configured = integration && integration.config && integration.config.webhookSecret;
   if (!configured) return false;
-  const provided = req.get('x-fieldcore-signature') || req.get('x-xero-signature') || req.get('x-signature') || '';
+  const provided = req.get('x-revengine-signature') || req.get('x-xero-signature') || req.get('x-signature') || '';
   if (!provided) return false;
   const body = JSON.stringify(req.body || {});
   const expected = crypto.createHmac('sha256', String(configured)).update(body).digest('hex');
@@ -2055,7 +2055,7 @@ function brandingDefaults(company) {
   return {
     id: null,
     companyId: company.id,
-    brandName: company.tradingName || company.name || 'FieldCore',
+    brandName: company.tradingName || company.name || 'Rev Engine',
     logoUrl: null,
     primaryColor: '#2363ff',
     secondaryColor: '#263ff1',
@@ -2454,7 +2454,7 @@ async function saveCompanySecuritySettings(companyId, input) {
 }
 
 function securityHash(value) {
-  return crypto.createHash('sha256').update(`${process.env.JWT_SECRET || 'fieldcore'}:${String(value || '').trim().toUpperCase()}`).digest('hex');
+  return crypto.createHash('sha256').update(`${process.env.JWT_SECRET || 'revengine'}:${String(value || '').trim().toUpperCase()}`).digest('hex');
 }
 
 function generateSecurityCode(length = 6) {
@@ -2607,7 +2607,7 @@ router.post('/auth/logout', (req, res) => {
   sendData(res, { loggedOut: true });
 });
 
-router.get('/health', (req, res) => sendData(res, { service: 'fieldcore-api', ok: true }));
+router.get('/health', (req, res) => sendData(res, { service: 'revengine-api', ok: true }));
 router.get('/auth/session', asyncHandler(async (req, res) => {
   if (req.cookies[CLIENT_COOKIE_NAME]) return sendData(res, null);
   const header = req.get('authorization') || '';
@@ -2754,7 +2754,7 @@ router.get('/admin/data-export/:type', requireAuth, validate(dataExportParamSche
   const data = normalize(rows.map((row) => safeAuditMetadata(row)));
   if (String(req.query.format || '').toLowerCase() === 'csv') {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="fieldcore-${req.params.type}-export.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="revengine-${req.params.type}-export.csv"`);
     return res.status(200).send(exportRowsToCsv(data));
   }
   sendData(res, { type: req.params.type, recordCount: data.length, rows: data });
@@ -2940,7 +2940,7 @@ router.post('/public/booking-requests/track', validate(publicTrackSchema), async
   sendData(res, normalize(publicTrackingResponse(request)));
 }));
 
-const CLIENT_COOKIE_NAME = process.env.CLIENT_COOKIE_NAME || "fieldcore_client_token";
+const CLIENT_COOKIE_NAME = process.env.CLIENT_COOKIE_NAME || "revengine_client_token";
 const CLIENT_COOKIE_OPTIONS = { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 1000 * 60 * 60 * 8 };
 const CLIENT_JWT_SECRET = process.env.JWT_SECRET || "dev-only-change-me";
 const clientEmailSchema = z.string().trim().email().transform(function(value) { return value.toLowerCase(); });
@@ -3620,7 +3620,7 @@ router.post('/public/member-invitations/accept', validate(invitationAcceptSchema
   if (!invitation || invitation.status !== 'PENDING' || invitation.revokedAt || invitation.acceptedAt) throw new AppError(409, 'Invitation is no longer valid.');
   if (new Date(invitation.expiresAt) <= new Date()) throw new AppError(410, 'Invitation has expired.');
   const existing = await prisma.user.findUnique({ where: { email: invitation.email } });
-  if (existing) throw new AppError(409, 'This email already belongs to a FieldCore account. Contact support to join another workspace safely.');
+  if (existing) throw new AppError(409, 'This email already belongs to a Rev Engine account. Contact support to join another workspace safely.');
   const selected = uniquePermissions(invitation.permissions);
   const scope = invitation.scopeConfig || {};
   const user = await prisma.$transaction(async (tx) => {
@@ -4095,7 +4095,7 @@ async function savePaymentProviderSecretsSafely(connection, secrets, options = {
     return await savePaymentProviderSecrets(connection, secrets, options);
   } catch (error) {
     if (error && error.code === 'PAYMENT_SECRET_STORAGE_NOT_CONFIGURED') {
-      throw new AppError(503, 'Secure payment setup is not ready. Please contact FieldCore support.');
+      throw new AppError(503, 'Secure payment setup is not ready. Please contact Rev Engine support.');
     }
     throw error;
   }
@@ -4312,7 +4312,7 @@ router.get('/finance/export/invoices.csv', requireRole(...adminRoles), validate(
   const invoices = await prisma.invoice.findMany({ where: { companyId: req.companyId, ...financeDateWhere(req.query) }, include: { customer: true, service: true, job: true }, orderBy: { createdAt: 'desc' } });
   const headers = ['id', 'number', 'customer', 'service', 'status', 'subtotal', 'taxTotal', 'total', 'balanceDue', 'dueDate', 'createdAt'];
   const rows = invoices.map((item) => ({ id: item.id, number: item.number, customer: item.customer && item.customer.name || '', service: item.service && item.service.name || '', status: item.status, subtotal: item.subtotal || 0, taxTotal: item.taxTotal || 0, total: item.total || item.amount || 0, balanceDue: item.balanceDue || 0, dueDate: item.dueDate || '', createdAt: item.createdAt || '' }));
-  return sendFinanceCsv(req, res, 'INVOICES', 'fieldcore-invoices.csv', headers, rows);
+  return sendFinanceCsv(req, res, 'INVOICES', 'revengine-invoices.csv', headers, rows);
 }));
 
 router.get('/finance/export/payments.csv', requireRole(...adminRoles), validate(financeExportQuerySchema, 'query'), asyncHandler(async (req, res) => {
@@ -4335,7 +4335,7 @@ router.get('/finance/export/payments.csv', requireRole(...adminRoles), validate(
     const appliedAmount = item.status === 'CONFIRMED' ? Math.max(0, amount - refundedAmount - unappliedAmount) : 0;
     return { id: item.id, invoiceNumber: invoice.number || '', customer: invoice.customer && invoice.customer.name || '', amount, refundedAmount, unappliedAmount, appliedAmount, method: item.method, status: adminPaymentStatusLabel(item.status), reference: item.reference || '', receivedAt: item.receivedAt || '', confirmedAt: item.confirmedAt || '', createdAt: item.createdAt || '' };
   });
-  return sendFinanceCsv(req, res, 'PAYMENTS', 'fieldcore-payments.csv', headers, rows);
+  return sendFinanceCsv(req, res, 'PAYMENTS', 'revengine-payments.csv', headers, rows);
 }));
 
 router.get('/finance/export/receipts.csv', requireRole(...adminRoles), validate(financeExportQuerySchema, 'query'), asyncHandler(async (req, res) => {
@@ -4344,14 +4344,14 @@ router.get('/finance/export/receipts.csv', requireRole(...adminRoles), validate(
   const invoiceMap = new Map(invoices.map((item) => [item.id, item]));
   const headers = ['id', 'receiptNumber', 'invoiceNumber', 'customer', 'paymentId', 'amount', 'issuedAt'];
   const rows = receipts.map((item) => { const invoice = invoiceMap.get(item.invoiceId) || {}; return { id: item.id, receiptNumber: item.receiptNumber, invoiceNumber: invoice.number || '', customer: invoice.customer && invoice.customer.name || '', paymentId: item.paymentId, amount: item.amount || 0, issuedAt: item.issuedAt || '' }; });
-  return sendFinanceCsv(req, res, 'RECEIPTS', 'fieldcore-receipts.csv', headers, rows);
+  return sendFinanceCsv(req, res, 'RECEIPTS', 'revengine-receipts.csv', headers, rows);
 }));
 
 router.get('/finance/export/customers.csv', requireRole(...adminRoles), validate(financeExportQuerySchema, 'query'), asyncHandler(async (req, res) => {
   const customers = await prisma.customer.findMany({ where: { companyId: req.companyId, ...financeDateWhere(req.query) }, orderBy: { createdAt: 'desc' } });
   const headers = ['id', 'name', 'email', 'phone', 'address', 'createdAt'];
   const rows = customers.map((item) => ({ id: item.id, name: item.name, email: item.email || '', phone: item.phone || '', address: item.address || '', createdAt: item.createdAt || '' }));
-  return sendFinanceCsv(req, res, 'CUSTOMERS', 'fieldcore-customers.csv', headers, rows);
+  return sendFinanceCsv(req, res, 'CUSTOMERS', 'revengine-customers.csv', headers, rows);
 }));
 
 router.post('/finance/export/mark-exported', requireRole(...adminRoles), validate(financeMarkExportedSchema), asyncHandler(async (req, res) => {
@@ -4624,7 +4624,7 @@ async function sendMemberInvitationEmail(invitation, token, req) {
   const link = `${base}/accept-invite.html?token=${encodeURIComponent(token)}`;
   const delivery = await sendEmail({
     to: invitation.email,
-    subject: `Join ${invitation.company.name} on FieldCore`,
+    subject: `Join ${invitation.company.name} on Rev Engine`,
     text: `${invitation.invitedBy.name} invited you to join ${invitation.company.name} as ${invitation.jobTitle || invitation.roleTemplate && invitation.roleTemplate.name || 'a team member'}. Use this one-time link to set your password and join: ${link}`,
     html: `<p>${invitation.invitedBy.name} invited you to join <strong>${invitation.company.name}</strong>.</p><p><a href="${link}">Set your password and join</a></p><p>This one-time link expires at ${new Date(invitation.expiresAt).toISOString()}.</p>`
   });
@@ -4717,7 +4717,7 @@ router.get('/member-invitations', asyncHandler(async (req, res) => {
 router.post('/member-invitations', validate(invitationSchema), asyncHandler(async (req, res) => {
   await requirePermission(req, 'members.invite');
   await validateInvitationScope(req, req.body);
-  if (await prisma.user.findUnique({ where: { email: req.body.email } })) throw new AppError(409, 'This email already belongs to a FieldCore account.');
+  if (await prisma.user.findUnique({ where: { email: req.body.email } })) throw new AppError(409, 'This email already belongs to a Rev Engine account.');
   const pending = await prisma.memberInvitation.findFirst({ where: { companyId: req.companyId, email: req.body.email, status: 'PENDING' } });
   if (pending) throw new AppError(409, 'A pending invitation already exists for this email.');
   const permissions = await resolveDelegatedPermissions(req, req.body);
@@ -5404,7 +5404,7 @@ router.get('/reports/export', asyncHandler(async (req, res) => {
   const data = await reportData(req.companyId, req.query);
   await audit(req, 'EXPORT', 'Report', section, { section, startDate: data.filters.startDate, endDate: data.filters.endDate });
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="fieldcore-${section}-report.csv"`);
+  res.setHeader('Content-Disposition', `attachment; filename="revengine-${section}-report.csv"`);
   return res.status(200).send(reportCsv(section, data));
 }));
 
@@ -5453,7 +5453,7 @@ router.get('/analytics/export.csv', requireRole(...adminRoles), asyncHandler(asy
   const data = await analyticsPayload(req, permissionMap[section]);
   await audit(req, 'EXPORT', 'EnterpriseAnalytics', section, { section, startDate: data.filters.startDate, endDate: data.filters.endDate, branchId: data.filters.branchId });
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="fieldcore-${section}-analytics.csv"`);
+  res.setHeader('Content-Disposition', `attachment; filename="revengine-${section}-analytics.csv"`);
   return res.status(200).send(analyticsCsv(section, data));
 }));
 
@@ -5864,7 +5864,7 @@ async function createVerticalDemoData(req, vertical) {
     created.services.push(service.id);
   }
   const customerName = labels[0].split(' ')[0] + ' Demo Account';
-  const customer = await prisma.customer.create({ data: { companyId: req.companyId, name: customerName, email: vertical.replace(/[^a-z0-9]/g, '-') + '@demo.fieldcore.local', phone: '+10000000000', notes: 'Vertical demo data' } });
+  const customer = await prisma.customer.create({ data: { companyId: req.companyId, name: customerName, email: vertical.replace(/[^a-z0-9]/g, '-') + '@demo.revengine.local', phone: '+10000000000', notes: 'Vertical demo data' } });
   created.customers.push(customer.id);
   const inventory = await prisma.inventoryItem.create({ data: { companyId: req.companyId, sku: vertical.toUpperCase().replace(/[^A-Z0-9]/g, '-') + '-KIT', name: labels[0] + ' Kit', unitOfMeasure: 'kit', unitCost: 25, active: true } });
   created.inventoryItems.push(inventory.id);
@@ -5915,7 +5915,7 @@ router.get('/onboarding/import-templates', requireRole(...adminRoles), asyncHand
 router.get('/onboarding/import-templates/:type.csv', requireRole(...adminRoles), asyncHandler(async (req, res) => {
   const type = assertOnboardingImportType(req.params.type);
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="fieldcore-${type}-template.csv"`);
+  res.setHeader('Content-Disposition', `attachment; filename="revengine-${type}-template.csv"`);
   res.status(200).send(onboardingTemplateColumns[type].map(csvEscape).join(',') + '\n');
 }));
 
@@ -8668,7 +8668,7 @@ router.post('/payments/:id/refund', validate(idParam, 'params'), validate(refund
   if (providerConnection && ['PAYNOW', 'OZOW'].includes(providerConnection.provider)) {
     const refund = await prisma.$transaction((tx) => reserveRefund(tx, { status: 'REQUESTED', reason: req.body.reason || 'Refund must be completed in the payment provider account' }));
     await audit(req, 'REQUEST_MANUAL_REFUND', 'Payment', payment.id, { refundId: refund.id, provider: providerConnection.provider, amount: refundAmount.toFixed(2) });
-    return sendData(res, normalize({ refund: safePaymentRefund(refund), manualActionRequired: true, message: 'Complete this refund in your payment account. FieldCore will update it after the provider confirms the refund.' }), 202);
+    return sendData(res, normalize({ refund: safePaymentRefund(refund), manualActionRequired: true, message: 'Complete this refund in your payment account. Rev Engine will update it after the provider confirms the refund.' }), 202);
   }
 
   const data = await prisma.$transaction(async (tx) => {

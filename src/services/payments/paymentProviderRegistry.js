@@ -29,7 +29,7 @@ function signPayload(secret, payload) {
 function verifySharedSecretWebhook(connection, req) {
   const secret = connection && connection.config && connection.config.webhookSecret;
   if (!secret) return Boolean(connection && connection.config && connection.config.mockMode);
-  const signature = req.headers['x-fieldcore-payment-signature'] || req.headers['x-payfast-signature'] || req.headers['x-yoco-signature'] || req.headers['x-ozow-signature'] || req.headers['x-paynow-signature'];
+  const signature = req.headers['x-revengine-payment-signature'] || req.headers['x-payfast-signature'] || req.headers['x-yoco-signature'] || req.headers['x-ozow-signature'] || req.headers['x-paynow-signature'];
   return safeCompare(signPayload(secret, req.body || {}), signature);
 }
 

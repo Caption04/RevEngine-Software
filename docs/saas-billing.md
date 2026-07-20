@@ -1,6 +1,6 @@
 # SaaS Billing Operations
 
-Phase 11 adds FieldCore-to-company subscription billing. This is separate from the existing company-to-customer quotes, invoices, payments, and receipts.
+Phase 11 adds Rev Engine-to-company subscription billing. This is separate from the existing company-to-customer quotes, invoices, payments, and receipts.
 
 ## Provider Modes
 

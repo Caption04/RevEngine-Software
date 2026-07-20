@@ -80,7 +80,7 @@ CREATE INDEX "PaymentLink_credentialVersionId_idx" ON "PaymentLink"("credentialV
 CREATE INDEX "PaymentLink_nextStatusCheckAt_status_idx" ON "PaymentLink"("nextStatusCheckAt", "status");
 
 -- One upstream provider transaction and one Paynow merchant trace may only
--- belong to one FieldCore attempt. PostgreSQL allows multiple NULL values.
+-- belong to one Rev Engine attempt. PostgreSQL allows multiple NULL values.
 CREATE UNIQUE INDEX "PaymentLink_providerConnectionId_providerPaymentId_key"
   ON "PaymentLink"("providerConnectionId", "providerPaymentId");
 CREATE UNIQUE INDEX "PaymentLink_providerConnectionId_merchantTrace_key"
