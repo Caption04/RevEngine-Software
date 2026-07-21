@@ -162,6 +162,23 @@ Prefer:
 
 Do not make each module feel like a separate complex product. Reuse familiar Rev Engine page patterns so users always know where they are and what to do next.
 
+### Solar Operator Product Rule
+
+Rev Engine is used by solar owners, managers, technicians, and office staff. They should not need to understand the software's internal architecture.
+
+For normal customer-facing screens:
+
+* say **company** instead of **workspace**;
+* say **all-company manager** instead of **group manager**;
+* keep **branch** for a physical operating location;
+* show company switching only when the signed-in person can actually access more than one company;
+* place company switching inside the existing account menu instead of adding another competing dropdown;
+* never show a disabled control that looks like an action;
+* never expose seed accounts, test credentials, demo labels, placeholder status cards, or unfinished scaffolding;
+* do not add a visible feature merely because the backend supports it.
+
+Prefer the smallest interface that completes the user's real solar task. Build for the next real business need, not an imagined final architecture.
+
 ## Backend Standards
 
 Use:

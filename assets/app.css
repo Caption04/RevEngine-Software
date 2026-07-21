@@ -3645,11 +3645,6 @@ form textarea:focus {
 
 .content-account-bar { display:flex; align-items:center; justify-content:flex-end; min-height:48px; margin-bottom:8px; }
 .content-account-bar .menu-toggle { margin-right:auto; }
-.workspace-switcher { min-width:240px; margin-right:10px; }
-.workspace-switcher label { display:grid; gap:3px; }
-.workspace-switcher label > span { color:#71809a; font-size:10px; font-weight:850; letter-spacing:.05em; text-transform:uppercase; }
-.workspace-switcher select { min-height:40px; width:100%; padding:0 34px 0 11px; border:1px solid #dbe5f2; border-radius:11px; background:#fff; color:#14213b; font-weight:780; box-shadow:0 7px 20px rgba(15,23,42,.05); }
-.workspace-switcher select:disabled { opacity:.85; cursor:default; }
 .account-menu { position:relative; z-index:30; }
 .account-trigger { display:flex; align-items:center; gap:10px; min-width:210px; padding:7px 10px 7px 7px; border:1px solid #dbe5f2; border-radius:12px; background:#fff; color:#14213b; cursor:pointer; box-shadow:0 7px 20px rgba(15,23,42,.06); transition:.16s ease; }
 .account-trigger:hover,.account-trigger[aria-expanded="true"] { border-color:#b8cdf8; box-shadow:0 10px 24px rgba(35,99,255,.12); transform:translateY(-1px); }
@@ -3659,12 +3654,20 @@ form textarea:focus {
 .account-trigger-copy strong { font-size:13px; }
 .account-trigger-copy small { color:#71809a; font-size:11px; margin-top:2px; }
 .account-chevron { margin-left:auto; color:#71809a; font-weight:900; }
-.account-dropdown { position:absolute; top:calc(100% + 9px); right:0; width:230px; padding:7px; border:1px solid #dce5f1; border-radius:13px; background:#fff; box-shadow:0 20px 45px rgba(15,23,42,.16); }
+.account-dropdown { position:absolute; top:calc(100% + 9px); right:0; width:260px; padding:7px; border:1px solid #dce5f1; border-radius:13px; background:#fff; box-shadow:0 20px 45px rgba(15,23,42,.16); }
 .account-dropdown[hidden] { display:none; }
 .account-dropdown a,.account-dropdown button { width:100%; display:flex; align-items:center; min-height:40px; padding:0 12px; border:0; border-radius:8px; background:transparent; color:#243651; font:inherit; font-size:13px; font-weight:760; text-align:left; cursor:pointer; }
 .account-dropdown a:hover,.account-dropdown a:focus-visible,.account-dropdown button:hover,.account-dropdown button:focus-visible { background:#edf4ff; color:var(--blue); outline:none; }
+.account-dropdown-label { display:block; padding:7px 12px 5px; color:#71809a; font-size:10px; font-weight:850; letter-spacing:.05em; text-transform:uppercase; }
+.account-company-list { padding-bottom:6px; margin-bottom:5px; border-bottom:1px solid #edf1f6; }
+.account-company-list[hidden] { display:none; }
+.account-company-list button,.account-current-company { justify-content:space-between; gap:12px; }
+.account-company-list button span,.account-current-company span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.account-current-company { width:100%; min-height:40px; display:flex; align-items:center; padding:0 12px; border-radius:8px; background:#f3f7fd; color:#243651; font-size:13px; font-weight:760; }
+.account-current-company small { flex:0 0 auto; color:#2f9b68; font-size:10px; font-weight:850; text-transform:uppercase; }
+.account-company-list button:disabled { opacity:.65; cursor:wait; }
 .account-dropdown button[data-logout] { margin-top:5px; border-top:1px solid #edf1f6; border-radius:0 0 8px 8px; color:#c7344a; }
-@media(max-width:720px){.account-trigger{min-width:0}.account-trigger-copy{display:none}.content-account-bar{position:relative}.account-dropdown{position:fixed;top:70px;right:16px}.workspace-switcher{min-width:0;max-width:190px;flex:1;margin-left:8px}.workspace-switcher label>span{display:none}}
+@media(max-width:720px){.account-trigger{min-width:0}.account-trigger-copy{display:none}.content-account-bar{position:relative}.account-dropdown{position:fixed;top:70px;right:16px}}
 
 .workspace-card-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
 .workspace-card { display:grid; gap:14px; padding:18px; border:1px solid #dfe7f2; border-radius:14px; background:#fff; box-shadow:0 10px 28px rgba(15,23,42,.05); }
@@ -5235,3 +5238,61 @@ body[data-page="executive-dashboard"] .report-table-scroll table {
 .eyebrow{text-transform:uppercase;letter-spacing:.12em;font-size:12px;font-weight:900;color:#155bd7}
 @media(max-width:1100px){.solar-health-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.solar-layout{grid-template-columns:1fr}.solar-site-metrics{text-align:left}}
 @media(max-width:700px){.solar-actions{justify-content:flex-start}.solar-health-strip{grid-template-columns:1fr 1fr}.solar-site-row{align-items:flex-start;flex-wrap:wrap}.solar-site-metrics{width:100%;grid-template-columns:repeat(3,1fr)}.solar-fault-row{flex-direction:column}.solar-fault-actions{align-items:flex-start;flex-direction:row;flex-wrap:wrap}}
+
+/* Keep Companies and Solar Operations inside the visible app frame. */
+.page-mount,
+.page-mount > .page,
+body[data-page="workspaces"] .page > *,
+body[data-page="solar-operations"] .page > * {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+body[data-page="workspaces"] .panel,
+body[data-page="workspaces"] .workspace-card-grid,
+body[data-page="workspaces"] .workspace-card,
+body[data-page="workspaces"] .form-grid,
+body[data-page="solar-operations"] .hero-row,
+body[data-page="solar-operations"] .hero-copy,
+body[data-page="solar-operations"] .hero-actions,
+body[data-page="solar-operations"] .stats,
+body[data-page="solar-operations"] .solar-health-strip,
+body[data-page="solar-operations"] .solar-layout,
+body[data-page="solar-operations"] .panel {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body[data-page="workspaces"] .workspace-card-head > div,
+body[data-page="solar-operations"] .hero-copy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1500px) and (min-width: 981px) {
+  body[data-page="workspaces"] .app-shell,
+  body[data-page="solar-operations"] .app-shell {
+    grid-template-columns: 250px minmax(0, 1fr);
+  }
+
+  body[data-page="workspaces"] .content,
+  body[data-page="solar-operations"] .content {
+    padding-right: 30px;
+    padding-left: 30px;
+  }
+
+  body[data-page="solar-operations"] .hero-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body[data-page="solar-operations"] .solar-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 1180px) {
+  body[data-page="workspaces"] .workspace-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

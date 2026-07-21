@@ -110,11 +110,11 @@ const REGION_CONFIGS = {
   ZW: {
     market: 'ZW',
     companyId: 'revengine-zw-demo',
-    companyName: 'Rev Engine Zimbabwe Demo',
-    legalName: 'Rev Engine Zimbabwe Demo (Private) Limited',
-    registrationNumber: 'ZW-DEMO-2026',
-    taxNumber: 'ZW-VAT-DEMO',
-    address: 'Demo House, Harare, Zimbabwe',
+    companyName: 'Rev Engine Zimbabwe',
+    legalName: 'Rev Engine Zimbabwe (Private) Limited',
+    registrationNumber: 'ZW-REG-0001',
+    taxNumber: 'ZW-VAT-0001',
+    address: 'Harare, Zimbabwe',
     phone: '+263 000 000 000',
     supportEmail: 'support.zw@revengine.test',
     websiteUrl: 'https://zw.revengine.test',
@@ -136,17 +136,17 @@ const REGION_CONFIGS = {
       worker: 'worker.zw@fieldcore.test',
       client: 'client.zw@fieldcore.test'
     },
-    people: { owner: 'Zimbabwe Demo Owner', admin: 'Zimbabwe Demo Admin', worker: 'Tariro Technician', client: 'Harare Demo Client' },
+    people: { owner: 'Zimbabwe Owner', admin: 'Zimbabwe Admin', worker: 'Tariro Technician', client: 'Harare Solar Client' },
     sample: { customerName: 'Harare Solar Client', customerPhone: '+263 000 000 120', customerAddress: 'Borrowdale, Harare', serviceName: 'Solar Preventive Maintenance', servicePrice: 450, invoiceNumber: 'ZW-INV-0001', siteName: 'Borrowdale Solar Site', siteCode: 'ZW-SOLAR-001', dcCapacityKwp: 24.8, acCapacityKw: 20, batteryCapacityKwh: 30, moduleCount: 40, inverterCount: 2 }
   },
   SA: {
     market: 'SA',
     companyId: 'revengine-sa-demo',
-    companyName: 'Rev Engine South Africa Demo',
-    legalName: 'Rev Engine South Africa Demo (Pty) Ltd',
-    registrationNumber: 'SA-DEMO-2026',
-    taxNumber: 'SA-VAT-DEMO',
-    address: 'Demo Office, Johannesburg, South Africa',
+    companyName: 'Rev Engine South Africa',
+    legalName: 'Rev Engine South Africa (Pty) Ltd',
+    registrationNumber: 'SA-REG-0001',
+    taxNumber: 'SA-VAT-0001',
+    address: 'Johannesburg, South Africa',
     phone: '+27 000 000 000',
     supportEmail: 'support.sa@revengine.test',
     websiteUrl: 'https://sa.revengine.test',
@@ -168,7 +168,7 @@ const REGION_CONFIGS = {
       worker: 'worker.sa@fieldcore.test',
       client: 'client.sa@fieldcore.test'
     },
-    people: { owner: 'South Africa Demo Owner', admin: 'South Africa Demo Admin', worker: 'Thabo Technician', client: 'Johannesburg Demo Client' },
+    people: { owner: 'South Africa Owner', admin: 'South Africa Admin', worker: 'Thabo Technician', client: 'Johannesburg Solar Client' },
     sample: { customerName: 'Johannesburg Solar Client', customerPhone: '+27 000 000 120', customerAddress: 'Rosebank, Johannesburg', serviceName: 'Solar Preventive Maintenance', servicePrice: 8500, invoiceNumber: 'SA-INV-0001', siteName: 'Rosebank Commercial Solar Plant', siteCode: 'SA-SOLAR-001', dcCapacityKwp: 120, acCapacityKw: 100, batteryCapacityKwh: 200, moduleCount: 192, inverterCount: 4 }
   }
 };
@@ -386,14 +386,14 @@ async function seedCompany(config, passwordHash, includeSampleData) {
   await prisma.workerDevice.upsert({
     where: { companyId_deviceId: { companyId: company.id, deviceId: `${config.market.toLowerCase()}-demo-worker-device` } },
     update: { workerId: worker.id, userId: workerUser.id, lastSeenAt: new Date(), active: true },
-    create: { companyId: company.id, workerId: worker.id, userId: workerUser.id, platform: 'ANDROID', deviceName: `${config.market} Demo Technician Phone`, deviceId: `${config.market.toLowerCase()}-demo-worker-device`, lastSeenAt: new Date(), active: true }
+    create: { companyId: company.id, workerId: worker.id, userId: workerUser.id, platform: 'ANDROID', deviceName: `${config.market} Technician Phone`, deviceId: `${config.market.toLowerCase()}-demo-worker-device`, lastSeenAt: new Date(), active: true }
   });
 
   if (includeSampleData) {
     const customer = await prisma.customer.upsert({
       where: { id: `${config.companyId}-customer` },
       update: { companyId: company.id, branchId: branch.id, name: config.sample.customerName, email: config.users.client, phone: config.sample.customerPhone, address: config.sample.customerAddress },
-      create: { id: `${config.companyId}-customer`, companyId: company.id, branchId: branch.id, name: config.sample.customerName, email: config.users.client, phone: config.sample.customerPhone, address: config.sample.customerAddress, notes: `${config.market} clean demo customer.` }
+      create: { id: `${config.companyId}-customer`, companyId: company.id, branchId: branch.id, name: config.sample.customerName, email: config.users.client, phone: config.sample.customerPhone, address: config.sample.customerAddress, notes: 'Solar O&M customer.' }
     });
 
     const clientAccount = await prisma.clientAccount.upsert({
@@ -407,14 +407,14 @@ async function seedCompany(config, passwordHash, includeSampleData) {
 
     const property = await prisma.customerProperty.upsert({
       where: { id: `${config.companyId}-solar-site` },
-      update: { companyId: company.id, branchId: branch.id, customerId: customer.id, clientAccountId: clientAccount.id, label: config.sample.siteName, address: config.sample.customerAddress, city: config.branch.city, notes: 'Solar O&M demo site.', isDefault: true },
-      create: { id: `${config.companyId}-solar-site`, companyId: company.id, branchId: branch.id, customerId: customer.id, clientAccountId: clientAccount.id, label: config.sample.siteName, address: config.sample.customerAddress, city: config.branch.city, notes: 'Solar O&M demo site.', isDefault: true }
+      update: { companyId: company.id, branchId: branch.id, customerId: customer.id, clientAccountId: clientAccount.id, label: config.sample.siteName, address: config.sample.customerAddress, city: config.branch.city, notes: 'Solar O&M site.', isDefault: true },
+      create: { id: `${config.companyId}-solar-site`, companyId: company.id, branchId: branch.id, customerId: customer.id, clientAccountId: clientAccount.id, label: config.sample.siteName, address: config.sample.customerAddress, city: config.branch.city, notes: 'Solar O&M site.', isDefault: true }
     });
 
     await prisma.solarSiteProfile.upsert({
       where: { propertyId: property.id },
-      update: { companyId: company.id, customerId: customer.id, siteCode: config.sample.siteCode, status: 'OPERATIONAL', installedCapacityKwp: config.sample.dcCapacityKwp, acCapacityKw: config.sample.acCapacityKw, batteryCapacityKwh: config.sample.batteryCapacityKwh, moduleCount: config.sample.moduleCount, inverterCount: config.sample.inverterCount, monitoringProvider: 'Demo Monitoring Portal', monitoringSiteId: config.sample.siteCode, gridConnectionType: 'HYBRID', targetPerformanceRatioPct: 75, targetAvailabilityPct: 98 },
-      create: { companyId: company.id, customerId: customer.id, propertyId: property.id, siteCode: config.sample.siteCode, status: 'OPERATIONAL', installedCapacityKwp: config.sample.dcCapacityKwp, acCapacityKw: config.sample.acCapacityKw, batteryCapacityKwh: config.sample.batteryCapacityKwh, moduleCount: config.sample.moduleCount, inverterCount: config.sample.inverterCount, monitoringProvider: 'Demo Monitoring Portal', monitoringSiteId: config.sample.siteCode, gridConnectionType: 'HYBRID', targetPerformanceRatioPct: 75, targetAvailabilityPct: 98 }
+      update: { companyId: company.id, customerId: customer.id, siteCode: config.sample.siteCode, status: 'OPERATIONAL', installedCapacityKwp: config.sample.dcCapacityKwp, acCapacityKw: config.sample.acCapacityKw, batteryCapacityKwh: config.sample.batteryCapacityKwh, moduleCount: config.sample.moduleCount, inverterCount: config.sample.inverterCount, monitoringProvider: 'Solar Monitoring Portal', monitoringSiteId: config.sample.siteCode, gridConnectionType: 'HYBRID', targetPerformanceRatioPct: 75, targetAvailabilityPct: 98 },
+      create: { companyId: company.id, customerId: customer.id, propertyId: property.id, siteCode: config.sample.siteCode, status: 'OPERATIONAL', installedCapacityKwp: config.sample.dcCapacityKwp, acCapacityKw: config.sample.acCapacityKw, batteryCapacityKwh: config.sample.batteryCapacityKwh, moduleCount: config.sample.moduleCount, inverterCount: config.sample.inverterCount, monitoringProvider: 'Solar Monitoring Portal', monitoringSiteId: config.sample.siteCode, gridConnectionType: 'HYBRID', targetPerformanceRatioPct: 75, targetAvailabilityPct: 98 }
     });
 
     const plant = await prisma.asset.upsert({
@@ -425,8 +425,8 @@ async function seedCompany(config, passwordHash, includeSampleData) {
 
     const inverter = await prisma.asset.upsert({
       where: { id: `${config.companyId}-inverter-01` },
-      update: { companyId: company.id, branchId: branch.id, customerId: customer.id, propertyId: property.id, serviceId: service.id, parentAssetId: plant.id, name: 'Main Inverter 01', assetType: 'INVERTER', assetTag: `${config.market}-INV-001`, serialNumber: `${config.market}-DEMO-INVERTER-001`, monitoringIdentifier: `${config.sample.siteCode}-INV-01`, acCapacityKw: config.sample.acCapacityKw / config.sample.inverterCount, status: 'ACTIVE' },
-      create: { id: `${config.companyId}-inverter-01`, companyId: company.id, branchId: branch.id, customerId: customer.id, propertyId: property.id, serviceId: service.id, parentAssetId: plant.id, name: 'Main Inverter 01', assetType: 'INVERTER', assetTag: `${config.market}-INV-001`, serialNumber: `${config.market}-DEMO-INVERTER-001`, monitoringIdentifier: `${config.sample.siteCode}-INV-01`, acCapacityKw: config.sample.acCapacityKw / config.sample.inverterCount, status: 'ACTIVE' }
+      update: { companyId: company.id, branchId: branch.id, customerId: customer.id, propertyId: property.id, serviceId: service.id, parentAssetId: plant.id, name: 'Main Inverter 01', assetType: 'INVERTER', assetTag: `${config.market}-INV-001`, serialNumber: `${config.market}-INVERTER-SN-001`, monitoringIdentifier: `${config.sample.siteCode}-INV-01`, acCapacityKw: config.sample.acCapacityKw / config.sample.inverterCount, status: 'ACTIVE' },
+      create: { id: `${config.companyId}-inverter-01`, companyId: company.id, branchId: branch.id, customerId: customer.id, propertyId: property.id, serviceId: service.id, parentAssetId: plant.id, name: 'Main Inverter 01', assetType: 'INVERTER', assetTag: `${config.market}-INV-001`, serialNumber: `${config.market}-INVERTER-SN-001`, monitoringIdentifier: `${config.sample.siteCode}-INV-01`, acCapacityKw: config.sample.acCapacityKw / config.sample.inverterCount, status: 'ACTIVE' }
     });
 
     await prisma.asset.upsert({

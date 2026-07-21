@@ -20,7 +20,7 @@
     ['leads', 'Solar Leads', 'leads.html', 'inbox'],
     ['customers', 'Solar Clients', 'customers.html', 'users'],
     ['members', 'Company Members', 'members.html', 'users'],
-    ['workspaces', 'Business Group', 'workspaces.html', 'settings'],
+    ['workspaces', 'Companies', 'workspaces.html', 'settings'],
     ['branches', 'Branches', 'branches.html', 'map'],
     ['approvals', 'Approvals', 'approvals.html', 'inbox'],
     ['assets', 'Solar Equipment', 'assets.html', 'briefcase'],
@@ -85,7 +85,7 @@
     ['Commercial', 'Solar quotes, invoices, and payments', ['quotes', 'invoices', 'collections']],
     ['Reports', 'Business results', ['executive-dashboard', 'reports']],
     ['O&M Management', 'Sites, equipment, contracts, and stock', ['branches', 'approvals', 'assets', 'service-contracts', 'contract-automation', 'inventory', 'purchase-requests', 'purchase-orders', 'procurement-costing']],
-    ['Workspace', 'Company setup', ['workspaces', 'settings']]
+    ['Company', 'Business setup', ['workspaces', 'settings']]
   ];
 
   const pagePermissions = {
@@ -184,7 +184,7 @@
     currentPermissionSet = new Set(user && user.effectivePermissions || []);
     if (navNode) navNode.innerHTML = nav(current, role, user && user.effectivePermissions);
     renderAccountIdentity(user);
-    renderWorkspaceSwitcher(user);
+    renderCompanyMenu(user);
 
     if (quick) {
       quick.hidden = !shouldShowQuickCard(current, role, user && user.effectivePermissions);
@@ -201,39 +201,45 @@
     });
   }
 
-  function renderWorkspaceSwitcher(user) {
-    const target = document.querySelector('[data-workspace-switcher]');
+  function renderCompanyMenu(user) {
+    const target = document.querySelector('[data-company-list]');
     if (!target) return;
+
     const organization = user && user.organization;
-    const workspaces = organization && Array.isArray(organization.workspaces) ? organization.workspaces : [];
-    if (!workspaces.length) {
+    const companies = organization && Array.isArray(organization.workspaces) ? organization.workspaces : [];
+    if (companies.length < 2) {
       target.hidden = true;
+      target.innerHTML = '';
       return;
     }
-    const active = workspaces.find((workspace) => workspace.id === organization.activeWorkspaceId) || workspaces[0];
+
+    const activeId = organization.activeWorkspaceId;
     target.hidden = false;
-    target.innerHTML = `<label><span>${escape(organization.group && organization.group.name || 'Workspace')}</span><select data-workspace-select aria-label="Switch workspace">${workspaces.map((workspace) => `<option value="${escape(workspace.id)}"${workspace.id === active.id ? ' selected' : ''}>${escape(workspace.name)}</option>`).join('')}</select></label>`;
-    const select = target.querySelector('[data-workspace-select]');
-    if (!select || workspaces.length < 2) {
-      if (select) select.disabled = true;
-      return;
-    }
-    select.addEventListener('change', async () => {
-      select.disabled = true;
-      try {
-        const response = await fetch(`${API_BASE}/organization/switch-workspace`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ companyId: select.value })
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload.error && payload.error.message || 'Could not switch workspace.');
-        window.location.reload();
-      } catch (error) {
-        select.disabled = false;
-        if (window.RevEngineUI) window.RevEngineUI.notify(error.message, { type: 'error' });
-      }
+    target.innerHTML = `<span class="account-dropdown-label">Switch company</span>${companies.map((company) => {
+      const active = company.id === activeId;
+      if (active) return `<div class="account-current-company"><span>${escape(company.name)}</span><small>Current</small></div>`;
+      return `<button role="menuitem" type="button" data-switch-company="${escape(company.id)}"><span>${escape(company.name)}</span></button>`;
+    }).join('')}`;
+
+    target.querySelectorAll('[data-switch-company]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const buttons = Array.from(target.querySelectorAll('[data-switch-company]'));
+        buttons.forEach((item) => { item.disabled = true; });
+        try {
+          const response = await fetch(`${API_BASE}/organization/switch-workspace`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ companyId: button.dataset.switchCompany })
+          });
+          const payload = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(payload.error && payload.error.message || 'Could not open that company.');
+          window.location.reload();
+        } catch (error) {
+          buttons.forEach((item) => { item.disabled = false; });
+          if (window.RevEngineUI) window.RevEngineUI.notify(error.message, { type: 'error' });
+        }
+      });
     });
   }
 
@@ -276,6 +282,7 @@
         <span class="account-chevron" aria-hidden="true">⌄</span>
       </button>
       <div class="account-dropdown" role="menu" data-account-dropdown hidden>
+        <div class="account-company-list" data-company-list hidden></div>
         <a role="menuitem" href="settings.html" data-required-any-permission="company.settings.view,company.settings.manage,company.branding.manage,settings.finance.manage,finance.exports.manage,notifications.view,integration.view,integration.manage,audit.view" hidden>Settings</a>
         <a role="menuitem" href="security-center.html" data-required-permission="security.view" hidden>Security</a>
         <button role="menuitem" type="button" data-logout>Log out</button>
@@ -505,7 +512,7 @@
       ${quickCard()}
     </aside>
     <main class="content">
-      <div class="content-account-bar"><button class="menu-toggle" type="button">Menu</button><div class="workspace-switcher" data-workspace-switcher hidden></div>${accountMenu()}</div>
+      <div class="content-account-bar"><button class="menu-toggle" type="button">Menu</button>${accountMenu()}</div>
       ${pageSearchBox()}
       <div class="page-mount"></div>
     </main>`;

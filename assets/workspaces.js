@@ -34,15 +34,15 @@
     const workspaces = state && state.workspaces || [];
     document.querySelector('[data-workspace-count]').textContent = workspaces.length;
     document.querySelector('[data-workspace-grid]').innerHTML = workspaces.map((workspace) => `<article class="workspace-card${workspace.active ? ' is-active' : ''}">
-      <div class="workspace-card-head"><div><h3>${escapeHtml(workspace.name)}</h3><p class="muted">${escapeHtml(workspace.legalName || workspace.countryName || 'Workspace')}</p></div><span class="badge ${workspace.active ? 'green' : workspace.onboardingState === 'COMPLETED' ? 'gray' : 'orange'}">${workspace.active ? 'Current' : workspace.onboardingState === 'COMPLETED' ? 'Available' : 'Plan required'}</span></div>
+      <div class="workspace-card-head"><div><h3>${escapeHtml(workspace.name)}</h3><p class="muted">${escapeHtml(workspace.legalName || workspace.countryName || 'Company')}</p></div><span class="badge ${workspace.active ? 'green' : workspace.onboardingState === 'COMPLETED' ? 'gray' : 'orange'}">${workspace.active ? 'Current' : workspace.onboardingState === 'COMPLETED' ? 'Available' : 'Setup required'}</span></div>
       <div class="workspace-card-meta">
         <div><strong>Country</strong><span>${escapeHtml(workspace.countryName || workspace.countryCode || '—')}</span></div>
         <div><strong>Currency</strong><span>${escapeHtml(workspace.currency || '—')}</span></div>
         <div><strong>Branches</strong><span>${escapeHtml(workspace.branchCount)}</span></div>
         <div><strong>Members</strong><span>${escapeHtml(workspace.memberCount)}</span></div>
       </div>
-      <div class="fc-form-actions">${workspace.active ? '<a class="secondary-button" href="branches.html">Manage branches</a>' : `<button class="secondary-button" type="button" data-switch-workspace="${escapeHtml(workspace.id)}">Open workspace</button>`}</div>
-    </article>`).join('') || '<div class="empty-state"><strong>No workspaces found</strong></div>';
+      <div class="fc-form-actions">${workspace.active ? '<a class="secondary-button" href="branches.html">Manage branches</a>' : `<button class="secondary-button" type="button" data-switch-workspace="${escapeHtml(workspace.id)}">Open company</button>`}</div>
+    </article>`).join('') || '<div class="empty-state"><strong>No companies found</strong></div>';
     document.querySelectorAll('[data-switch-workspace]').forEach((button) => button.onclick = () => switchWorkspace(button.dataset.switchWorkspace).catch((error) => notify(error.message, false)));
   }
 
@@ -53,24 +53,22 @@
       <td><strong>${escapeHtml(membership.user && membership.user.name || 'Member')}</strong></td>
       <td>${escapeHtml(membership.user && membership.user.email || '—')}</td>
       <td>${escapeHtml(membership.user && membership.user.company && membership.user.company.name || '—')}</td>
-      <td><span class="badge ${membership.role === 'OWNER' ? 'blue' : 'green'}">${membership.role === 'OWNER' ? 'Owner' : 'Group manager'}</span></td>
+      <td><span class="badge ${membership.role === 'OWNER' ? 'blue' : 'green'}">${membership.role === 'OWNER' ? 'Owner' : 'All-company manager'}</span></td>
       <td>${isOwner() && membership.role === 'MANAGER' ? `<button class="secondary-button compact danger" type="button" data-remove-manager="${escapeHtml(membership.user.id)}">Remove</button>` : '<span class="muted">Protected</span>'}</td>
-    </tr>`).join('') || '<tr><td colspan="5">No group managers assigned.</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="5">No managers have access to every company.</td></tr>';
     document.querySelectorAll('[data-remove-manager]').forEach((button) => button.onclick = async () => {
-      const confirmed = await window.RevEngineUI.confirm({ title: 'Remove group manager?', message: 'They will lose access to the other workspaces and will need to sign in again.', confirmLabel: 'Remove manager', danger: true });
+      const confirmed = await window.RevEngineUI.confirm({ title: 'Remove all-company access?', message: 'They will lose access to the other companies and will need to sign in again.', confirmLabel: 'Remove manager', danger: true });
       if (!confirmed) return;
       try {
         await api(`/organization/group-managers/${button.dataset.removeManager}`, { method: 'DELETE' });
         await load();
-        notify('Group manager removed.');
+        notify('All-company access removed.');
       } catch (error) { notify(error.message, false); }
     });
   }
 
   function render() {
-    document.querySelector('[data-group-name]').textContent = state && state.group && state.group.name || 'Business group';
-    document.querySelector('[data-status]').textContent = state && state.group ? 'Ready' : 'Single workspace';
-    document.querySelector('[data-status]').classList.add('ok');
+    document.querySelector('[data-group-name]').textContent = state && state.group && state.group.name || 'Your business';
     document.querySelectorAll('[data-owner-panel]').forEach((node) => { node.hidden = !isOwner(); });
     renderWorkspaces();
     renderManagers();
@@ -94,7 +92,7 @@
       workspaceForm.reset();
       workspaceForm.mainBranchName.value = 'Main Branch';
       await load();
-      notify('Workspace created.');
+      notify('Company added.');
     } catch (error) {
       errorNode.textContent = error.message;
       errorNode.hidden = false;
@@ -112,7 +110,7 @@
       await api('/organization/group-managers', { method: 'POST', body: JSON.stringify(formBody(managerForm)) });
       managerForm.reset();
       await load();
-      notify('Group manager assigned.');
+      notify('Access to all companies granted.');
     } catch (error) {
       errorNode.textContent = error.message;
       errorNode.hidden = false;
@@ -120,7 +118,6 @@
   });
 
   load().catch((error) => {
-    document.querySelector('[data-status]').textContent = 'Could not load';
     notify(error.message, false);
   });
 })();
