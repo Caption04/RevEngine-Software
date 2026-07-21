@@ -96,7 +96,7 @@
   }
 
   async function loadBranches() {
-    const rows = asArray(await api('/branches')).map((branch) => `<tr><td>${escapeHtml(branch.name)}</td><td>${escapeHtml(branch.code || '-')}</td><td>${escapeHtml(branch.city || '-')}</td><td>${escapeHtml(branch.country || '-')}</td><td>${badge(branch.active === false ? 'INACTIVE' : 'ACTIVE')}</td></tr>`);
+    const rows = asArray(await api('/branches')).map((branch) => `<tr><td>${escapeHtml(branch.name)}</td><td>${escapeHtml(branch.code || '-')}</td><td>${escapeHtml(branch.city || '-')}</td><td>${escapeHtml(branch.countryName || branch.country || '-')}</td><td>${badge(branch.active === false ? 'INACTIVE' : 'ACTIVE')}</td></tr>`);
     setRows('[data-branches]', rows, 5);
     setStatus(`Loaded ${rows.length} branch${rows.length === 1 ? '' : 'es'}`, true);
   }
@@ -477,7 +477,7 @@
             ['Money this month', businessMoney(overview.mtdRevenue, currency), 'Confirmed payments'],
             ['Money in this period', businessMoney(overview.periodRevenue, currency), 'Confirmed payments'],
             ['Money still owed', businessMoney(overview.outstandingInvoiceTotal, currency), `${overview.outstandingInvoices || 0} unpaid invoices`],
-            ['Jobs done', String(overview.completedJobs || 0), 'Completed in this period'],
+            ['Solar work orders', String(overview.completedJobs || 0), 'Completed in this period'],
             ['Jobs at risk', String(overview.jobsAtRisk || 0), 'Late or close to late'],
             ['Quote success', businessPercent(overview.quoteAcceptanceRate), 'Accepted quotes'],
             ['Missing proof', String(overview.proofMissingCount || 0), 'Completed jobs missing proof'],
@@ -504,7 +504,7 @@
           quoteSent: 'Quotes sent',
           quoteAccepted: 'Quotes accepted',
           jobScheduled: 'Jobs booked',
-          jobCompleted: 'Jobs done',
+          jobCompleted: 'Solar work orders',
           invoiceIssued: 'Invoices sent',
           paymentCollected: 'Payments received'
         };

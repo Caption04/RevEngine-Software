@@ -18,7 +18,7 @@
         <div class="hero-copy auth-onboarding-copy">
           <span class="eyebrow">New workspace</span>
           <h2>Create your Rev Engine account</h2>
-          <p>Start with the essentials. Operational setup can be delegated after signup.</p>
+          <p>Create a solar O&M workspace for sites, equipment, technicians, readings, faults, contracts, and field work.</p>
         </div>
         <form class="form-grid" data-register-form>
           <div class="signup-progress span-2" aria-label="Signup progress"><span class="active" data-signup-dot="1">1</span><i></i><span data-signup-dot="2">2</span></div>
@@ -33,11 +33,14 @@
             <div class="fc-form-actions"><a class="secondary-button" href="login.html">Sign In</a><button class="primary-button" type="button" data-signup-next>Continue</button></div>
           </section>
           <section class="signup-step span-2" data-signup-step="2" hidden>
-            <div class="panel-head"><div><h3>Business basics</h3><p class="muted">Used to prepare the right workspace for your business.</p></div><span class="badge blue">Step 2 of 2</span></div>
+            <div class="panel-head"><div><h3>Business structure</h3><p class="muted">Create the business group, its first country workspace, and its first branch.</p></div><span class="badge blue">Step 2 of 2</span></div>
             <div class="form-grid">
-              <div class="field span-2"><label for="companyName">Company name</label><input id="companyName" name="companyName" autocomplete="organization" required minlength="2"></div>
+              <div class="field span-2"><label for="groupName">Business group name</label><input id="groupName" name="groupName" autocomplete="organization" required minlength="2" placeholder="Rev Engine Group"><small>The parent business the owner controls.</small></div>
+              <div class="field span-2"><label for="companyName">First workspace name</label><input id="companyName" name="companyName" required minlength="2" placeholder="Rev Engine Zimbabwe"><small>Usually the registered company for this country.</small></div>
               <div class="field"><label for="market">Country / market</label><select id="market" name="market" required><option value="ZW">Zimbabwe</option><option value="SA">South Africa</option></select></div>
-              <div class="field"><label for="verticalKey">Industry</label><select id="verticalKey" name="verticalKey" required><option value="generic">General field services</option><option value="hvac">HVAC &amp; refrigeration</option><option value="plumbing">Plumbing</option><option value="electrical">Electrical</option><option value="cleaning">Cleaning</option><option value="facilities">Facilities management</option></select></div>
+              <div class="field"><label for="branchName">Main branch name</label><input id="branchName" name="branchName" required minlength="2" value="Main Branch"></div>
+              <div class="field"><label for="branchCity">Main branch city <span class="optional-label">Optional</span></label><input id="branchCity" name="branchCity" maxlength="120" placeholder="Harare"></div>
+              <div class="field"><label>Workspace</label><div class="fixed-choice"><strong>Solar Operations &amp; Maintenance</strong><small>PV systems, inverters, batteries, generators, monitoring, and field service.</small></div><input type="hidden" id="verticalKey" name="verticalKey" value="solar-om"></div>
               <div class="field span-2"><label for="teamSizeBand">Approximate team size</label><select id="teamSizeBand" name="teamSizeBand" required><option value="1-5">1–5 people</option><option value="6-15">6–15 people</option><option value="16-40">16–40 people</option><option value="41-100">41–100 people</option><option value="101+">101+ people</option></select></div>
             </div>
             <div class="fc-form-actions"><button class="secondary-button" type="button" data-signup-back>Back</button><button class="primary-button" type="submit">Create workspace</button></div>

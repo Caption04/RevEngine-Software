@@ -2,7 +2,7 @@
   const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3000/api' : '/api';
   const page = document.body.dataset.page || 'dashboard';
   const REV_ENGINE_LOGO = 'assets/rev-engine-mark.png';
-  const state = { user: null, profile: null, branding: null, leads: [], dispatchBoard: null, selectedDispatchJobId: null, customers: [], services: [], workers: [], roles: [], jobs: [], assets: [], serviceContracts: [], invoices: [], schedule: [], scheduleSettings: null, scheduleView: 'week', scheduleDate: new Date(), scheduleFilters: { workerId: '', status: '' }, listFilters: {}, availability: {}, notificationLogs: [], integrations: [], messageLogs: [], storageUsage: null, billing: null, financeSettings: null, financeIntegrations: [], financeExportLogs: [], reports: null, activeReportTab: 'overview' };
+  const state = { user: null, profile: null, branding: null, leads: [], dispatchBoard: null, selectedDispatchJobId: null, customers: [], services: [], workers: [], roles: [], jobs: [], assets: [], solarSites: [], serviceContracts: [], invoices: [], schedule: [], scheduleSettings: null, scheduleView: 'week', scheduleDate: new Date(), scheduleFilters: { workerId: '', status: '' }, listFilters: {}, availability: {}, notificationLogs: [], integrations: [], messageLogs: [], storageUsage: null, billing: null, financeSettings: null, financeIntegrations: [], financeExportLogs: [], reports: null, activeReportTab: 'overview' };
 
   const MARKET_DEFAULTS = {
     ZW: { country: 'ZW', timezone: 'Africa/Harare', defaultCurrency: 'USD', numberFormat: 'en-ZW', taxName: 'VAT', allowedCurrencies: ['USD'], paymentMethods: ['CASH', 'BANK_TRANSFER', 'EXTERNAL_PAYMENT_LINK', 'CUSTOM_MANUAL', 'PAYNOW'] },
@@ -78,9 +78,9 @@
       ]
     },
     customers: {
-      columns: ['Customer', 'Contact', 'Address', 'Jobs', 'Balance'],
-      emptyTitle: 'No customers yet',
-      emptyText: 'Create your first customer to fill this directory.',
+      columns: ['Client', 'Contact', 'Address', 'Work Orders', 'Balance'],
+      emptyTitle: 'No solar clients yet',
+      emptyText: 'Create your first solar client to start managing their sites, equipment, and work.',
       row: (item) => [item.name, [item.email, item.phone].filter(Boolean).join(' / ') || '-', item.address || '-', (item.jobs || []).length, money.format((item.invoices || []).filter((i) => i.status !== 'PAID').reduce((sum, i) => sum + Number(i.amount || 0), 0))]
     },
     workers: {
@@ -90,48 +90,97 @@
       row: (item) => [item.user && item.user.name || 'Worker', [item.user && item.user.email, item.phone].filter(Boolean).join(' / ') || '-', item.title || '-', badge(item.active === false ? 'INACTIVE' : 'ACTIVE'), formatDate(item.createdAt)]
     },
     jobs: {
-      columns: ['Job', 'Customer', 'Worker', 'Status', 'SLA', 'Assets', 'Scheduled', 'Total', 'Actions'],
-      emptyTitle: 'No jobs yet',
-      emptyText: 'Create your first job to populate operations.',
+      columns: ['Work Order', 'Client', 'Solar Technician', 'Status', 'SLA', 'Solar Equipment', 'Scheduled', 'Total', 'Actions'],
+      emptyTitle: 'No solar work orders yet',
+      emptyText: 'Create the first installation, inspection, cleaning, maintenance, or fault-response work order.',
       row: (item) => [item.title, item.customer && item.customer.name || '-', item.worker && item.worker.user && item.worker.user.name || '-', badge(item.status), item.slaStatus ? badge(item.slaStatus) : '-', (item.jobAssets || item.assets || []).length || '-', formatDate(item.scheduledStart), money.format(Number(item.total || 0)), rowActions('jobs', item)]
     },
     assets: {
-      columns: ['Asset', 'Customer', 'Type', 'Tag', 'Warranty', 'Status'],
-      emptyTitle: 'No assets yet',
-      emptyText: 'Create serviceable equipment records for customer sites.',
-      row: (item) => [item.name, item.customer && item.customer.name || '-', item.assetType || '-', item.assetTag || item.serialNumber || '-', item.warrantyStatus || warrantyLabel(item), badge(item.status)]
+      columns: ['Solar Equipment', 'Solar Site', 'Type', 'Capacity', 'Serial / Monitoring ID', 'Warranty', 'Status'],
+      emptyTitle: 'No solar equipment yet',
+      emptyText: 'Add the plant, arrays, inverters, batteries, meters, gateways, and other equipment installed at each solar site.',
+      row: (item) => [item.name, item.property && item.property.label || item.customer && item.customer.name || '-', solarAssetTypeLabel(item.assetType), solarCapacityLabel(item), item.monitoringIdentifier || item.serialNumber || item.assetTag || '-', item.warrantyStatus || warrantyLabel(item), badge(item.status)]
     },
     'service-contracts': {
-      columns: ['Contract', 'Customer', 'Status', 'SLA', 'Assets', 'Due Work'],
-      emptyTitle: 'No contracts yet',
-      emptyText: 'Create maintenance contracts and recurring service entitlements.',
-      row: (item) => [item.contractNumber || item.name, item.customer && item.customer.name || '-', badge(item.status), [item.responseSlaHours && item.responseSlaHours + 'h response', item.completionSlaHours && item.completionSlaHours + 'h complete'].filter(Boolean).join(' / ') || '-', (item.assets || []).length || 0, (item.upcomingDueWork || []).length || 0]
+      columns: ['O&M Contract', 'Client', 'Status', 'Response SLA', 'Covered Equipment', 'Due Maintenance'],
+      emptyTitle: 'No solar O&M contracts yet',
+      emptyText: 'Create an O&M agreement for recurring inspections, cleaning, fault response, and preventive maintenance.',
+      row: (item) => [item.contractNumber || item.name, item.customer && item.customer.name || '-', badge(item.status), [item.responseSlaHours && item.responseSlaHours + 'h response', item.completionSlaHours && item.completionSlaHours + 'h resolution'].filter(Boolean).join(' / ') || '-', (item.assets || []).length || 0, (item.upcomingDueWork || []).length || 0]
     },
     quotes: {
-      columns: ['Quote', 'Customer', 'Status', 'Total', 'Valid Until', 'Actions'],
+      columns: ['Solar Quote', 'Client', 'Status', 'Total', 'Valid Until', 'Actions'],
       emptyTitle: 'No quotes yet',
-      emptyText: 'Create your first quote to start the pipeline.',
+      emptyText: 'Create the first solar installation, maintenance, or fault-response quote.',
       row: (item) => [item.title, item.customer && item.customer.name || '-', item.deletedAt ? badge('DELETED') : badge(item.status), money.format(Number(item.total || item.amount || 0)), item.deletedAt ? formatDate(item.deleteExpiresAt) : formatDate(item.validUntil), rowActions('quotes', item)]
     },
     invoices: {
-      columns: ['Invoice', 'Customer', 'Status', 'Total', 'Balance', 'Due', 'Actions'],
+      columns: ['Invoice', 'Solar Client', 'Status', 'Total', 'Balance', 'Due', 'Actions'],
       emptyTitle: 'No invoices yet',
       emptyText: 'Create your first invoice to start billing.',
       row: (item) => [item.number, item.customer && item.customer.name || '-', badge(item.status), money.format(Number(item.total || item.amount || 0)), money.format(Number(item.balanceDue || 0)), formatDate(item.dueDate), rowActions('invoices', item)]
     },
     'booking-requests': {
-      columns: ['Customer', 'Contact', 'Service', 'Preferred', 'Status', 'Created', 'Actions'],
-      emptyTitle: 'No booking requests yet',
-      emptyText: 'Public service requests will appear here.',
+      columns: ['Solar Client', 'Contact', 'Solar Service', 'Preferred', 'Status', 'Created', 'Actions'],
+      emptyTitle: 'No solar service requests yet',
+      emptyText: 'Public solar service requests will appear here.',
       row: (item) => [item.customerName, [item.customerEmail, item.customerPhone].filter(Boolean).join(' / ') || '-', item.service && item.service.name || item.serviceName || '-', [formatDate(item.preferredDate), item.preferredTimeWindow && String(item.preferredTimeWindow).replace(/_/g, ' ')].filter(Boolean).join(' / ') || '-', badge(item.status), formatDate(item.createdAt), rowActions('booking-requests', item)]
     },
     schedule: {
-      columns: ['Job', 'Customer', 'Worker', 'Status', 'Start', 'End', 'Conflict'],
+      columns: ['Solar Work Order', 'Client', 'Solar Technician', 'Status', 'Start', 'End', 'Conflict'],
       emptyTitle: 'No scheduled work',
-      emptyText: 'Schedule jobs to workers to fill this calendar.',
+      emptyText: 'Schedule solar work orders to technicians to fill this calendar.',
       row: (item) => [item.job && item.job.title || '-', item.job && item.job.customer && item.job.customer.name || '-', item.worker && item.worker.user && item.worker.user.name || '-', badge(item.status), formatDateTime(item.startsAt), formatDateTime(item.endsAt), badge(item.conflictStatus || 'CLEAR')]
     }
   };
+
+  const SOLAR_ASSET_TYPES = [
+    ['SOLAR_PLANT', 'Solar Plant'],
+    ['PV_ARRAY', 'PV Array'],
+    ['PV_MODULE', 'PV Module'],
+    ['INVERTER', 'Inverter'],
+    ['MPPT', 'MPPT'],
+    ['STRING', 'PV String'],
+    ['COMBINER_BOX', 'Combiner Box'],
+    ['DC_ISOLATOR', 'DC Isolator'],
+    ['AC_DISTRIBUTION', 'AC Distribution'],
+    ['BATTERY_BANK', 'Battery Bank'],
+    ['BATTERY_MODULE', 'Battery Module'],
+    ['BMS', 'Battery Management System'],
+    ['CHARGE_CONTROLLER', 'Charge Controller'],
+    ['GENERATOR', 'Backup Generator'],
+    ['MONITORING_GATEWAY', 'Monitoring Gateway'],
+    ['WEATHER_STATION', 'Weather Station'],
+    ['METER', 'Energy Meter'],
+    ['TRANSFORMER', 'Transformer'],
+    ['OTHER', 'Other Solar Equipment']
+  ];
+
+  function solarAssetTypeLabel(value) {
+    const match = SOLAR_ASSET_TYPES.find((item) => item[0] === String(value || '').toUpperCase());
+    return match ? match[1] : String(value || '-').replace(/_/g, ' ');
+  }
+
+  function solarCapacityLabel(item) {
+    const values = [];
+    if (item && item.dcCapacityKw != null) values.push(Number(item.dcCapacityKw).toLocaleString() + ' kWp DC');
+    if (item && item.acCapacityKw != null) values.push(Number(item.acCapacityKw).toLocaleString() + ' kW AC');
+    if (item && item.batteryCapacityKwh != null) values.push(Number(item.batteryCapacityKwh).toLocaleString() + ' kWh');
+    return values.join(' / ') || '-';
+  }
+
+  function solarSiteOptionLabel(site) {
+    const property = site && site.property || {};
+    const customer = site && site.customer || {};
+    return [property.label || site.siteCode || 'Solar site', customer.name].filter(Boolean).join(' - ');
+  }
+
+  function solarSiteOptions() {
+    return '<option value="">Select solar site</option>' + (state.solarSites || []).map((site) => '<option value="' + escapeHtml(site.propertyId) + '">' + escapeHtml(solarSiteOptionLabel(site)) + '</option>').join('');
+  }
+
+  function solarAssetTypeOptions() {
+    return '<option value="">Select equipment type</option>' + SOLAR_ASSET_TYPES.map((item) => '<option value="' + item[0] + '">' + escapeHtml(item[1]) + '</option>').join('');
+  }
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
@@ -264,7 +313,7 @@
   }
 
   function initials(value) {
-    return String(value || 'FC').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'FC';
+    return String(value || 'RE').split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'FC';
   }
 
   function applyBranding() {
@@ -684,7 +733,7 @@
     const queueLabel = root.querySelector('[data-dispatch-queue-label]');
     if (queueLabel) queueLabel.textContent = queue.length + (queue.length === 1 ? ' job' : ' jobs');
     const queueNode = root.querySelector('[data-dispatch-queue]');
-    if (queueNode) queueNode.innerHTML = queue.length ? queue.map((job) => '<button class="dispatch-queue-item' + (job.id === state.selectedDispatchJobId ? ' selected' : '') + '" type="button" data-dispatch-select="' + escapeHtml(job.id) + '"><span><strong>' + escapeHtml(job.title || 'Job') + '</strong><small>' + escapeHtml(dispatchJobMeta(job)) + '</small></span><span class="badge gray">' + escapeHtml(String(job.dispatchState || '').replace(/_/g, ' ')) + '</span></button>').join('') : '<div class="empty-state compact-empty"><div><strong>Everything is assigned and scheduled.</strong></div></div>';
+    if (queueNode) queueNode.innerHTML = queue.length ? queue.map((job) => '<button class="dispatch-queue-item' + (job.id === state.selectedDispatchJobId ? ' selected' : '') + '" type="button" data-dispatch-select="' + escapeHtml(job.id) + '"><span><strong>' + escapeHtml(job.title || 'Solar Work Order') + '</strong><small>' + escapeHtml(dispatchJobMeta(job)) + '</small></span><span class="badge gray">' + escapeHtml(String(job.dispatchState || '').replace(/_/g, ' ')) + '</span></button>').join('') : '<div class="empty-state compact-empty"><div><strong>Everything is assigned and scheduled.</strong></div></div>';
 
     const selected = queue.find((job) => job.id === state.selectedDispatchJobId);
     const suggestionsNode = root.querySelector('[data-dispatch-suggestions]');
@@ -697,7 +746,7 @@
     const riskLabel = root.querySelector('[data-dispatch-risk-label]');
     if (riskLabel) riskLabel.textContent = risks.length + (risks.length === 1 ? ' job' : ' jobs');
     const riskNode = root.querySelector('[data-dispatch-risks]');
-    if (riskNode) riskNode.innerHTML = risks.length ? risks.map((job) => '<div class="dispatch-risk-item"><div><strong>' + escapeHtml(job.title || 'Job') + '</strong><small>' + escapeHtml(dispatchJobMeta(job)) + '</small></div><span class="badge red">' + escapeHtml((job.riskReasons || []).join(' - ')) + '</span></div>').join('') : '<div class="empty-state compact-empty"><div><strong>No late or at-risk jobs.</strong></div></div>';
+    if (riskNode) riskNode.innerHTML = risks.length ? risks.map((job) => '<div class="dispatch-risk-item"><div><strong>' + escapeHtml(job.title || 'Solar Work Order') + '</strong><small>' + escapeHtml(dispatchJobMeta(job)) + '</small></div><span class="badge red">' + escapeHtml((job.riskReasons || []).join(' - ')) + '</span></div>').join('') : '<div class="empty-state compact-empty"><div><strong>No late or at-risk jobs.</strong></div></div>';
   }
 
   async function loadDispatchBoard() {
@@ -862,21 +911,23 @@
       return;
     }
     const totals = data.totals || {};
+    const solar = data.solar || {};
+    const solarTotals = solar.totals || {};
     setStats([
-      { label: 'Jobs Today', value: totals.jobsToday || 0, trend: totals.jobsToday ? 'Scheduled today' : 'No jobs scheduled' },
-      { label: 'Revenue MTD', value: money.format(totals.revenueMonthToDate || 0), trend: 'Month to date' },
-      { label: 'Unpaid Invoices', value: money.format(totals.unpaidInvoices || 0), trend: totals.unpaidInvoices ? 'Outstanding' : 'Nothing outstanding' },
-      { label: 'Active Workers', value: totals.activeWorkers || 0, trend: totals.activeWorkers ? 'Available workers' : 'No workers online' }
+      { label: 'Solar Sites', value: solarTotals.sites || 0, trend: solarTotals.operationalSites ? solarTotals.operationalSites + ' operational' : 'Add your first solar site' },
+      { label: 'Installed Capacity', value: Number(solarTotals.installedCapacityKwp || 0).toLocaleString() + ' kWp', trend: 'Managed DC capacity' },
+      { label: 'Open Solar Faults', value: solarTotals.openFaults || 0, trend: solarTotals.criticalFaults ? solarTotals.criticalFaults + ' critical' : 'No critical faults' },
+      { label: 'Work Orders Today', value: totals.jobsToday || 0, trend: totals.jobsToday ? 'Solar field work scheduled' : 'No work scheduled' }
     ]);
 
-    fillPanel("Today's Schedule", data.schedule || [], (item) => [item.job && item.job.title || 'Scheduled job', formatDateTime(item.startsAt)]);
-    fillPanel('Worker Status', data.workers || [], (item) => [item.user && item.user.name || 'Worker', item.active ? 'Active' : 'Inactive']);
-    fillPanel('Recent Jobs', data.recentJobs || [], (item) => [item.title, `${item.customer && item.customer.name || '-'} - ${String(item.status || '').replace(/_/g, ' ')}`]);
+    fillPanel('Site Health', solar.sites || [], (item) => [item.property && item.property.label || item.siteCode || 'Solar site', [String(item.status || '').replace(/_/g, ' '), item.latestReading && item.latestReading.performanceRatioPct != null ? Number(item.latestReading.performanceRatioPct).toFixed(1) + '% PR' : null, item.openFaultCount ? item.openFaultCount + ' open fault' + (item.openFaultCount === 1 ? '' : 's') : 'No open faults'].filter(Boolean).join(' - ')]);
+    fillPanel('Open Solar Faults', solar.faults || [], (item) => [item.title || 'Solar fault', [item.property && item.property.label, String(item.severity || '').replace(/_/g, ' ')].filter(Boolean).join(' - ')]);
+    fillPanel('Recent Work Orders', data.recentJobs || [], (item) => [item.title, `${item.customer && item.customer.name || '-'} - ${String(item.status || '').replace(/_/g, ' ')}`]);
     const pipeline = data.pipeline || {};
-    fillPanel('Pipeline', [
-      { name: 'Leads', value: pipeline.leads || 0 },
-      { name: 'Quoted', value: pipeline.quoted || 0 },
-      { name: 'Won', value: pipeline.won || 0 }
+    fillPanel('Solar Sales Pipeline', [
+      { name: 'Solar enquiries', value: pipeline.leads || 0 },
+      { name: 'Solar quotes', value: pipeline.quoted || 0 },
+      { name: 'Won projects', value: pipeline.won || 0 }
     ], (item) => [item.name, `${item.value} records`]);
   }
 
@@ -1290,7 +1341,7 @@
       '<div data-report-tab-panel>' + renderActiveReportTab(data || {}) + '</div>';
     bindReportControls(data || {});
   }
-  
+
   async function loadReports() {
     const root = document.querySelector('[data-reports-root]');
     if (!root) return;
@@ -1308,7 +1359,7 @@
   }
 
   function jobCustomer(job) {
-    return job && job.customer && job.customer.name || 'No customer';
+    return job && job.customer && job.customer.name || 'No client';
   }
 
   function jobAddress(job) {
@@ -1331,7 +1382,7 @@
 
   function workerJobItem(job, includeLifecycle) {
     const address = jobAddress(job);
-    return `<div class="list-item"><span class="initials">${escapeHtml(String(job.title || 'Job').slice(0, 2).toUpperCase())}</span><div><strong>${escapeHtml(job.title || 'Scheduled job')}</strong><small>${escapeHtml([formatDateTime(job.scheduledStart), jobCustomer(job), address].filter(Boolean).join(' - '))}</small></div><div>${badge(job.status)}${workerJobActions(job, includeLifecycle)}</div></div>`;
+    return `<div class="list-item"><span class="initials">${escapeHtml(String(job.title || 'Solar Work Order').slice(0, 2).toUpperCase())}</span><div><strong>${escapeHtml(job.title || 'Scheduled job')}</strong><small>${escapeHtml([formatDateTime(job.scheduledStart), jobCustomer(job), address].filter(Boolean).join(' - '))}</small></div><div>${badge(job.status)}${workerJobActions(job, includeLifecycle)}</div></div>`;
   }
 
   function renderWorkerPanel(title, items, emptyTitle, renderer) {
@@ -1374,7 +1425,7 @@
       const date = new Date(job.scheduledStart);
       return Number.isNaN(date.getTime()) || (date > today && date.toDateString() !== today.toDateString());
     });
-    const renderJob = (job) => '<div class="list-item worker-job-card"><span class="initials">' + escapeHtml(String(job.title || 'Job').slice(0, 2).toUpperCase()) + '</span><div><strong>' + escapeHtml(job.title || 'Assigned job') + '</strong><small>' + escapeHtml([formatDateTime(job.scheduledStart), jobCustomer(job), jobAddress(job)].filter(Boolean).join(' - ')) + '</small><small>' + escapeHtml(jobRequirementSummary(job)) + '</small></div><div>' + badge(job.status) + workerJobActions(job, true) + '</div></div>';
+    const renderJob = (job) => '<div class="list-item worker-job-card"><span class="initials">' + escapeHtml(String(job.title || 'Solar Work Order').slice(0, 2).toUpperCase()) + '</span><div><strong>' + escapeHtml(job.title || 'Assigned job') + '</strong><small>' + escapeHtml([formatDateTime(job.scheduledStart), jobCustomer(job), jobAddress(job)].filter(Boolean).join(' - ')) + '</small><small>' + escapeHtml(jobRequirementSummary(job)) + '</small></div><div>' + badge(job.status) + workerJobActions(job, true) + '</div></div>';
     pageEl.innerHTML = '<div class="hero-row"><div class="hero-copy"><h2>My Jobs</h2><p>Your assigned work for today and upcoming jobs.</p></div><span class="api-status" data-api-status>Connected</span></div><section class="split">' + renderWorkerPanel('Today', todayJobs, 'No assigned jobs today.', renderJob) + renderWorkerPanel('Upcoming', upcomingJobs, 'No upcoming assigned jobs.', renderJob) + '</section><section class="panel"><div class="panel-head"><h3>All Assigned Jobs</h3></div>' + (jobs.length ? '<div class="list">' + jobs.map(renderJob).join('') + '</div>' : '<div class="empty-state"><div><strong>No assigned jobs.</strong></div></div>') + '</section>';
   }
 
@@ -1417,9 +1468,9 @@
       const titled = data.filter((worker) => worker.title).length;
       setStats([{ label: 'Total Workers', value: data.length, trend: 'Team members' }, { label: 'Active Workers', value: active, trend: 'Available for work' }, { label: 'Inactive Workers', value: data.length - active, trend: 'Not active' }, { label: 'With Titles', value: titled, trend: 'Role assigned' }]);
     }
-    if (resource === 'jobs') setStats(countStatuses(data, ['NEW', 'IN_PROGRESS', 'SCHEDULED', 'ON_HOLD'], ['Not on calendar', 'Active work', 'On calendar', 'Paused or held']));
-    if (resource === 'assets') setStats([{ label: 'Active', value: data.filter((item) => item.status === 'ACTIVE').length, trend: 'Assets in service' }, { label: 'Under Repair', value: data.filter((item) => item.status === 'UNDER_REPAIR').length, trend: 'Needs attention' }, { label: 'Retired', value: data.filter((item) => item.status === 'RETIRED').length, trend: 'Out of service' }, { label: 'Warranty', value: data.filter((item) => item.warrantyEndAt).length, trend: 'Tracked warranties' }]);
-    if (resource === 'service-contracts') setStats([{ label: 'Active', value: data.filter((item) => item.status === 'ACTIVE').length, trend: 'Live agreements' }, { label: 'Suspended', value: data.filter((item) => item.status === 'SUSPENDED').length, trend: 'Paused service' }, { label: 'Draft', value: data.filter((item) => item.status === 'DRAFT').length, trend: 'In setup' }, { label: 'Due Work', value: data.reduce((sum, item) => sum + ((item.upcomingDueWork || []).length), 0), trend: 'Upcoming visits' }]);
+    if (resource === 'jobs') setStats(countStatuses(data, ['NEW', 'IN_PROGRESS', 'SCHEDULED', 'ON_HOLD'], ['Unscheduled solar work', 'Active field work', 'On technician calendar', 'Paused or awaiting parts']));
+    if (resource === 'assets') setStats([{ label: 'Active Equipment', value: data.filter((item) => item.status === 'ACTIVE').length, trend: 'Operating solar equipment' }, { label: 'Needs Attention', value: data.filter((item) => item.status === 'UNDER_REPAIR').length, trend: 'Faulted or under repair' }, { label: 'Installed DC', value: Number(data.reduce((sum, item) => sum + Number(item.dcCapacityKw || 0), 0).toFixed(2)).toLocaleString() + ' kWp', trend: 'Recorded equipment capacity' }, { label: 'Battery Storage', value: Number(data.reduce((sum, item) => sum + Number(item.batteryCapacityKwh || 0), 0).toFixed(2)).toLocaleString() + ' kWh', trend: 'Recorded storage capacity' }]);
+    if (resource === 'service-contracts') setStats([{ label: 'Active O&M Contracts', value: data.filter((item) => item.status === 'ACTIVE').length, trend: 'Solar sites under agreement' }, { label: 'Suspended', value: data.filter((item) => item.status === 'SUSPENDED').length, trend: 'Paused O&M coverage' }, { label: 'Draft', value: data.filter((item) => item.status === 'DRAFT').length, trend: 'Agreements in setup' }, { label: 'Maintenance Due', value: data.reduce((sum, item) => sum + ((item.upcomingDueWork || []).length), 0), trend: 'Upcoming solar visits' }]);
     if (resource === 'quotes') setStats(countStatuses(data, ['SENT', 'ACCEPTED', 'SENT', 'DRAFT'], ['Open quotes', 'Accepted', 'Sent', 'Drafts']));
     if (resource === 'invoices') setStats(countStatuses(data, ['ALL', 'PAID', 'SENT', 'OVERDUE', 'DRAFT'], ['Total invoices', 'Paid', 'Unpaid', 'Overdue', 'Drafts']));
     if (resource === 'booking-requests') updateBookingRequestStats(data);
@@ -1496,6 +1547,7 @@
       requests.push(api('/assets').then((d) => state.assets = d).catch(() => []));
       requests.push(api('/service-contracts').then((d) => state.serviceContracts = d).catch(() => []));
     }
+    if (page === 'assets' && !isWorker()) requests.push(api('/solar/sites').then((d) => state.solarSites = d).catch(() => []));
     if (['quotes', 'invoices', 'schedule'].includes(page)) requests.push(api('/jobs').then((d) => state.jobs = d).catch(() => []));
     if (['dashboard', 'jobs', 'quotes', 'invoices', 'reports', 'settings', 'collections', 'assets', 'service-contracts'].includes(page)) requests.push(api('/company/finance-settings').then((d) => state.financeSettings = applyMarketCurrencyForDisplay(d)).catch(() => { state.financeSettings = applyMarketCurrencyForDisplay(null); }));
     if (['jobs', 'schedule'].includes(page) && !isWorker()) requests.push(api('/company/scheduling-settings').then((d) => state.scheduleSettings = d).catch(() => null));
@@ -1549,15 +1601,15 @@
       const duration = settings.defaultJobDurationMinutes || 60;
       const buffer = settings.defaultTravelBufferMinutes || 0;
       return {
-  title: 'New Job',
+  title: 'New Solar Work Order',
   action: '/jobs',
   fields:
-    field('title', 'Title', 'text', 'required') +
-    select('customerId', 'Customer', optionList(state.customers, 'Select customer'), true) +
+    field('title', 'Work Order Title', 'text', 'required') +
+    select('customerId', 'Client', optionList(state.customers, 'Select customer'), true) +
     select('serviceId', 'Service', optionList(state.services, 'No service'), false) +
-    select('contractId', 'Service Contract', optionList(state.serviceContracts, 'No contract'), false) +
-    select('assetId', 'Primary Asset', optionList(state.assets, 'No linked asset'), false) +
-    select('workerId', 'Worker', optionList(state.workers, 'No worker'), false) +
+    select('contractId', 'O&M Contract', optionList(state.serviceContracts, 'No contract'), false) +
+    select('assetId', 'Primary Solar Equipment', optionList(state.assets, 'No linked asset'), false) +
+    select('workerId', 'Solar Technician', optionList(state.workers, 'No worker'), false) +
     field('scheduledStart', 'Scheduled Start', 'datetime-local') +
     field('durationMinutes', 'Duration Minutes', 'number', 'min="1" value="' + escapeHtml(duration) + '"') +
     field('travelBufferMinutes', 'Travel Buffer Minutes', 'number', 'min="0" value="' + escapeHtml(buffer) + '"') +
@@ -1569,8 +1621,30 @@
     checkboxField('requiresLocation', 'Require completion location', Boolean(settings.requireLocation))
       };
     }
-    if (resource === 'assets') return { title: 'New Asset', action: '/assets', fields: field('name', 'Asset Name', 'text', 'required') + select('customerId', 'Customer', optionList(state.customers, 'Select customer'), true) + select('serviceId', 'Default Service', optionList(state.services, 'No service'), false) + field('assetType', 'Asset Type', 'text', 'required') + field('assetTag', 'Asset Tag') + field('serialNumber', 'Serial Number') + field('manufacturer', 'Manufacturer') + field('modelNumber', 'Model Number') + field('locationLabel', 'Location') + field('warrantyEndAt', 'Warranty Ends', 'date') };
-    if (resource === 'service-contracts') return { title: 'New Service Contract', action: '/service-contracts', fields: field('contractNumber', 'Contract Number', 'text', 'required') + field('name', 'Contract Name', 'text', 'required') + select('customerId', 'Customer', optionList(state.customers, 'Select customer'), true) + field('startDate', 'Start Date', 'date', 'required') + field('endDate', 'End Date', 'date') + field('currency', 'Currency', 'text', 'maxlength="3" value="' + escapeHtml(effectiveFinanceSettings().defaultCurrency || 'USD') + '"') + field('contractValue', 'Contract Value', 'number', 'min="0" step="0.01"') + field('responseSlaHours', 'Response SLA Hours', 'number', 'min="1"') + field('completionSlaHours', 'Completion SLA Hours', 'number', 'min="1"') + field('includedVisits', 'Included Visits', 'number', 'min="0"') };
+    if (resource === 'assets') return {
+      title: 'New Solar Equipment',
+      action: '/assets',
+      fields:
+        field('name', 'Equipment Name', 'text', 'required') +
+        select('customerId', 'Client', optionList(state.customers, 'Select client'), true) +
+        select('propertyId', 'Solar Site', solarSiteOptions(), true) +
+        select('parentAssetId', 'Parent Equipment', optionList(state.assets, 'No parent equipment'), false) +
+        select('serviceId', 'Default Solar Service', optionList(state.services, 'No default service'), false) +
+        select('assetType', 'Equipment Type', solarAssetTypeOptions(), true) +
+        field('manufacturer', 'Manufacturer') +
+        field('modelNumber', 'Model Number') +
+        field('serialNumber', 'Serial Number') +
+        field('monitoringIdentifier', 'Monitoring / Portal ID') +
+        field('assetTag', 'Internal Equipment Tag') +
+        field('locationLabel', 'Physical Location') +
+        field('dcCapacityKw', 'DC Capacity (kWp)', 'number', 'min="0" step="0.001"') +
+        field('acCapacityKw', 'AC Capacity (kW)', 'number', 'min="0" step="0.001"') +
+        field('batteryCapacityKwh', 'Battery Capacity (kWh)', 'number', 'min="0" step="0.001"') +
+        field('moduleCount', 'PV Module Count', 'number', 'min="0" step="1"') +
+        field('commissionedAt', 'Commissioned Date', 'date') +
+        field('warrantyEndAt', 'Warranty Ends', 'date')
+    };
+    if (resource === 'service-contracts') return { title: 'New Solar O&M Contract', action: '/service-contracts', fields: field('contractNumber', 'O&M Contract Number', 'text', 'required') + field('name', 'Agreement Name', 'text', 'required') + select('customerId', 'Client', optionList(state.customers, 'Select client'), true) + field('startDate', 'Coverage Starts', 'date', 'required') + field('endDate', 'Coverage Ends', 'date') + field('currency', 'Currency', 'text', 'maxlength="3" value="' + escapeHtml(effectiveFinanceSettings().defaultCurrency || 'USD') + '"') + field('contractValue', 'Contract Value', 'number', 'min="0" step="0.01"') + field('responseSlaHours', 'Fault Response SLA Hours', 'number', 'min="1"') + field('completionSlaHours', 'Resolution SLA Hours', 'number', 'min="1"') + field('includedVisits', 'Included Preventive Visits', 'number', 'min="0"') };
     if (resource === 'quotes') return { title: 'New Quote', action: '/quotes', fields: field('title', 'Title', 'text', 'required') + select('customerId', 'Customer', optionList(state.customers, 'Select customer'), true) + select('serviceId', 'Service', optionList(state.services, 'No service'), false) + field('amount', 'Amount', 'number', 'min="0" step="0.01"') + field('validUntil', 'Valid Until', 'date') };
     if (resource === 'invoices') return { title: 'New Invoice', action: '/invoices', fields: field('number', 'Number') + select('customerId', 'Customer', optionList(state.customers, 'Select customer'), true) + select('jobId', 'Job', optionList(state.jobs, 'No job'), false) + field('amount', 'Amount', 'number', 'min="0" step="0.01"') + field('dueDate', 'Due Date', 'date') };
   }
@@ -1784,8 +1858,8 @@
     const title = mode === 'reschedule' ? 'Reschedule Job' : 'Schedule Job';
     openModal({
       title,
-      fields: `<div class="field span-2"><label>Job</label><input value="${escapeHtml(job.title || 'Job')}" disabled></div>` +
-        select('workerId', 'Worker', optionList(state.workers, 'Select worker'), true) +
+      fields: `<div class="field span-2"><label>Job</label><input value="${escapeHtml(job.title || 'Solar Work Order')}" disabled></div>` +
+        select('workerId', 'Solar Technician', optionList(state.workers, 'Select worker'), true) +
         field('startsAt', 'Start', 'datetime-local', 'required') +
         field('durationMinutes', 'Duration Minutes', 'number', 'min="1" value="' + escapeHtml(job.durationMinutes || 60) + '"') +
         field('travelBufferMinutes', 'Travel Buffer Minutes', 'number', 'min="0" value="' + escapeHtml(job.travelBufferMinutes || 0) + '"') +
@@ -1982,8 +2056,8 @@
 
   function renderJobAssetSummary(job) {
     const assets = (job.jobAssets || job.assets || []).map((item) => item.asset || item).filter(Boolean);
-    if (!assets.length) return '<section class="job-evidence-section"><h4>Linked Assets</h4><div class="empty-state"><div><strong>No linked assets.</strong></div></div></section>';
-    return '<section class="job-evidence-section"><h4>Linked Assets</h4><div class="list">' + assets.map((asset) => '<div class="list-item"><span class="initials">' + escapeHtml(String(asset.name || 'AS').slice(0, 2).toUpperCase()) + '</span><div><strong>' + escapeHtml(asset.name || 'Asset') + '</strong><small>' + escapeHtml([asset.assetType, asset.assetTag || asset.serialNumber, asset.locationLabel].filter(Boolean).join(' - ')) + '</small></div>' + badge(asset.status || 'ACTIVE') + '</div>').join('') + '</div></section>';
+    if (!assets.length) return '<section class="job-evidence-section"><h4>Linked Solar Equipment</h4><div class="empty-state"><div><strong>No linked solar equipment.</strong></div></div></section>';
+    return '<section class="job-evidence-section"><h4>Linked Solar Equipment</h4><div class="list">' + assets.map((asset) => '<div class="list-item"><span class="initials">' + escapeHtml(String(asset.name || 'AS').slice(0, 2).toUpperCase()) + '</span><div><strong>' + escapeHtml(asset.name || 'Solar Equipment') + '</strong><small>' + escapeHtml([asset.assetType, asset.assetTag || asset.serialNumber, asset.locationLabel].filter(Boolean).join(' - ')) + '</small></div>' + badge(asset.status || 'ACTIVE') + '</div>').join('') + '</div></section>';
   }
 
   function lifecycleActions(job) {
@@ -2286,8 +2360,8 @@
     if (!notesRequired && notes == null) return false;
     const body = { completionNotes: notes };
     if (summary.missing) {
-      if (!state.user || state.user.role === "WORKER") throw new Error("Upload required completion evidence before completing this job.");
-      const override = await openConfirmModal({ title: "Missing Evidence", message: "This job is missing required completion evidence. Complete anyway with admin override?", okLabel: "Complete Anyway", cancelLabel: "Cancel", closeExisting: false });
+      if (!state.user || state.user.role === "WORKER") throw new Error("Upload required completion evidence before completing this solar work order.");
+      const override = await openConfirmModal({ title: "Missing Evidence", message: "This solar work order is missing required completion evidence. Complete anyway with admin override?", okLabel: "Complete Anyway", cancelLabel: "Cancel", closeExisting: false });
       if (!override) return false;
       body.adminOverride = true;
     } else if (state.user && state.user.role !== "WORKER" && !["IN_PROGRESS", "PAUSED"].includes(String(job.status || "").toUpperCase())) body.adminOverride = true;
@@ -2322,7 +2396,7 @@
     const noteForm = editableEvidence ? '<form class="job-note-form"><div class="field"><label for="fc-job-note">Worker Activity Note</label><textarea id="fc-job-note" name="note" maxlength="2000"></textarea></div><div class="fc-form-actions"><button class="secondary-button compact" type="submit">Add Note</button></div><p class="fc-form-error" hidden></p></form>' : '';
     const modal = document.createElement('div');
     modal.className = 'fc-modal';
-    modal.innerHTML = `<div class="fc-dialog job-detail-dialog ${editableEvidence ? 'worker-job-detail-dialog' : 'admin-job-detail-dialog'}"><div class="panel-head"><div><h3>${escapeHtml(job.title || 'Job')}</h3><p class="modal-copy">${escapeHtml(job.customer && job.customer.name || 'No customer')}</p></div><button class="icon-button" type="button" data-close>&times;</button></div><div class="job-detail-grid">${detailItem('Customer', job.customer && job.customer.name)}${detailItem('Worker', job.worker && job.worker.user && job.worker.user.name)}${detailItem('Contract', job.contract && (job.contract.contractNumber || job.contract.name))}${detailItem('Scheduled', formatDateTime(job.scheduledStart))}${detailItem('Response Due', formatDateTime(job.responseDueAt))}${detailItem('Completion Due', formatDateTime(job.completionDueAt))}${detailItem('Completed', formatDateTime(job.completedAt))}<div class="job-detail-item"><span>Status</span>${badge(job.status)}</div><div class="job-detail-item"><span>SLA</span>${badge(job.slaStatus || 'NOT_APPLICABLE')}</div></div>${job.completionNotes ? `<div class="job-notes"><span>Completion Notes</span><p>${escapeHtml(job.completionNotes)}</p></div>` : ''}${lifecycle}${renderJobAssetSummary(job)}${renderCompletionRequirements(job)}${renderProofPhotos(job, { editable: editableEvidence })}${renderSignature(job, { editable: editableEvidence })}${renderCompletionLocation(job, { editable: editableEvidence })}${noteForm}<section class="job-activity-section"><h4>Activity Timeline</h4>${renderActivityTimeline(activity || [])}</section></div>`;
+    modal.innerHTML = `<div class="fc-dialog job-detail-dialog ${editableEvidence ? 'worker-job-detail-dialog' : 'admin-job-detail-dialog'}"><div class="panel-head"><div><h3>${escapeHtml(job.title || 'Solar Work Order')}</h3><p class="modal-copy">${escapeHtml(job.customer && job.customer.name || 'No client')}</p></div><button class="icon-button" type="button" data-close>&times;</button></div><div class="job-detail-grid">${detailItem('Client', job.customer && job.customer.name)}${detailItem('Solar Technician', job.worker && job.worker.user && job.worker.user.name)}${detailItem('O&M Contract', job.contract && (job.contract.contractNumber || job.contract.name))}${detailItem('Scheduled', formatDateTime(job.scheduledStart))}${detailItem('Response Due', formatDateTime(job.responseDueAt))}${detailItem('Completion Due', formatDateTime(job.completionDueAt))}${detailItem('Completed', formatDateTime(job.completedAt))}<div class="job-detail-item"><span>Status</span>${badge(job.status)}</div><div class="job-detail-item"><span>SLA</span>${badge(job.slaStatus || 'NOT_APPLICABLE')}</div></div>${job.completionNotes ? `<div class="job-notes"><span>Completion Notes</span><p>${escapeHtml(job.completionNotes)}</p></div>` : ''}${lifecycle}${renderJobAssetSummary(job)}${renderCompletionRequirements(job)}${renderProofPhotos(job, { editable: editableEvidence })}${renderSignature(job, { editable: editableEvidence })}${renderCompletionLocation(job, { editable: editableEvidence })}${noteForm}<section class="job-activity-section"><h4>Activity Timeline</h4>${renderActivityTimeline(activity || [])}</section></div>`;
     modal.addEventListener('click', async (event) => {
       if (event.target === modal || event.target.closest('[data-close]')) return closeModal();
       const proofDelete = event.target.closest('[data-proof-delete]');

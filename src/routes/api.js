@@ -15,8 +15,9 @@ const { billingSummary, cancelSubscription, changePlan, createCheckout, selectMo
 const { reportCsv, reportData } = require('../services/reporting.service');
 const { analyticsCsv, buildExecutiveAnalytics } = require('../services/executiveAnalytics.service');
 const { buildDispatchBoard } = require('../services/dispatch.service');
+const { countryConfig, normalizeCountryCode, organizationContextForUser } = require('../services/organization.service');
 const { billingCatalog, canUseFeature, getUsage, listPlans, requireFeature, requirePlanLimit } = require('../services/subscription.service');
-const { FULL_ACCESS_ONLY_PERMISSION_KEYS, PERMISSION_CATALOG, PERMISSION_DEPENDENCIES, PERMISSION_GROUPS, defaultPermissionBundles, delegatablePermissionKeys, effectiveAccessForUser, expandPermissionDependencies, hasFullBusinessAccess, isSubset, permissionKeys, scopeContains, uniquePermissions } = require('../services/accessControl.service');
+const { FULL_ACCESS_ONLY_PERMISSION_KEYS, PERMISSION_CATALOG, PERMISSION_DEPENDENCIES, PERMISSION_GROUPS, defaultPermissionBundles, delegatablePermissionKeys, effectiveAccessForUser, expandPermissionDependencies, hasFullBusinessAccess, isSubset, permissionKeys, scopeContains, seedSystemRoleTemplates, uniquePermissions } = require('../services/accessControl.service');
 const { getStorageObjectForCompany, readStorageObject, storeUploadedFile } = require('../services/integrations/storage.service');
 const {
   disableIntegrationConnection,
@@ -97,6 +98,62 @@ const leadActivityTypeValues = ['NOTE', 'FOLLOW_UP', 'STATUS_CHANGE'];
 const integrationProviderValues = ['BREVO', 'META_WHATSAPP_CLOUD', 'CLICKATELL', 'AFRICAS_TALKING', 'CLOUDFLARE_R2'];
 const integrationChannelValues = ['EMAIL', 'WHATSAPP', 'SMS', 'STORAGE'];
 const assetStatusValues = ['ACTIVE', 'INACTIVE', 'UNDER_REPAIR', 'RETIRED'];
+const solarSiteStatusValues = ['COMMISSIONING', 'OPERATIONAL', 'DEGRADED', 'OFFLINE', 'MAINTENANCE'];
+const solarFaultSeverityValues = ['INFO', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+const solarFaultStatusValues = ['OPEN', 'ACKNOWLEDGED', 'IN_PROGRESS', 'RESOLVED', 'IGNORED'];
+const solarReadingConditionValues = ['NORMAL', 'WARNING', 'CRITICAL'];
+const solarAssetTypeValues = ['SOLAR_PLANT', 'PV_ARRAY', 'PV_MODULE', 'INVERTER', 'MPPT', 'STRING', 'COMBINER_BOX', 'DC_ISOLATOR', 'AC_DISTRIBUTION', 'BATTERY_BANK', 'BATTERY_MODULE', 'BMS', 'CHARGE_CONTROLLER', 'GENERATOR', 'MONITORING_GATEWAY', 'WEATHER_STATION', 'METER', 'TRANSFORMER', 'OTHER'];
+const solarDefaultServices = [
+  { name: 'Solar Site Assessment', description: 'Site survey, system inventory, capacity capture, safety review, and baseline condition report.' },
+  { name: 'Solar Preventive Maintenance', description: 'Planned mechanical and electrical inspection of the complete solar plant.' },
+  { name: 'Inverter Diagnostics', description: 'Alarm review, electrical measurements, firmware checks, and inverter fault diagnosis.' },
+  { name: 'PV Module Cleaning', description: 'Safe module cleaning with before-and-after condition evidence.' },
+  { name: 'Battery Health Assessment', description: 'Battery state-of-charge, state-of-health, voltage, temperature, and connection checks.' },
+  { name: 'Solar Fault Callout', description: 'Reactive investigation and corrective work for an underperforming or offline solar site.' }
+];
+const solarChecklistDefinitions = [
+  {
+    serviceName: 'Solar Preventive Maintenance',
+    name: 'Solar Plant Preventive Maintenance',
+    description: 'Required field checks for a complete solar O&M visit.',
+    items: [
+      ['Confirm isolators, labels, guards, and access controls are safe', 'PASS_FAIL', true, false],
+      ['Inspect modules for cracks, delamination, hotspots, shading, and soiling', 'PASS_FAIL', true, true],
+      ['Inspect mounting structure, clamps, roof penetrations, and corrosion', 'PASS_FAIL', true, true],
+      ['Inspect DC cabling, connectors, combiner boxes, and surge protection', 'PASS_FAIL', true, true],
+      ['Record inverter alarms and operating state', 'TEXT', true, false],
+      ['Record DC voltage', 'NUMBER', false, false],
+      ['Record AC voltage', 'NUMBER', false, false],
+      ['Record power output in kW', 'NUMBER', false, false],
+      ['Record energy generated today in kWh', 'NUMBER', false, false],
+      ['Capture final site condition photo', 'PHOTO', true, true]
+    ]
+  },
+  {
+    serviceName: 'Battery Health Assessment',
+    name: 'Battery Health Assessment',
+    description: 'Battery condition, electrical readings, and safety checks.',
+    items: [
+      ['Inspect battery enclosure, ventilation, cabling, and terminals', 'PASS_FAIL', true, true],
+      ['Record battery state of charge percentage', 'NUMBER', true, false],
+      ['Record battery state of health percentage', 'NUMBER', false, false],
+      ['Record battery voltage', 'NUMBER', true, false],
+      ['Check BMS alarms and communication status', 'PASS_FAIL', true, false],
+      ['Capture battery bank condition photo', 'PHOTO', true, true]
+    ]
+  },
+  {
+    serviceName: 'PV Module Cleaning',
+    name: 'PV Module Cleaning Proof',
+    description: 'Cleaning quality and damage evidence.',
+    items: [
+      ['Record module condition before cleaning', 'PHOTO', true, true],
+      ['Confirm approved water and cleaning method were used', 'YES_NO', true, false],
+      ['Report cracked or damaged modules found during cleaning', 'TEXT', false, false],
+      ['Record module condition after cleaning', 'PHOTO', true, true]
+    ]
+  }
+];
 const serviceContractStatusValues = ['DRAFT', 'ACTIVE', 'SUSPENDED', 'EXPIRED', 'CANCELLED'];
 const billingIntervalValues = ['MONTHLY', 'QUARTERLY', 'SEMIANNUAL', 'ANNUAL', 'ON_DEMAND'];
 const slaStatusValues = ['NOT_APPLICABLE', 'ON_TRACK', 'AT_RISK', 'BREACHED', 'MET', 'WAIVED'];
@@ -166,11 +223,13 @@ async function publicStaffUser(user) {
   const safe = publicUser(user);
   if (!safe) return safe;
   const access = await effectiveAccessForUser(user, { companyId: user.companyId });
+  const organization = await organizationContextForUser(user);
   return {
     ...safe,
     effectivePermissions: access.permissions,
     fullBusinessAccess: hasFullBusinessAccess(user, access),
-    accessScope: { type: access.scopeType, branchIds: access.branchIds, teamIds: access.teamIds }
+    accessScope: { type: access.scopeType, branchIds: access.branchIds, teamIds: access.teamIds },
+    organization
   };
 }
 
@@ -268,16 +327,21 @@ async function addEnterpriseAudit(req, action, entity, entityId, metadata) {
   });
 }
 
-async function getEffectivePermissionSet(req, userId = req.user.id, branchId) {
+async function getEffectiveAccess(req, userId = req.user.id, branchId) {
   const user = userId === req.user.id ? req.user : await requireCompanyUser(req, userId);
-  const access = await effectiveAccessForUser(user, { companyId: req.companyId, branchId });
+  return effectiveAccessForUser(user, { companyId: req.companyId, branchId });
+}
+
+async function getEffectivePermissionSet(req, userId = req.user.id, branchId) {
+  const access = await getEffectiveAccess(req, userId, branchId);
   return new Set(access.permissions);
 }
 
 async function hasPermission(req, permissionKey, options = {}) {
   if (!permissionKeys.includes(permissionKey)) return false;
-  const permissions = await getEffectivePermissionSet(req, req.user.id, options.branchId);
-  return permissions.has(permissionKey);
+  const access = await getEffectiveAccess(req, req.user.id, options.branchId);
+  if (options.branchId && access.scopeType === 'BRANCH' && !access.branchIds.includes(options.branchId)) return false;
+  return new Set(access.permissions).has(permissionKey);
 }
 
 async function requirePermission(req, permissionKey, options = {}) {
@@ -1263,7 +1327,7 @@ const leadInclude = {
 const jobInclude = { customer: true, service: true, contract: true, worker: { include: SAFE_WORKER_INCLUDE }, jobAssets: { include: { asset: true } } };
 const jobDetailInclude = { ...jobInclude, completedBy: { select: { id: true, companyId: true, name: true, email: true, role: true } }, proofPhotos: { orderBy: { createdAt: 'desc' } }, signature: true, completionLocation: true };
 const jobActivityInclude = { worker: { include: SAFE_WORKER_INCLUDE }, user: { select: { id: true, companyId: true, email: true, name: true, role: true, createdAt: true, updatedAt: true } } };
-const assetInclude = { customer: true, property: true, service: true, jobAssets: { include: { job: { include: { service: true, invoices: true, proofPhotos: true } } }, orderBy: { createdAt: 'desc' } }, serviceContractAssets: { include: { contract: true } } };
+const assetInclude = { customer: true, property: { include: { solarProfile: true } }, service: true, parentAsset: true, childAssets: true, jobAssets: { include: { job: { include: { service: true, invoices: true, proofPhotos: true } } }, orderBy: { createdAt: 'desc' } }, serviceContractAssets: { include: { contract: true } } };
 const contractInclude = { customer: true, property: true, assets: { include: { asset: true } }, serviceLines: { include: { service: true }, orderBy: { nextDueAt: 'asc' } }, jobs: { include: { service: true, jobAssets: { include: { asset: true } } }, orderBy: { createdAt: 'desc' } } };
 
 const integrationConfigSchema = z.record(z.union([z.string().trim().max(500), z.boolean(), z.number()])).default({});
@@ -1448,7 +1512,6 @@ const checklistTemplateSchema = z.object({ serviceId: optionalText(160), contrac
 const branchSchema = z.object({
   name: z.string().trim().min(1).max(160),
   code: optionalText(40),
-  country: optionalText(80),
   city: optionalText(120),
   address: optionalText(500),
   timezone: optionalText(80),
@@ -1490,12 +1553,34 @@ const branchAccessSchema = z.object({
   active: z.boolean().optional()
 });
 const roleTemplateSchema = z.object({ name: z.string().trim().min(2).max(120), description: optionalText(500), key: z.string().trim().regex(/^[a-z0-9-]+$/).max(80).optional(), systemRole: z.enum(['ADMIN', 'WORKER']).default('ADMIN'), permissions: z.array(z.enum(permissionKeys)).default([]), defaultScopeType: z.enum(['COMPANY', 'BRANCH', 'TEAM', 'SELF']).default('COMPANY') });
-const memberAccessSchema = z.object({ jobTitle: z.string().trim().min(2).max(120), roleName: optionalText(120), roleTemplateId: optionalText(160), systemRole: z.enum(['ADMIN', 'WORKER']).optional(), fullAccess: z.boolean().default(false), permissions: z.array(z.enum(permissionKeys)).default([]), scopeType: z.enum(['COMPANY', 'BRANCH', 'TEAM', 'SELF']).default('COMPANY'), branchIds: z.array(z.string().min(1)).max(50).default([]), teamIds: z.array(z.string().min(1)).max(50).default([]) });
-const invitationSchema = memberAccessSchema.extend({ email: z.string().email().transform((value) => value.toLowerCase()) });
+const memberAccessFields = { jobTitle: z.string().trim().min(2).max(120), roleName: optionalText(120), roleTemplateId: optionalText(160), systemRole: z.enum(['ADMIN', 'WORKER']).optional(), fullAccess: z.boolean().default(false), permissions: z.array(z.enum(permissionKeys)).default([]), scopeType: z.enum(['COMPANY', 'BRANCH', 'TEAM', 'SELF']).default('COMPANY'), branchIds: z.array(z.string().min(1)).max(50).default([]), teamIds: z.array(z.string().min(1)).max(50).default([]) };
+function validateFullWorkspaceAccess(value, ctx) {
+  if (value.fullAccess && value.scopeType !== 'COMPANY') ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['fullAccess'], message: 'Full workspace access can only be used with the whole workspace.' });
+}
+const memberAccessSchema = z.object(memberAccessFields).superRefine(validateFullWorkspaceAccess);
+const invitationSchema = z.object({ ...memberAccessFields, email: z.string().email().transform((value) => value.toLowerCase()) }).superRefine(validateFullWorkspaceAccess);
 const memberStatusSchema = z.object({ disabled: z.boolean() });
 const invitationTokenSchema = z.object({ token: z.string().min(32).max(500) });
 const invitationAcceptSchema = invitationTokenSchema.extend({ password: z.string().min(12).max(128), name: z.string().trim().min(2).max(120) });
 const teamSchema = z.object({ name: z.string().trim().min(2).max(120), description: optionalText(500), branchId: optionalText(160), active: z.boolean().optional() });
+const workspaceCreateSchema = z.object({
+  name: z.string().trim().min(2).max(160),
+  legalName: optionalText(200),
+  countryCode: z.string().trim().min(2).max(40).transform((value, ctx) => {
+    const code = normalizeCountryCode(value);
+    if (!code) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Choose Zimbabwe or South Africa.' });
+    return code || value;
+  }),
+  registrationNumber: optionalText(120),
+  taxNumber: optionalText(120),
+  phone: optionalText(80),
+  email: optionalEmail,
+  address: optionalText(500),
+  mainBranchName: z.string().trim().min(2).max(160).default('Main Branch'),
+  mainBranchCity: optionalText(120)
+});
+const workspaceSwitchSchema = z.object({ companyId: z.string().min(1) });
+const groupManagerSchema = z.object({ email: z.string().email().transform((value) => value.toLowerCase()) });
 const approvalExecutionSchema = z.object({
   decisionNote: optionalText(1000)
 });
@@ -1635,7 +1720,7 @@ function offlineJob(job) {
     updatedAt: job.updatedAt,
     customer: job.customer && { id: job.customer.id, name: job.customer.name, phone: job.customer.phone, address: job.customer.address },
     service: job.service && { id: job.service.id, name: job.service.name, description: job.service.description },
-    assets: (job.jobAssets || []).map((link) => link.asset && { id: link.asset.id, name: link.asset.name, assetType: link.asset.assetType, assetTag: link.asset.assetTag, locationLabel: link.asset.locationLabel }).filter(Boolean),
+    assets: (job.jobAssets || []).map((link) => link.asset && { id: link.asset.id, name: link.asset.name, assetType: link.asset.assetType, assetTag: link.asset.assetTag, locationLabel: link.asset.locationLabel, monitoringIdentifier: link.asset.monitoringIdentifier, dcCapacityKw: link.asset.dcCapacityKw, acCapacityKw: link.asset.acCapacityKw, batteryCapacityKwh: link.asset.batteryCapacityKwh }).filter(Boolean),
     parts: (job.jobPartUsages || []).map(safeWorkerPart),
     proofPhotos: job.proofPhotos || [],
     signature: job.signature || null,
@@ -1964,7 +2049,7 @@ const logoUpload = multer({
   limits: { fileSize: 2 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = ['image/png', 'image/jpeg', 'image/webp'];
-    if (!allowed.includes(file.mimetype)) return cb(new AppError(400, 'Only PNG, JPG, and WEBP logos are allowed')); 
+    if (!allowed.includes(file.mimetype)) return cb(new AppError(400, 'Only PNG, JPG, and WEBP logos are allowed'));
     cb(null, true);
   }
 });
@@ -2355,13 +2440,65 @@ function dateWithPreferredTime(date, preferredTime) {
   return next;
 }
 
+async function ensureSolarCompanyDefaults(tx, companyId) {
+  if (!tx.service) return { services: [], checklists: [] };
+  const services = [];
+  for (const definition of solarDefaultServices) {
+    let service = await tx.service.findFirst({ where: { companyId, name: definition.name } });
+    if (!service) {
+      service = await tx.service.create({ data: { companyId, name: definition.name, description: definition.description, price: 0, active: true } });
+    }
+    services.push(service);
+  }
+
+  const checklists = [];
+  if (!tx.jobChecklistTemplate || !tx.jobChecklistItem) return { services, checklists };
+  for (const definition of solarChecklistDefinitions) {
+    const service = services.find((item) => item.name === definition.serviceName);
+    let template = await tx.jobChecklistTemplate.findFirst({ where: { companyId, name: definition.name } });
+    if (!template) {
+      template = await tx.jobChecklistTemplate.create({
+        data: {
+          companyId,
+          serviceId: service && service.id,
+          name: definition.name,
+          description: definition.description,
+          active: true,
+          requiredForCompletion: true,
+          sortOrder: checklists.length
+        }
+      });
+      for (const [label, answerType, required, photoRequired] of definition.items) {
+        await tx.jobChecklistItem.create({
+          data: {
+            companyId,
+            templateId: template.id,
+            label,
+            answerType,
+            required,
+            photoRequired,
+            passFail: answerType === 'PASS_FAIL',
+            sortOrder: definition.items.findIndex((item) => item[0] === label),
+            active: true
+          }
+        });
+      }
+    }
+    checklists.push(template);
+  }
+  return { services, checklists };
+}
+
 const registerSchema = z.object({
   companyName: z.string().min(2),
+  groupName: optionalText(160),
+  branchName: optionalText(160),
+  branchCity: optionalText(120),
   name: z.string().min(2),
   email: z.string().email().transform((v) => v.toLowerCase()),
   password: z.string().min(12).max(128),
-  market: z.enum(['ZW', 'SA']),
-  verticalKey: z.string().trim().regex(/^[a-z0-9-]+$/).max(80).default('generic'),
+  market: z.enum(['ZW', 'SA', 'ZA']).transform((value) => value === 'ZA' ? 'SA' : value),
+  verticalKey: z.string().trim().max(80).optional(),
   teamSizeBand: z.enum(['1-5', '6-15', '16-40', '41-100', '101+'])
 });
 
@@ -2496,7 +2633,7 @@ async function createAuthSession(req, user, settings) {
 
 async function requireCurrentUserRecord(req) {
   const user = await prisma.user.findUnique({ where: { id: req.user.id }, select: SAFE_LOGIN_USER_SELECT });
-  if (!user || user.companyId !== req.companyId) throw new AppError(404, 'User not found');
+  if (!user) throw new AppError(404, 'User not found');
   return user;
 }
 
@@ -2538,16 +2675,19 @@ function exportRowsToCsv(rows) {
 
 router.post('/auth/register', validate(registerSchema), asyncHandler(async (req, res) => {
   const user = await prisma.$transaction(async (tx) => {
-    const isSa = req.body.market === 'SA';
-    const company = await tx.company.create({ data: { name: req.body.companyName, market: req.body.market, verticalKey: req.body.verticalKey || 'generic', teamSizeBand: req.body.teamSizeBand, onboardingState: 'PLAN_SELECTION_REQUIRED' } });
+    const regional = countryConfig(req.body.market);
+    if (!regional) throw new AppError(400, 'Choose a supported country.');
+    const group = tx.businessGroup ? await tx.businessGroup.create({ data: { name: req.body.groupName || req.body.companyName } }) : null;
+    const company = await tx.company.create({ data: { groupId: group && group.id, name: req.body.companyName, market: regional.market, verticalKey: 'solar-om', teamSizeBand: req.body.teamSizeBand, onboardingState: 'PLAN_SELECTION_REQUIRED' } });
     const trialStartedAt = new Date();
     const trialEndsAt = new Date(trialStartedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
     if (tx.companySubscription) {
       await tx.companySubscription.create({ data: { companyId: company.id, status: 'TRIALING', billingInterval: 'MONTHLY', trialStartedAt, trialEndsAt, currentPeriodStart: trialStartedAt, currentPeriodEnd: trialEndsAt, provider: 'MOCK_INTERNAL' } });
     }
-    if (tx.companyFinanceSettings) await tx.companyFinanceSettings.create({ data: { companyId: company.id, country: isSa ? 'ZA' : 'ZW', timezone: isSa ? 'Africa/Johannesburg' : 'Africa/Harare', defaultCurrency: isSa ? 'ZAR' : 'USD', allowedCurrencies: [isSa ? 'ZAR' : 'USD'], taxName: 'VAT', taxRate: 15, numberFormat: isSa ? 'en-ZA' : 'en-ZW', allowedPaymentMethods: isSa ? ['CASH', 'BANK_TRANSFER', 'OZOW', 'YOCO', 'PAYFAST', 'SNAPSCAN'] : ['CASH', 'BANK_TRANSFER', 'PAYNOW'] } });
+    if (tx.companyFinanceSettings) await tx.companyFinanceSettings.create({ data: { companyId: company.id, country: regional.code, timezone: regional.timezone, defaultCurrency: regional.currency, allowedCurrencies: [regional.currency], taxName: regional.taxName, taxRate: regional.taxRate, numberFormat: regional.numberFormat, allowedPaymentMethods: regional.allowedPaymentMethods } });
+    await ensureSolarCompanyDefaults(tx, company.id);
     const ownerTemplate = tx.permissionRoleTemplate ? await tx.permissionRoleTemplate.findFirst({ where: { companyId: null, key: 'owner', verticalKey: 'generic', active: true } }) : null;
-    return tx.user.create({
+    const created = await tx.user.create({
       data: {
         companyId: company.id,
         email: req.body.email,
@@ -2561,6 +2701,9 @@ router.post('/auth/register', validate(registerSchema), asyncHandler(async (req,
       },
       select: SAFE_LOGIN_USER_SELECT
     });
+    if (group && tx.businessGroupMembership) await tx.businessGroupMembership.create({ data: { groupId: group.id, userId: created.id, role: 'OWNER', active: true } });
+    if (tx.branch) await tx.branch.create({ data: { companyId: company.id, name: req.body.branchName || 'Main Branch', code: 'MAIN', country: regional.code, city: req.body.branchCity, timezone: regional.timezone, active: true } });
+    return created;
   });
   clearClientAuthCookie(res);
   setAuthCookie(res, user);
@@ -2580,7 +2723,20 @@ router.post('/auth/login', validate(loginSchema), asyncHandler(async (req, res) 
     throw new AppError(401, 'Invalid email or password');
   }
   if (user.disabledAt) throw new AppError(403, 'Account is disabled');
-  const twoFactorRequired = ['OWNER', 'ADMIN'].includes(user.role) && (settings.twoFactorRequired || user.twoFactorEnabled);
+  const groupMembership = user && user.company && user.company.groupId && prisma.businessGroupMembership
+    ? await prisma.businessGroupMembership.findFirst({ where: { groupId: user.company.groupId, userId: user.id, active: true } })
+    : null;
+  const groupRole = groupMembership && groupMembership.role;
+  const authUser = {
+    ...user,
+    primaryCompanyId: user.companyId,
+    groupRole: groupRole || null,
+    role: groupRole === 'OWNER' ? 'OWNER' : groupRole === 'MANAGER' ? 'ADMIN' : user.role,
+    defaultScopeType: groupRole ? 'COMPANY' : user.defaultScopeType,
+    fullBusinessAccess: groupRole ? true : user.fullBusinessAccess,
+    worker: groupRole ? null : user.worker
+  };
+  const twoFactorRequired = ['OWNER', 'ADMIN'].includes(authUser.role) && (settings.twoFactorRequired || user.twoFactorEnabled);
   if (twoFactorRequired) {
     if (!user.twoFactorEnabled) {
       await recordSecurityEvent(user.companyId, 'TWO_FACTOR_SETUP_REQUIRED', { userId: user.id, severity: 'WARN', req });
@@ -2593,12 +2749,12 @@ router.post('/auth/login', validate(loginSchema), asyncHandler(async (req, res) 
     }
   }
   await prisma.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lockedUntil: null } });
-  const session = await createAuthSession(req, user, settings);
+  const session = await createAuthSession(req, authUser, settings);
   clearClientAuthCookie(res);
-  setAuthCookie(res, { ...user, currentSessionId: session.id }, { sessionId: session.id, expiresInHours: settings.sessionLengthHours });
-  await audit({ companyId: user.companyId, user, ip: req.ip, get: req.get.bind(req) }, 'LOGIN', 'User', user.id, { sessionId: session.id });
+  setAuthCookie(res, { ...authUser, currentSessionId: session.id }, { sessionId: session.id, expiresInHours: settings.sessionLengthHours });
+  await audit({ companyId: authUser.companyId, user: authUser, ip: req.ip, get: req.get.bind(req) }, 'LOGIN', 'User', user.id, { sessionId: session.id });
   await recordSecurityEvent(user.companyId, 'LOGIN_SUCCESS', { userId: user.id, severity: 'INFO', req, metadata: { sessionId: session.id } });
-  sendData(res, { ...(await publicStaffUser(user)), sessionId: session.id, expiresAt: session.expiresAt });
+  sendData(res, { ...(await publicStaffUser(authUser)), sessionId: session.id, expiresAt: session.expiresAt });
 }));
 
 router.post('/auth/logout', (req, res) => {
@@ -2622,16 +2778,16 @@ router.get('/auth/session', asyncHandler(async (req, res) => {
 router.get('/auth/me', requireAuth, asyncHandler(async (req, res) => sendData(res, await publicStaffUser(req.user))));
 
 router.patch('/auth/me', requireAuth, validate(accountPatchSchema), asyncHandler(async (req, res) => {
-  const existing = await prisma.user.findFirst({ where: { id: req.user.id, companyId: req.companyId } });
+  const existing = await prisma.user.findUnique({ where: { id: req.user.id } });
   if (!existing) throw new AppError(404, 'User not found');
   const data = await prisma.user.update({ where: { id: existing.id }, data: req.body, select: SAFE_LOGIN_USER_SELECT });
-  setAuthCookie(res, data);
+  setAuthCookie(res, { ...data, companyId: req.companyId }, { sessionId: req.authSessionId });
   await audit({ companyId: req.companyId, user: data }, 'UPDATE', 'User', data.id, { section: 'account' });
   sendData(res, publicUser(data));
 }));
 
 router.patch('/auth/me/password', requireAuth, validate(passwordPatchSchema), asyncHandler(async (req, res) => {
-  const existing = await prisma.user.findFirst({ where: { id: req.user.id, companyId: req.companyId } });
+  const existing = await prisma.user.findUnique({ where: { id: req.user.id } });
   if (!existing || !(await verifyPassword(req.body.currentPassword, existing.passwordHash))) throw new AppError(401, 'Current password is incorrect');
   const settings = await getCompanySecuritySettings(req.companyId);
   if (req.body.newPassword.length < Number(settings.passwordMinimum || 8)) throw new AppError(400, `Password must be at least ${settings.passwordMinimum} characters.`);
@@ -3178,7 +3334,7 @@ function clientInvoice(invoice, paymentOptions) {
   const paid = Math.max(0, Math.min(total, total - due));
   return { id: invoice.id, invoiceNumber: invoice.number, number: invoice.number, status: invoice.status, customerId: invoice.customerId, quoteId: invoice.quoteId, jobId: invoice.jobId, service: invoice.service && { id: invoice.service.id, name: invoice.service.name }, customer: clientCustomer(invoice.customer), quote: invoice.quote && { id: invoice.quote.id, title: invoice.quote.title, status: invoice.quote.status }, job: clientJobSummary(invoice.job), createdAt: invoice.createdAt, updatedAt: invoice.updatedAt, dueDate: invoice.dueDate, subtotal: invoice.subtotal, tax: invoice.taxTotal, discount: invoice.discountTotal, total: invoice.total, amountPaid: paid, amountDue: invoice.balanceDue, balanceDue: invoice.balanceDue, lineItems: (invoice.lineItems || []).map(clientLine), paymentLinks: (invoice.paymentLinks || []).map((link) => ({ id: link.id, status: link.status, statusLabel: customerPaymentStatusLabel(link.status), provider: link.provider, amount: link.amount, currency: link.currency, checkoutUrl: link.checkoutUrl, expiresAt: link.expiresAt })), paymentOptions: paymentOptions || null, payments: (invoice.payments || []).map(clientPayment), receipts: (invoice.receipts || []).map(clientReceipt) };
 }
-function clientAsset(asset) { return asset && { id: asset.id, customerId: asset.customerId, propertyId: asset.propertyId, serviceId: asset.serviceId, name: asset.name, assetType: asset.assetType, assetTag: asset.assetTag, serialNumber: asset.serialNumber, manufacturer: asset.manufacturer, modelNumber: asset.modelNumber, locationLabel: asset.locationLabel, installedAt: asset.installedAt, warrantyStartAt: asset.warrantyStartAt, warrantyEndAt: asset.warrantyEndAt, warrantyStatus: warrantyStatus(asset), status: asset.status, notes: asset.notes, service: asset.service && { id: asset.service.id, name: asset.service.name }, property: asset.property && { id: asset.property.id, label: asset.property.label, address: asset.property.address }, jobHistory: (asset.jobAssets || []).map((item) => clientJobSummary(item.job)).filter(Boolean) }; }
+function clientAsset(asset) { return asset && { id: asset.id, customerId: asset.customerId, propertyId: asset.propertyId, serviceId: asset.serviceId, parentAssetId: asset.parentAssetId, name: asset.name, assetType: asset.assetType, assetTag: asset.assetTag, serialNumber: asset.serialNumber, manufacturer: asset.manufacturer, modelNumber: asset.modelNumber, monitoringIdentifier: asset.monitoringIdentifier, locationLabel: asset.locationLabel, dcCapacityKw: asset.dcCapacityKw, acCapacityKw: asset.acCapacityKw, batteryCapacityKwh: asset.batteryCapacityKwh, moduleCount: asset.moduleCount, commissionedAt: asset.commissionedAt, installedAt: asset.installedAt, warrantyStartAt: asset.warrantyStartAt, warrantyEndAt: asset.warrantyEndAt, warrantyStatus: warrantyStatus(asset), status: asset.status, notes: asset.notes, service: asset.service && { id: asset.service.id, name: asset.service.name }, property: asset.property && { id: asset.property.id, label: asset.property.label, address: asset.property.address }, jobHistory: (asset.jobAssets || []).map((item) => clientJobSummary(item.job)).filter(Boolean) }; }
 function clientContract(contract) { return contract && { id: contract.id, customerId: contract.customerId, propertyId: contract.propertyId, contractNumber: contract.contractNumber, name: contract.name, status: contract.status, startDate: contract.startDate, endDate: contract.endDate, currency: contract.currency, responseSlaHours: contract.responseSlaHours, completionSlaHours: contract.completionSlaHours, includedVisits: contract.includedVisits, notes: contract.notes, assets: (contract.assets || []).map((item) => clientAsset(item.asset)).filter(Boolean), serviceLines: (contract.serviceLines || []).map((line) => ({ id: line.id, title: line.title, service: line.service && { id: line.service.id, name: line.service.name }, frequency: line.frequency, interval: line.interval, visitsPerPeriod: line.visitsPerPeriod, nextDueAt: line.nextDueAt, defaultDurationMinutes: line.defaultDurationMinutes, requiresProofPhotos: line.requiresProofPhotos, requiresSignature: line.requiresSignature, requiresLocation: line.requiresLocation })), upcomingDueWork: contractDueItems(contract, new Date()) }; }
 function clientJob(job) { return job && { id: job.id, title: job.title, description: job.description, status: job.status, customerId: job.customerId, quoteId: job.quotes && job.quotes[0] && job.quotes[0].id, invoiceId: job.invoices && job.invoices[0] && job.invoices[0].id, service: job.service && { id: job.service.id, name: job.service.name, description: job.service.description }, customer: clientCustomer(job.customer), scheduledStart: job.scheduledStart, scheduledEnd: job.scheduledEnd, address: job.customer && job.customer.address, arrivedAt: job.arrivedAt, startedAt: job.startedAt, pausedAt: job.pausedAt, resumedAt: job.resumedAt, completedAt: job.completedAt, completionNotes: job.completionNotes, requiresProofPhotos: job.requiresProofPhotos, minimumProofPhotos: job.minimumProofPhotos, requiresBeforePhotos: job.requiresBeforePhotos, requiresAfterPhotos: job.requiresAfterPhotos, requiresSignature: job.requiresSignature, requiresLocation: job.requiresLocation, proofCompletedAt: job.proofCompletedAt, signatureCompletedAt: job.signatureCompletedAt, contract: job.contract && { id: job.contract.id, contractNumber: job.contract.contractNumber, name: job.contract.name, status: job.contract.status }, responseDueAt: job.responseDueAt, completionDueAt: job.completionDueAt, slaStatus: job.slaStatus, slaBreachedAt: job.slaBreachedAt, assets: (job.jobAssets || []).map((item) => clientAsset(item.asset)).filter(Boolean), total: job.total, createdAt: job.createdAt, updatedAt: job.updatedAt, proofPhotos: (job.proofPhotos || []).map(clientProofPhoto), signature: clientSignature(job.signature), proofSummary: proofSummary(jobWithEvidenceStatus(job), true) }; }
 function clientStorageUrl(url) { return String(url || '').replace(/^\/api\/storage\/objects\//, '/api/client/storage/objects/'); }
@@ -3376,34 +3532,67 @@ router.get("/client/jobs/:id/activity", requireClientAuth, validate(idParam, "pa
 
 router.get("/client/properties", requireClientAuth, asyncHandler(async (req, res) => {
   if (!req.clientAccount.customerId) return sendData(res, []);
-  const data = await prisma.customerProperty.findMany({ where: { companyId: req.clientAccount.companyId, customerId: req.clientAccount.customerId }, orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }] });
+  const data = await prisma.customerProperty.findMany({
+    where: { companyId: req.clientAccount.companyId, customerId: req.clientAccount.customerId },
+    include: { solarProfile: true },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
+  });
   sendData(res, normalize(data));
 }));
 
 router.post("/client/properties", requireClientAuth, validate(clientPropertySchema), asyncHandler(async (req, res) => {
-  if (!req.clientAccount.customerId) throw new AppError(409, "A linked customer is required before adding properties");
+  if (!req.clientAccount.customerId) throw new AppError(409, "A linked client is required before adding solar sites");
   const data = await prisma.$transaction(async (tx) => {
     if (req.body.isDefault) await tx.customerProperty.updateMany({ where: { companyId: req.clientAccount.companyId, customerId: req.clientAccount.customerId }, data: { isDefault: false } });
-    return tx.customerProperty.create({ data: { companyId: req.clientAccount.companyId, customerId: req.clientAccount.customerId, clientAccountId: req.clientAccount.id, label: req.body.label || "Property", address: req.body.address, city: req.body.city, notes: req.body.notes, isDefault: Boolean(req.body.isDefault) } });
+    const property = await tx.customerProperty.create({
+      data: {
+        companyId: req.clientAccount.companyId,
+        customerId: req.clientAccount.customerId,
+        clientAccountId: req.clientAccount.id,
+        label: req.body.label || "Solar Site",
+        address: req.body.address,
+        city: req.body.city,
+        notes: req.body.notes,
+        isDefault: Boolean(req.body.isDefault)
+      }
+    });
+    const solarProfile = tx.solarSiteProfile && typeof tx.solarSiteProfile.create === "function"
+      ? await tx.solarSiteProfile.create({
+        data: {
+          companyId: req.clientAccount.companyId,
+          customerId: req.clientAccount.customerId,
+          propertyId: property.id,
+          status: "COMMISSIONING",
+          targetPerformanceRatioPct: 75,
+          targetAvailabilityPct: 98,
+          notes: req.body.notes
+        }
+      })
+      : null;
+    return { ...property, ...(solarProfile ? { solarProfile } : {}) };
   });
   sendData(res, normalize(data), 201);
 }));
 
 router.patch("/client/properties/:id", requireClientAuth, validate(idParam, "params"), validate(clientPropertySchema.partial()), asyncHandler(async (req, res) => {
-  if (!req.clientAccount.customerId) throw notFound("Property not found");
+  if (!req.clientAccount.customerId) throw notFound("Solar site not found");
   const existing = await prisma.customerProperty.findFirst({ where: { id: req.params.id, companyId: req.clientAccount.companyId, customerId: req.clientAccount.customerId } });
-  if (!existing) throw notFound("Property not found");
+  if (!existing) throw notFound("Solar site not found");
   const data = await prisma.$transaction(async (tx) => {
     if (req.body.isDefault) await tx.customerProperty.updateMany({ where: { companyId: req.clientAccount.companyId, customerId: req.clientAccount.customerId }, data: { isDefault: false } });
-    return tx.customerProperty.update({ where: { id: existing.id }, data: { label: req.body.label, address: req.body.address, city: req.body.city, notes: req.body.notes, isDefault: req.body.isDefault } });
+    return tx.customerProperty.update({
+      where: { id: existing.id },
+      data: { label: req.body.label, address: req.body.address, city: req.body.city, notes: req.body.notes, isDefault: req.body.isDefault },
+      include: { solarProfile: true }
+    });
   });
   sendData(res, normalize(data));
 }));
 
 router.delete("/client/properties/:id", requireClientAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
-  if (!req.clientAccount.customerId) throw notFound("Property not found");
+  if (!req.clientAccount.customerId) throw notFound("Solar site not found");
   const existing = await prisma.customerProperty.findFirst({ where: { id: req.params.id, companyId: req.clientAccount.companyId, customerId: req.clientAccount.customerId } });
-  if (!existing) throw notFound("Property not found");
+  if (!existing) throw notFound("Solar site not found");
   await prisma.customerProperty.delete({ where: { id: existing.id } });
   sendData(res, { deleted: true });
 }));
@@ -3647,6 +3836,130 @@ router.use(requireAuth);
 router.use(asyncHandler(async (req, res, next) => {
   req.effectiveAccess = await effectiveAccessForUser(req.user, { companyId: req.companyId });
   next();
+}));
+
+async function requireBusinessGroupMembership(req, allowedRoles = ['OWNER', 'MANAGER']) {
+  if (!prisma.businessGroupMembership) throw new AppError(503, 'Business group support is not available until the database migration is applied.');
+  const groupId = req.user && req.user.company && req.user.company.groupId;
+  if (!groupId) throw new AppError(409, 'This workspace is not connected to a business group yet.');
+  const membership = await prisma.businessGroupMembership.findFirst({ where: { groupId, userId: req.user.id, active: true }, include: { group: true } });
+  if (!membership || !allowedRoles.includes(membership.role)) throw new AppError(403, 'Only the business owner can do that.');
+  return membership;
+}
+
+router.get('/organization', asyncHandler(async (req, res) => {
+  const context = await organizationContextForUser(req.user);
+  const groupId = context && context.group && context.group.id;
+  const managers = groupId && context && context.group && context.group.role && prisma.businessGroupMembership
+    ? await prisma.businessGroupMembership.findMany({
+      where: { groupId, active: true },
+      include: { user: { select: { id: true, name: true, email: true, companyId: true, disabledAt: true, company: { select: { id: true, name: true } } } } },
+      orderBy: [{ role: 'asc' }, { createdAt: 'asc' }]
+    })
+    : [];
+  sendData(res, normalize({ ...context, managers }));
+}));
+
+router.post('/organization/switch-workspace', validate(workspaceSwitchSchema), asyncHandler(async (req, res) => {
+  const baseUser = await prisma.user.findUnique({ where: { id: req.user.id }, select: SAFE_LOGIN_USER_SELECT });
+  if (!baseUser) throw notFound('User not found');
+  const target = await prisma.company.findUnique({
+    where: { id: req.body.companyId },
+    select: { id: true, groupId: true, name: true, market: true, verticalKey: true, teamSizeBand: true, onboardingState: true, group: { select: { id: true, name: true } } }
+  });
+  if (!target) throw notFound('Workspace not found');
+  const membership = target.groupId && prisma.businessGroupMembership
+    ? await prisma.businessGroupMembership.findFirst({ where: { groupId: target.groupId, userId: baseUser.id, active: true } })
+    : null;
+  if (target.id !== baseUser.companyId && !membership) throw new AppError(403, 'You do not have access to this workspace.');
+  if (req.authSessionId && prisma.userSession) await prisma.userSession.update({ where: { id: req.authSessionId }, data: { companyId: target.id, lastSeenAt: new Date() } });
+  const groupRole = membership && membership.role;
+  const switchedUser = {
+    ...baseUser,
+    primaryCompanyId: baseUser.companyId,
+    companyId: target.id,
+    company: target,
+    groupRole: groupRole || null,
+    role: groupRole === 'OWNER' ? 'OWNER' : groupRole === 'MANAGER' ? 'ADMIN' : baseUser.role,
+    defaultScopeType: groupRole ? 'COMPANY' : baseUser.defaultScopeType,
+    fullBusinessAccess: groupRole ? true : baseUser.fullBusinessAccess,
+    worker: groupRole ? null : baseUser.worker && baseUser.worker.companyId === target.id ? baseUser.worker : null
+  };
+  const settings = await getCompanySecuritySettings(target.id);
+  setAuthCookie(res, { ...switchedUser, currentSessionId: req.authSessionId }, { sessionId: req.authSessionId, expiresInHours: settings.sessionLengthHours });
+  await audit({ companyId: target.id, user: switchedUser, ip: req.ip, get: req.get.bind(req) }, 'WORKSPACE_SWITCHED', 'Company', target.id, { fromCompanyId: req.companyId });
+  sendData(res, await publicStaffUser(switchedUser));
+}));
+
+router.post('/organization/workspaces', validate(workspaceCreateSchema), asyncHandler(async (req, res) => {
+  const membership = await requireBusinessGroupMembership(req, ['OWNER']);
+  const regional = countryConfig(req.body.countryCode);
+  if (!regional) throw new AppError(400, 'Choose Zimbabwe or South Africa.');
+  const sourceCompany = await prisma.company.findUnique({ where: { id: req.companyId } });
+  const workspace = await prisma.$transaction(async (tx) => {
+    const company = await tx.company.create({
+      data: {
+        groupId: membership.groupId,
+        name: req.body.name,
+        legalName: req.body.legalName,
+        registrationNumber: req.body.registrationNumber,
+        taxNumber: req.body.taxNumber,
+        phone: req.body.phone,
+        email: req.body.email,
+        address: req.body.address,
+        market: regional.market,
+        verticalKey: sourceCompany && sourceCompany.verticalKey || 'solar-om',
+        teamSizeBand: sourceCompany && sourceCompany.teamSizeBand,
+        onboardingState: 'PLAN_SELECTION_REQUIRED'
+      }
+    });
+    const now = new Date();
+    const trialEndsAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    if (tx.companySubscription) await tx.companySubscription.create({
+      data: {
+        companyId: company.id,
+        status: 'TRIALING',
+        billingInterval: 'MONTHLY',
+        trialStartedAt: now,
+        trialEndsAt,
+        currentPeriodStart: now,
+        currentPeriodEnd: trialEndsAt,
+        provider: 'MOCK_INTERNAL'
+      }
+    });
+    if (tx.companyFinanceSettings) await tx.companyFinanceSettings.create({ data: { companyId: company.id, country: regional.code, timezone: regional.timezone, defaultCurrency: regional.currency, allowedCurrencies: [regional.currency], taxName: regional.taxName, taxRate: regional.taxRate, numberFormat: regional.numberFormat, allowedPaymentMethods: regional.allowedPaymentMethods } });
+    await ensureSolarCompanyDefaults(tx, company.id);
+    await tx.branch.create({ data: { companyId: company.id, name: req.body.mainBranchName, code: 'MAIN', country: regional.code, city: req.body.mainBranchCity, address: req.body.address, timezone: regional.timezone, active: true } });
+    return company;
+  });
+  await audit(req, 'WORKSPACE_CREATED', 'Company', workspace.id, { groupId: membership.groupId, countryCode: regional.code });
+  sendData(res, normalize({ workspace, organization: await organizationContextForUser(req.user) }), 201);
+}));
+
+router.post('/organization/group-managers', validate(groupManagerSchema), asyncHandler(async (req, res) => {
+  const ownerMembership = await requireBusinessGroupMembership(req, ['OWNER']);
+  const user = await prisma.user.findUnique({ where: { email: req.body.email }, include: { company: { select: { groupId: true, name: true } } } });
+  if (!user || !user.company || user.company.groupId !== ownerMembership.groupId) throw new AppError(400, 'Invite this person to one of the group workspaces first.');
+  const existingOwner = await prisma.businessGroupMembership.findFirst({ where: { groupId: ownerMembership.groupId, userId: user.id, role: 'OWNER', active: true } });
+  if (existingOwner) throw new AppError(409, 'This person is already a business owner.');
+  const manager = await prisma.businessGroupMembership.upsert({
+    where: { groupId_userId: { groupId: ownerMembership.groupId, userId: user.id } },
+    update: { role: 'MANAGER', active: true },
+    create: { groupId: ownerMembership.groupId, userId: user.id, role: 'MANAGER', active: true },
+    include: { user: { select: { id: true, name: true, email: true, companyId: true } } }
+  });
+  await audit(req, 'GROUP_MANAGER_ASSIGNED', 'User', user.id, { groupId: ownerMembership.groupId });
+  sendData(res, normalize(manager), 201);
+}));
+
+router.delete('/organization/group-managers/:id', validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  const ownerMembership = await requireBusinessGroupMembership(req, ['OWNER']);
+  const manager = await prisma.businessGroupMembership.findFirst({ where: { groupId: ownerMembership.groupId, userId: req.params.id, role: 'MANAGER', active: true } });
+  if (!manager) throw notFound('Group manager not found');
+  await prisma.businessGroupMembership.update({ where: { id: manager.id }, data: { active: false } });
+  if (prisma.userSession) await prisma.userSession.updateMany({ where: { userId: req.params.id, revokedAt: null }, data: { revokedAt: new Date(), revokedById: req.user.id } });
+  await audit(req, 'GROUP_MANAGER_REMOVED', 'User', req.params.id, { groupId: ownerMembership.groupId });
+  sendData(res, { removed: true });
 }));
 
 const resourcePermissionRules = [
@@ -4434,23 +4747,40 @@ router.post(
 
 
 router.get('/branches', requireRole(...adminRoles), asyncHandler(async (req, res) => {
-  const result = await paged(prisma.branch, req, { where: { companyId: req.companyId }, orderBy: { createdAt: 'desc' } });
-  sendData(res, normalize(result.data), 200, result.meta);
+  const access = req.effectiveAccess || await effectiveAccessForUser(req.user, { companyId: req.companyId });
+  const scopeWhere = access.scopeType === 'COMPANY'
+    ? {}
+    : access.scopeType === 'BRANCH'
+      ? { id: { in: access.branchIds.length ? access.branchIds : ['__none__'] } }
+      : { id: '__none__' };
+  const result = await paged(prisma.branch, req, { where: { companyId: req.companyId, ...scopeWhere }, orderBy: { createdAt: 'desc' } });
+  sendData(res, normalize(result.data.map((branch) => {
+    const regional = countryConfig(branch.country);
+    return { ...branch, country: regional ? regional.code : branch.country, countryName: regional ? regional.name : branch.country };
+  })), 200, result.meta);
 }));
 
 router.post('/branches', requireRole(...adminRoles), validate(branchSchema), asyncHandler(async (req, res) => {
   await requirePermission(req, 'branch.manage');
-  const data = await prisma.branch.create({ data: { ...req.body, companyId: req.companyId, active: req.body.active !== false } });
+  if (!req.effectiveAccess || req.effectiveAccess.scopeType !== 'COMPANY') throw new AppError(403, 'Only a workspace-wide manager can create branches.');
+  const finance = await prisma.companyFinanceSettings.findUnique({ where: { companyId: req.companyId } });
+  const company = await prisma.company.findUnique({ where: { id: req.companyId }, select: { market: true } });
+  const regional = countryConfig(finance && finance.country || company && company.market);
+  if (!regional) throw new AppError(409, 'Set the workspace country before creating a branch.');
+  const data = await prisma.branch.create({ data: { ...req.body, companyId: req.companyId, country: regional.code, timezone: req.body.timezone || regional.timezone, active: req.body.active !== false } });
   await audit(req, 'CREATE', 'Branch', data.id);
-  sendData(res, normalize(data), 201);
+  sendData(res, normalize({ ...data, countryName: regional.name }), 201);
 }));
 
 router.patch('/branches/:id', requireRole(...adminRoles), validate(idParam, 'params'), validate(branchSchema.partial()), asyncHandler(async (req, res) => {
   await requirePermission(req, 'branch.manage', { branchId: req.params.id });
   await requireBranch(req, req.params.id);
-  const data = await prisma.branch.update({ where: { id: req.params.id }, data: req.body });
+  const finance = await prisma.companyFinanceSettings.findUnique({ where: { companyId: req.companyId } });
+  const company = await prisma.company.findUnique({ where: { id: req.companyId }, select: { market: true } });
+  const regional = countryConfig(finance && finance.country || company && company.market);
+  const data = await prisma.branch.update({ where: { id: req.params.id }, data: { ...req.body, country: regional && regional.code } });
   await audit(req, 'UPDATE', 'Branch', data.id);
-  sendData(res, normalize(data));
+  sendData(res, normalize({ ...data, countryName: regional ? regional.name : data.country }));
 }));
 
 router.get('/approval-policies', requireRole(...adminRoles), asyncHandler(async (req, res) => {
@@ -4983,6 +5313,7 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     }
   }
 
+  const solar = await buildSolarOverview(companyId).catch(() => null);
   sendData(res, normalize({
     branding: publicBranding(company),
     company: profileResponse(company),
@@ -4991,6 +5322,7 @@ router.get('/dashboard', asyncHandler(async (req, res) => {
     schedule,
     workers,
     recentJobs,
+    solar,
     ...(pipeline ? { pipeline } : {})
   }));
 }));
@@ -5485,7 +5817,7 @@ router.post('/analytics/report-schedules', requireRole(...adminRoles), asyncHand
 }));
 
 const onboardingImportTypes = ['customers', 'properties', 'workers', 'assets', 'inventory-items', 'suppliers', 'stock-levels', 'service-contracts', 'contract-assets'];
-const onboardingVerticals = ['hvac-refrigeration', 'solar-om', 'fire-access-control', 'facilities-maintenance'];
+const onboardingVerticals = ['solar-om'];
 const onboardingTemplateColumns = {
   customers: ['name', 'email', 'phone', 'address', 'branchCode', 'notes'],
   properties: ['customerEmail', 'customerName', 'label', 'address', 'city', 'branchCode', 'notes', 'isDefault'],
@@ -5501,17 +5833,17 @@ const onboardingChecklistDefinition = [
   { key: 'companyProfile', label: 'Company profile' },
   { key: 'branches', label: 'Branches' },
   { key: 'usersWorkers', label: 'Users and workers' },
-  { key: 'customers', label: 'Customers' },
-  { key: 'properties', label: 'Properties/sites' },
-  { key: 'services', label: 'Services' },
-  { key: 'assets', label: 'Assets' },
-  { key: 'contracts', label: 'Contracts' },
-  { key: 'inventory', label: 'Inventory' },
+  { key: 'customers', label: 'Solar clients' },
+  { key: 'properties', label: 'Solar sites' },
+  { key: 'services', label: 'Solar services' },
+  { key: 'assets', label: 'Solar equipment' },
+  { key: 'contracts', label: 'O&M contracts' },
+  { key: 'inventory', label: 'Solar parts and stock' },
   { key: 'financeSettings', label: 'Finance settings' },
   { key: 'paymentMethods', label: 'Payment methods' },
   { key: 'notifications', label: 'Notifications' },
   { key: 'approvals', label: 'Approvals' },
-  { key: 'firstTestJob', label: 'First test job' }
+  { key: 'firstTestJob', label: 'First solar work order' }
 ];
 
 const implementationSettingsSchema = z.object({
@@ -5851,22 +6183,17 @@ async function duplicateDetection(req, type) {
 
 async function createVerticalDemoData(req, vertical) {
   if (!onboardingVerticals.includes(vertical)) throw new AppError(400, 'Unsupported vertical.');
-  const labels = {
-    'hvac-refrigeration': ['HVAC Preventive Maintenance', 'Refrigeration Leak Check', 'Compressor Replacement'],
-    'solar-om': ['Solar Array Inspection', 'Inverter Health Check', 'Panel Cleaning'],
-    'fire-access-control': ['Fire Panel Inspection', 'Access Control Service', 'Emergency Lighting Test'],
-    'facilities-maintenance': ['General Maintenance Visit', 'Plumbing Callout', 'Electrical Inspection']
-  }[vertical];
+  const labels = solarDefaultServices.slice(0, 3).map((service) => service.name);
   const created = { services: [], customers: [], inventoryItems: [] };
   for (const name of labels) {
     let service = await prisma.service.findFirst({ where: { companyId: req.companyId, name } });
-    service = service ? await prisma.service.update({ where: { id: service.id }, data: { active: true } }) : await prisma.service.create({ data: { companyId: req.companyId, name, description: 'Demo service for ' + vertical, price: 100, active: true } });
+    service = service ? await prisma.service.update({ where: { id: service.id }, data: { active: true } }) : await prisma.service.create({ data: { companyId: req.companyId, name, description: 'Solar O&M demo service', price: 100, active: true } });
     created.services.push(service.id);
   }
-  const customerName = labels[0].split(' ')[0] + ' Demo Account';
-  const customer = await prisma.customer.create({ data: { companyId: req.companyId, name: customerName, email: vertical.replace(/[^a-z0-9]/g, '-') + '@demo.revengine.local', phone: '+10000000000', notes: 'Vertical demo data' } });
+  const customerName = 'Solar O&M Demo Client';
+  const customer = await prisma.customer.create({ data: { companyId: req.companyId, name: customerName, email: vertical.replace(/[^a-z0-9]/g, '-') + '@demo.revengine.local', phone: '+10000000000', notes: 'Solar O&M demo data' } });
   created.customers.push(customer.id);
-  const inventory = await prisma.inventoryItem.create({ data: { companyId: req.companyId, sku: vertical.toUpperCase().replace(/[^A-Z0-9]/g, '-') + '-KIT', name: labels[0] + ' Kit', unitOfMeasure: 'kit', unitCost: 25, active: true } });
+  const inventory = await prisma.inventoryItem.create({ data: { companyId: req.companyId, sku: vertical.toUpperCase().replace(/[^A-Z0-9]/g, '-') + '-KIT', name: 'Solar Technician Service Kit', unitOfMeasure: 'kit', unitCost: 25, active: true } });
   created.inventoryItems.push(inventory.id);
   await audit(req, 'CREATE_VERTICAL_DEMO_DATA', 'Company', req.companyId, { vertical, created });
   return created;
@@ -6288,13 +6615,20 @@ const assetSchema = z.object({
   customerId: z.string().min(1),
   propertyId: optionalText(80),
   serviceId: optionalText(80),
+  parentAssetId: optionalText(80),
   name: z.string().trim().min(2).max(200),
   assetType: z.string().trim().min(2).max(120),
   assetTag: optionalText(120),
   serialNumber: optionalText(120),
   manufacturer: optionalText(120),
   modelNumber: optionalText(120),
+  monitoringIdentifier: optionalText(160),
   locationLabel: optionalText(200),
+  dcCapacityKw: z.coerce.number().nonnegative().max(1000000).optional(),
+  acCapacityKw: z.coerce.number().nonnegative().max(1000000).optional(),
+  batteryCapacityKwh: z.coerce.number().nonnegative().max(1000000).optional(),
+  moduleCount: z.coerce.number().int().nonnegative().max(10000000).optional(),
+  commissionedAt: optionalDate,
   installedAt: optionalDate,
   warrantyStartAt: optionalDate,
   warrantyEndAt: optionalDate,
@@ -6307,6 +6641,80 @@ const assetSchema = z.object({
   notes: optionalText(2000),
   customFields: z.record(z.any()).optional()
 });
+
+const solarPercentage = z.coerce.number().min(0).max(100).optional();
+const solarCapacity = z.coerce.number().nonnegative().max(1000000).optional();
+const solarSiteSchema = z.object({
+  customerId: z.string().min(1),
+  label: z.string().trim().min(2).max(120),
+  address: z.string().trim().min(2).max(300),
+  city: optionalText(120),
+  propertyNotes: optionalText(1000),
+  isDefault: z.boolean().optional(),
+  siteCode: optionalText(80),
+  status: z.enum(solarSiteStatusValues).optional(),
+  installedCapacityKwp: solarCapacity,
+  acCapacityKw: solarCapacity,
+  batteryCapacityKwh: solarCapacity,
+  moduleCount: z.coerce.number().int().nonnegative().max(10000000).optional(),
+  inverterCount: z.coerce.number().int().nonnegative().max(100000).optional(),
+  monitoringProvider: optionalText(160),
+  monitoringSiteId: optionalText(160),
+  gridConnectionType: optionalText(120),
+  latitude: z.coerce.number().min(-90).max(90).optional(),
+  longitude: z.coerce.number().min(-180).max(180).optional(),
+  targetPerformanceRatioPct: solarPercentage,
+  targetAvailabilityPct: solarPercentage,
+  lastInspectionAt: optionalDate,
+  nextInspectionDueAt: optionalDate,
+  notes: optionalText(2000)
+});
+
+const solarReadingSchema = z.object({
+  propertyId: z.string().min(1),
+  assetId: optionalText(80),
+  jobId: optionalText(80),
+  source: z.enum(['MANUAL', 'TECHNICIAN', 'MONITORING_IMPORT']).optional(),
+  condition: z.enum(solarReadingConditionValues).optional(),
+  recordedAt: optionalDate,
+  powerKw: solarCapacity,
+  energyTodayKwh: solarCapacity,
+  lifetimeEnergyKwh: z.coerce.number().nonnegative().max(100000000000).optional(),
+  irradianceWm2: z.coerce.number().nonnegative().max(5000).optional(),
+  ambientTemperatureC: z.coerce.number().min(-100).max(150).optional(),
+  moduleTemperatureC: z.coerce.number().min(-100).max(200).optional(),
+  dcVoltageV: z.coerce.number().min(-100000).max(100000).optional(),
+  dcCurrentA: z.coerce.number().min(-100000).max(100000).optional(),
+  acVoltageV: z.coerce.number().min(-100000).max(100000).optional(),
+  acCurrentA: z.coerce.number().min(-100000).max(100000).optional(),
+  frequencyHz: z.coerce.number().min(0).max(1000).optional(),
+  batterySocPct: solarPercentage,
+  batterySohPct: solarPercentage,
+  batteryVoltageV: z.coerce.number().min(-100000).max(100000).optional(),
+  performanceRatioPct: solarPercentage,
+  availabilityPct: solarPercentage,
+  notes: optionalText(2000)
+});
+
+const solarFaultSchema = z.object({
+  propertyId: z.string().min(1),
+  assetId: optionalText(80),
+  jobId: optionalText(80),
+  faultCode: optionalText(120),
+  category: optionalText(120),
+  title: z.string().trim().min(2).max(200),
+  description: optionalText(2000),
+  severity: z.enum(solarFaultSeverityValues).optional(),
+  status: z.enum(solarFaultStatusValues).optional(),
+  detectedAt: optionalDate,
+  acknowledgedAt: optionalDate,
+  resolvedAt: optionalDate,
+  downtimeMinutes: z.coerce.number().int().nonnegative().max(100000000).optional(),
+  estimatedEnergyLossKwh: z.coerce.number().nonnegative().max(100000000000).optional(),
+  rootCause: optionalText(2000),
+  correctiveAction: optionalText(2000)
+});
+
 
 const contractSchema = z.object({
   branchId: z.string().min(1).optional(),
@@ -6375,6 +6783,11 @@ async function validateAssetRelations(req, body) {
   await requireCustomer(req, body.customerId);
   if (body.propertyId) await requireCustomerProperty(req, body.propertyId, body.customerId);
   if (body.serviceId) await requireService(req, body.serviceId);
+  if (body.parentAssetId) {
+    const parent = await requireAsset(req, body.parentAssetId);
+    if (parent.customerId !== body.customerId) throw new AppError(400, 'Parent equipment must belong to the same client.');
+    if (body.propertyId && parent.propertyId && parent.propertyId !== body.propertyId) throw new AppError(400, 'Parent equipment must belong to the same solar site.');
+  }
 }
 
 async function validateContractRelations(req, body) {
@@ -6515,6 +6928,204 @@ async function updateAssetServiceDates(tx, req, job) {
   }
 }
 
+const solarSiteInclude = { property: true, customer: true };
+const solarReadingInclude = { property: true, customer: true, asset: true, job: true, capturedBy: { select: SAFE_USER_SELECT } };
+const solarFaultInclude = { property: true, customer: true, asset: true, job: true, reportedBy: { select: SAFE_USER_SELECT } };
+
+function solarProfileFields(body) {
+  const keys = ['siteCode', 'status', 'installedCapacityKwp', 'acCapacityKw', 'batteryCapacityKwh', 'moduleCount', 'inverterCount', 'monitoringProvider', 'monitoringSiteId', 'gridConnectionType', 'latitude', 'longitude', 'targetPerformanceRatioPct', 'targetAvailabilityPct', 'lastInspectionAt', 'nextInspectionDueAt', 'notes'];
+  return Object.fromEntries(keys.filter((key) => body[key] !== undefined).map((key) => [key, body[key]]));
+}
+
+function solarPropertyFields(body) {
+  const data = {};
+  if (body.customerId !== undefined) data.customerId = body.customerId;
+  if (body.label !== undefined) data.label = body.label;
+  if (body.address !== undefined) data.address = body.address;
+  if (body.city !== undefined) data.city = body.city;
+  if (body.propertyNotes !== undefined) data.notes = body.propertyNotes;
+  if (body.isDefault !== undefined) data.isDefault = body.isDefault;
+  return data;
+}
+
+async function validateSolarRelations(req, property, body) {
+  if (body.assetId) {
+    const asset = await requireAsset(req, body.assetId);
+    if (asset.customerId !== property.customerId || asset.propertyId && asset.propertyId !== property.id) throw new AppError(400, 'Solar equipment must belong to the selected solar site.');
+  }
+  if (body.jobId) {
+    const job = await requireJob(req, body.jobId, { assignedOnly: req.user.role === 'WORKER' });
+    if (job.customerId !== property.customerId) throw new AppError(400, 'Work order must belong to the selected solar site client.');
+  }
+}
+
+function latestSolarReadings(readings) {
+  const latest = new Map();
+  for (const reading of readings || []) {
+    if (!latest.has(reading.propertyId)) latest.set(reading.propertyId, reading);
+  }
+  return latest;
+}
+
+async function buildSolarOverview(companyId) {
+  if (!prisma.solarSiteProfile || !prisma.solarReading || !prisma.solarFault) {
+    return { totals: { sites: 0, operationalSites: 0, installedCapacityKwp: 0, equipment: 0, energyTodayKwh: 0, openFaults: 0, criticalFaults: 0, averagePerformanceRatioPct: null, averageAvailabilityPct: null }, sites: [], faults: [], readings: [] };
+  }
+  const now = new Date();
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const [profiles, equipment, readings, faults] = await Promise.all([
+    prisma.solarSiteProfile.findMany({ where: { companyId }, include: solarSiteInclude, orderBy: { updatedAt: 'desc' } }),
+    prisma.asset.findMany({ where: { companyId, status: { not: 'RETIRED' } }, include: { property: true, customer: true, parentAsset: true }, orderBy: { createdAt: 'desc' } }),
+    prisma.solarReading.findMany({ where: { companyId }, include: solarReadingInclude, orderBy: { recordedAt: 'desc' }, take: 250 }),
+    prisma.solarFault.findMany({ where: { companyId, status: { in: ['OPEN', 'ACKNOWLEDGED', 'IN_PROGRESS'] } }, include: solarFaultInclude, orderBy: [{ severity: 'desc' }, { detectedAt: 'desc' }], take: 100 })
+  ]);
+  const latestBySite = latestSolarReadings(readings);
+  const equipmentBySite = new Map();
+  for (const item of equipment) {
+    if (!item.propertyId) continue;
+    equipmentBySite.set(item.propertyId, (equipmentBySite.get(item.propertyId) || 0) + 1);
+  }
+  const faultsBySite = new Map();
+  for (const item of faults) faultsBySite.set(item.propertyId, (faultsBySite.get(item.propertyId) || 0) + 1);
+  const sites = profiles.map((profile) => ({
+    ...profile,
+    equipmentCount: equipmentBySite.get(profile.propertyId) || 0,
+    openFaultCount: faultsBySite.get(profile.propertyId) || 0,
+    latestReading: latestBySite.get(profile.propertyId) || null
+  }));
+  const latest = Array.from(latestBySite.values());
+  const performanceValues = latest.map((item) => Number(item.performanceRatioPct)).filter(Number.isFinite);
+  const availabilityValues = latest.map((item) => Number(item.availabilityPct)).filter(Number.isFinite);
+  const todayLatest = latest.filter((item) => item.recordedAt && new Date(item.recordedAt) >= dayStart);
+  const average = (values) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  return {
+    totals: {
+      sites: profiles.length,
+      operationalSites: profiles.filter((item) => item.status === 'OPERATIONAL').length,
+      installedCapacityKwp: profiles.reduce((sum, item) => sum + Number(item.installedCapacityKwp || 0), 0),
+      equipment: equipment.length,
+      energyTodayKwh: todayLatest.reduce((sum, item) => sum + Number(item.energyTodayKwh || 0), 0),
+      openFaults: faults.length,
+      criticalFaults: faults.filter((item) => item.severity === 'CRITICAL').length,
+      averagePerformanceRatioPct: average(performanceValues),
+      averageAvailabilityPct: average(availabilityValues)
+    },
+    sites,
+    faults,
+    readings: readings.slice(0, 30)
+  };
+}
+
+router.post('/solar/bootstrap', requireRole(...adminRoles), asyncHandler(async (req, res) => {
+  await requirePermission(req, 'company.settings.manage');
+  const result = await prisma.$transaction(async (tx) => {
+    const defaults = await ensureSolarCompanyDefaults(tx, req.companyId);
+    const properties = await tx.customerProperty.findMany({ where: { companyId: req.companyId } });
+    let profilesCreated = 0;
+    for (const property of properties) {
+      const existing = await tx.solarSiteProfile.findUnique({ where: { propertyId: property.id } });
+      if (existing) continue;
+      await tx.solarSiteProfile.create({ data: { companyId: req.companyId, customerId: property.customerId, propertyId: property.id, status: 'COMMISSIONING', targetPerformanceRatioPct: 75, targetAvailabilityPct: 98 } });
+      profilesCreated += 1;
+    }
+    await tx.company.update({ where: { id: req.companyId }, data: { verticalKey: 'solar-om' } });
+    return { services: defaults.services.length, checklists: defaults.checklists.length, profilesCreated };
+  });
+  await audit(req, 'BOOTSTRAP', 'SolarVertical', req.companyId, result);
+  sendData(res, normalize(result));
+}));
+
+router.get('/solar/overview', requireRole(...adminRoles), asyncHandler(async (req, res) => {
+  await requirePermission(req, 'contract.automation.manage');
+  sendData(res, normalize(await buildSolarOverview(req.companyId)));
+}));
+
+router.get('/solar/sites', requireRole(...adminRoles), asyncHandler(async (req, res) => {
+  await requirePermission(req, 'contract.automation.manage');
+  const overview = await buildSolarOverview(req.companyId);
+  sendData(res, normalize(overview.sites));
+}));
+
+router.post('/solar/sites', requireRole(...adminRoles), validate(solarSiteSchema), asyncHandler(async (req, res) => {
+  await requirePermission(req, 'contract.automation.manage');
+  await requireCustomer(req, req.body.customerId);
+  const data = await prisma.$transaction(async (tx) => {
+    if (req.body.isDefault) await tx.customerProperty.updateMany({ where: { companyId: req.companyId, customerId: req.body.customerId }, data: { isDefault: false } });
+    const property = await tx.customerProperty.create({ data: { companyId: req.companyId, customerId: req.body.customerId, label: req.body.label, address: req.body.address, city: req.body.city, notes: req.body.propertyNotes, isDefault: req.body.isDefault === true } });
+    return tx.solarSiteProfile.create({ data: { companyId: req.companyId, customerId: req.body.customerId, propertyId: property.id, status: req.body.status || 'COMMISSIONING', targetPerformanceRatioPct: req.body.targetPerformanceRatioPct == null ? 75 : req.body.targetPerformanceRatioPct, targetAvailabilityPct: req.body.targetAvailabilityPct == null ? 98 : req.body.targetAvailabilityPct, ...solarProfileFields(req.body) }, include: solarSiteInclude });
+  });
+  await audit(req, 'CREATE', 'SolarSiteProfile', data.id, { propertyId: data.propertyId, customerId: data.customerId, capacityKwp: data.installedCapacityKwp });
+  sendData(res, normalize(data), 201);
+}));
+
+router.patch('/solar/sites/:id', requireRole(...adminRoles), validate(idParam, 'params'), validate(solarSiteSchema.partial()), asyncHandler(async (req, res) => {
+  await requirePermission(req, 'contract.automation.manage');
+  const property = await requireCustomerProperty(req, req.params.id);
+  const nextCustomerId = req.body.customerId || property.customerId;
+  await requireCustomer(req, nextCustomerId);
+  const data = await prisma.$transaction(async (tx) => {
+    if (req.body.isDefault) await tx.customerProperty.updateMany({ where: { companyId: req.companyId, customerId: nextCustomerId, id: { not: property.id } }, data: { isDefault: false } });
+    const propertyData = solarPropertyFields(req.body);
+    const updatedProperty = Object.keys(propertyData).length ? await tx.customerProperty.update({ where: { id: property.id }, data: propertyData }) : property;
+    const existing = await tx.solarSiteProfile.findUnique({ where: { propertyId: property.id } });
+    const profileData = { ...solarProfileFields(req.body), customerId: nextCustomerId };
+    return existing
+      ? tx.solarSiteProfile.update({ where: { id: existing.id }, data: profileData, include: solarSiteInclude })
+      : tx.solarSiteProfile.create({ data: { companyId: req.companyId, propertyId: updatedProperty.id, customerId: nextCustomerId, status: req.body.status || 'COMMISSIONING', ...profileData }, include: solarSiteInclude });
+  });
+  await audit(req, 'UPDATE', 'SolarSiteProfile', data.id, { propertyId: data.propertyId, status: data.status });
+  sendData(res, normalize(data));
+}));
+
+router.get('/solar/readings', requireRole(...adminRoles), asyncHandler(async (req, res) => {
+  await requirePermission(req, 'contract.automation.manage');
+  const where = { companyId: req.companyId };
+  if (req.query.propertyId) where.propertyId = String(req.query.propertyId);
+  if (req.query.assetId) where.assetId = String(req.query.assetId);
+  const result = await paged(prisma.solarReading, req, { where, include: solarReadingInclude, orderBy: { recordedAt: 'desc' } });
+  sendData(res, normalize(result.data), 200, result.meta);
+}));
+
+router.post('/solar/readings', validate(solarReadingSchema), asyncHandler(async (req, res) => {
+  const property = await requireCustomerProperty(req, req.body.propertyId);
+  await validateSolarRelations(req, property, req.body);
+  const data = await prisma.solarReading.create({ data: { ...req.body, companyId: req.companyId, customerId: property.customerId, capturedById: req.user.id, source: req.body.source || (req.user.role === 'WORKER' ? 'TECHNICIAN' : 'MANUAL'), condition: req.body.condition || 'NORMAL', recordedAt: req.body.recordedAt || new Date() }, include: solarReadingInclude });
+  await audit(req, 'CREATE', 'SolarReading', data.id, { propertyId: property.id, assetId: data.assetId, condition: data.condition });
+  sendData(res, normalize(data), 201);
+}));
+
+router.get('/solar/faults', requireRole(...adminRoles), asyncHandler(async (req, res) => {
+  await requirePermission(req, 'contract.automation.manage');
+  const where = { companyId: req.companyId };
+  if (req.query.propertyId) where.propertyId = String(req.query.propertyId);
+  if (req.query.assetId) where.assetId = String(req.query.assetId);
+  if (req.query.status) where.status = String(req.query.status);
+  const result = await paged(prisma.solarFault, req, { where, include: solarFaultInclude, orderBy: { detectedAt: 'desc' } });
+  sendData(res, normalize(result.data), 200, result.meta);
+}));
+
+router.post('/solar/faults', validate(solarFaultSchema), asyncHandler(async (req, res) => {
+  const property = await requireCustomerProperty(req, req.body.propertyId);
+  await validateSolarRelations(req, property, req.body);
+  const status = req.body.status || 'OPEN';
+  const data = await prisma.solarFault.create({ data: { ...req.body, companyId: req.companyId, customerId: property.customerId, reportedById: req.user.id, severity: req.body.severity || 'MEDIUM', status, detectedAt: req.body.detectedAt || new Date(), acknowledgedAt: status === 'ACKNOWLEDGED' ? new Date() : req.body.acknowledgedAt, resolvedAt: status === 'RESOLVED' ? (req.body.resolvedAt || new Date()) : req.body.resolvedAt }, include: solarFaultInclude });
+  await audit(req, 'CREATE', 'SolarFault', data.id, { propertyId: property.id, assetId: data.assetId, severity: data.severity });
+  sendData(res, normalize(data), 201);
+}));
+
+router.patch('/solar/faults/:id', requireRole(...adminRoles), validate(idParam, 'params'), validate(solarFaultSchema.partial()), asyncHandler(async (req, res) => {
+  await requirePermission(req, 'contract.automation.manage');
+  const existing = await prisma.solarFault.findFirst({ where: { id: req.params.id, companyId: req.companyId } });
+  if (!existing) throw notFound('Solar fault not found');
+  const property = await requireCustomerProperty(req, req.body.propertyId || existing.propertyId);
+  await validateSolarRelations(req, property, { ...existing, ...req.body });
+  const status = req.body.status || existing.status;
+  const data = await prisma.solarFault.update({ where: { id: existing.id }, data: { ...req.body, propertyId: property.id, customerId: property.customerId, acknowledgedAt: status === 'ACKNOWLEDGED' && !existing.acknowledgedAt ? new Date() : req.body.acknowledgedAt, resolvedAt: status === 'RESOLVED' ? (req.body.resolvedAt || existing.resolvedAt || new Date()) : req.body.resolvedAt }, include: solarFaultInclude });
+  await audit(req, 'UPDATE', 'SolarFault', data.id, { status: data.status, severity: data.severity });
+  sendData(res, normalize(data));
+}));
+
+
 router.get('/assets', requireRole(...adminRoles), asyncHandler(async (req, res) => {
   const where = { companyId: req.companyId };
   if (req.query.customerId) where.customerId = String(req.query.customerId);
@@ -6542,6 +7153,7 @@ router.get('/assets/:id', requireRole(...adminRoles), validate(idParam, 'params'
 router.patch('/assets/:id', requireRole(...adminRoles), validate(idParam, 'params'), validate(assetSchema.partial()), asyncHandler(async (req, res) => {
   const existing = await requireAsset(req, req.params.id);
   const body = { ...req.body, customerId: req.body.customerId || existing.customerId };
+  if (body.parentAssetId === existing.id) throw new AppError(400, 'Solar equipment cannot be its own parent.');
   await validateAssetRelations(req, body);
   const data = await prisma.$transaction(async (tx) => {
     const asset = await tx.asset.update({ where: { id: existing.id }, data: req.body, include: assetInclude });

@@ -3,40 +3,44 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rev Engine Assets</title>
+    <title>Rev Engine Solar Equipment</title>
     <link rel="stylesheet" href="assets/app.css">
     <script defer src="assets/ui-feedback.js"></script>
     <script defer src="assets/layout.js"></script>
-    <script defer src="assets/api.js?v=assets-contracts-1"></script>
+    <script defer src="assets/api.js?v=solar-vertical-1"></script>
   </head>
-  <body data-page="assets" data-title="Assets">
+  <body data-page="assets" data-title="Solar Equipment">
     <section class="page">
       <div class="hero-row">
         <div class="hero-copy">
-          <h2>Assets</h2>
-          <p>Track customer equipment, warranty status, linked jobs, and service history.</p>
+          <p class="eyebrow">Solar asset register</p>
+          <h2>Solar Equipment</h2>
+          <p>Build each site from the plant and arrays down to inverters, strings, batteries, meters, gateways, and other maintainable equipment.</p>
         </div>
-        <button class="primary-button" type="button" data-create-resource="assets">+ New Asset</button>
+        <div class="hero-actions">
+          <a class="secondary-button" href="solar-operations.html">Solar Sites</a>
+          <button class="primary-button" type="button" data-create-resource="assets">+ New Solar Equipment</button>
+        </div>
       </div>
       <section class="stats">
-        <article class="card stat-card"><div class="stat-label">Active</div><div class="stat-value">0</div><div class="trend">Assets in service</div></article>
-        <article class="card stat-card"><div class="stat-label">Under Repair</div><div class="stat-value">0</div><div class="trend">Needs attention</div></article>
-        <article class="card stat-card"><div class="stat-label">Retired</div><div class="stat-value">0</div><div class="trend">Out of service</div></article>
-        <article class="card stat-card"><div class="stat-label">Warranty</div><div class="stat-value">0</div><div class="trend">Tracked warranties</div></article>
+        <article class="card stat-card"><div class="stat-label">Active Equipment</div><div class="stat-value">0</div><div class="trend">Operating solar equipment</div></article>
+        <article class="card stat-card"><div class="stat-label">Needs Attention</div><div class="stat-value">0</div><div class="trend">Faulted or under repair</div></article>
+        <article class="card stat-card"><div class="stat-label">Installed DC</div><div class="stat-value">0 kWp</div><div class="trend">Recorded equipment capacity</div></article>
+        <article class="card stat-card"><div class="stat-label">Battery Storage</div><div class="stat-value">0 kWh</div><div class="trend">Recorded storage capacity</div></article>
       </section>
       <section class="panel asset-client-panel">
         <div class="panel-head">
-          <div><h3>Find a customer asset page</h3><p>Search/select a customer first, then view that customer’s equipment, warranties, and service records.</p></div>
+          <div><h3>Find a client’s solar equipment</h3><p>Select a client to review their equipment register, warranties, linked work orders, and service history.</p></div>
           <span class="api-status" data-api-status>Connecting...</span>
         </div>
         <div class="form-grid compact-form">
-          <div class="field span-2"><label>Customer</label><select data-asset-customer-filter><option value="">All customers</option></select></div>
+          <div class="field span-2"><label>Client</label><select data-asset-customer-filter><option value="">All clients</option></select></div>
         </div>
         <div class="settings-list" data-selected-customer-assets></div>
       </section>
       <section class="table-card">
-        <div class="empty-state"><div><strong>No assets yet</strong><span>Create serviceable asset records for customer sites.</span></div></div>
-        <footer class="table-footer"><span>Showing 0 assets</span><div class="pager"><span class="page-dot active">1</span></div></footer>
+        <div class="empty-state"><div><strong>No solar equipment yet</strong><span>Create a solar site first, then add the equipment installed at that site.</span></div></div>
+        <footer class="table-footer"><span>Showing 0 equipment records</span><div class="pager"><span class="page-dot active">1</span></div></footer>
       </section>
     </section>
   </body>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Business Group | Rev Engine</title>
+    <link rel="stylesheet" href="assets/app.css">
+    <script defer src="assets/ui-feedback.js"></script>
+    <script defer src="assets/layout.js"></script>
+    <script defer src="assets/form-ux.js"></script>
+    <script defer src="assets/workspaces.js"></script>
+  </head>
+  <body data-page="workspaces" data-title="Business Group">
+    <section class="page">
+      <div class="hero-row">
+        <div class="hero-copy">
+          <span class="eyebrow">Business structure</span>
+          <h2 data-group-name>Business group</h2>
+          <p>Use one workspace for each country or legal company. Use branches for locations inside that workspace.</p>
+        </div>
+        <span class="api-status" data-status>Loading...</span>
+      </div>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div><h3>Workspaces</h3><p class="muted">Each workspace keeps its own currency, tax, payment provider, phone details, customers, and reports.</p></div>
+          <span class="badge gray" data-workspace-count>0</span>
+        </div>
+        <div class="workspace-card-grid" data-workspace-grid></div>
+      </section>
+
+      <section class="panel" data-owner-panel hidden>
+        <div class="panel-head"><div><h3>Add workspace</h3><p class="muted">Create this when the business enters another country or uses another legal company.</p></div><span class="badge blue">Owner only</span></div>
+        <form class="form-grid" data-workspace-form>
+          <div class="field"><label>Workspace name</label><input name="name" required minlength="2" placeholder="Rev Engine South Africa"></div>
+          <div class="field"><label>Country</label><select name="countryCode" required><option value="ZW">Zimbabwe</option><option value="ZA">South Africa</option></select></div>
+          <div class="field"><label>Registered company name <span class="optional-label">Optional</span></label><input name="legalName" maxlength="200"></div>
+          <div class="field"><label>Registration number <span class="optional-label">Optional</span></label><input name="registrationNumber" maxlength="120"></div>
+          <div class="field"><label>Tax number <span class="optional-label">Optional</span></label><input name="taxNumber" maxlength="120"></div>
+          <div class="field"><label>Business phone <span class="optional-label">Optional</span></label><input name="phone" maxlength="80"></div>
+          <div class="field"><label>Business email <span class="optional-label">Optional</span></label><input name="email" type="email"></div>
+          <div class="field"><label>Main branch name</label><input name="mainBranchName" required value="Main Branch"></div>
+          <div class="field"><label>Main branch city <span class="optional-label">Optional</span></label><input name="mainBranchCity" maxlength="120" placeholder="Cape Town"></div>
+          <div class="field span-2"><label>Business address <span class="optional-label">Optional</span></label><input name="address" maxlength="500"></div>
+          <p class="fc-form-error span-2" data-workspace-error hidden></p>
+          <div class="fc-form-actions span-2"><button class="primary-button" type="submit">Create workspace</button></div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><div><h3>Group managers</h3><p class="muted">They can oversee every workspace and branch, but they cannot transfer ownership or add another owner.</p></div><span class="badge gray" data-manager-count>0</span></div>
+        <form class="form-grid" data-manager-form data-owner-panel hidden>
+          <div class="field span-2"><label>Existing member email</label><input name="email" type="email" required placeholder="manager@company.com"><small>Invite the person to any workspace first, then promote them here.</small></div>
+          <p class="fc-form-error span-2" data-manager-error hidden></p>
+          <div class="fc-form-actions span-2"><button class="primary-button" type="submit">Assign group manager</button></div>
+        </form>
+        <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Home workspace</th><th>Access</th><th>Actions</th></tr></thead><tbody data-managers-body></tbody></table></div>
+      </section>
+    </section>
+  </body>
+</html>

@@ -1,122 +1,50 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rev Engine Dashboard</title>
+    <title>Rev Engine Solar Dashboard</title>
     <link rel="stylesheet" href="assets/app.css">
     <script defer src="assets/ui-feedback.js"></script>
     <script defer src="assets/layout.js"></script>
-    <script defer src="assets/api.js?v=worker-activity-notes-1"></script>
+    <script defer src="assets/api.js?v=solar-vertical-1"></script>
   </head>
-  <body data-page="dashboard" data-title="Dashboard">
+  <body data-page="dashboard" data-title="Solar Dashboard">
     <section class="page">
       <div class="hero-row">
         <div class="hero-copy">
+          <p class="eyebrow">Solar operations overview</p>
           <h2>Good morning.</h2>
-          <p>Your workspace is ready. Once jobs, customers, invoices, and workers are created, this dashboard will fill in automatically.</p>
+          <p>Monitor solar sites, installed capacity, active faults, field work, and commercial performance from one dashboard.</p>
         </div>
-        <span class="api-status" data-api-status>Connecting...</span>
+        <a class="primary-button" href="solar-operations.html">Open Solar Operations</a>
       </div>
       <section class="stats">
-        <article class="card stat-card">
-          <div class="stat-label">
-            Jobs Today
-          </div>
-          <div class="stat-value">
-            0
-          </div>
-          <div class="trend">
-            No jobs scheduled
-          </div>
-        </article>
-        <article class="card stat-card">
-          <div class="stat-label">
-            Revenue MTD
-          </div>
-          <div class="stat-value">
-            $0
-          </div>
-          <div class="trend">
-            No payments yet
-          </div>
-        </article>
-        <article class="card stat-card">
-          <div class="stat-label">
-            Unpaid Invoices
-          </div>
-          <div class="stat-value">
-            $0
-          </div>
-          <div class="trend">
-            Nothing outstanding
-          </div>
-        </article>
-        <article class="card stat-card">
-          <div class="stat-label">
-            Active Workers
-          </div>
-          <div class="stat-value">
-            0
-          </div>
-          <div class="trend">
-            No workers online
-          </div>
-        </article>
+        <article class="card stat-card"><div class="stat-label">Solar Sites</div><div class="stat-value">0</div><div class="trend">Add your first solar site</div></article>
+        <article class="card stat-card"><div class="stat-label">Installed Capacity</div><div class="stat-value">0 kWp</div><div class="trend">Managed DC capacity</div></article>
+        <article class="card stat-card"><div class="stat-label">Open Solar Faults</div><div class="stat-value">0</div><div class="trend">No critical faults</div></article>
+        <article class="card stat-card"><div class="stat-label">Work Orders Today</div><div class="stat-value">0</div><div class="trend">No work scheduled</div></article>
       </section>
       <section class="split">
         <div class="panel">
-          <div class="panel-head">
-            <h2>Today's Schedule</h2>
-            <a class="secondary-button" href="schedule.html">Open</a>
-          </div>
-          <div class="empty-state">
-            <div>
-              <strong>No jobs scheduled yet</strong>
-              <span>Create your first job to populate today's schedule.</span>
-            </div>
-          </div>
+          <div class="panel-head"><h2>Site Health</h2><a class="secondary-button" href="solar-operations.html">Open</a></div>
+          <div class="empty-state"><div><strong>No solar sites yet</strong><span>Add a site to begin tracking plant health and performance.</span></div></div>
         </div>
         <aside class="panel">
-          <div class="panel-head">
-            <h3>Worker Status</h3>
-            <a href="map.html">Map</a>
-          </div>
-          <div class="empty-state">
-            <div>
-              <strong>No workers yet</strong>
-              <span>Add technicians to see live status.</span>
-            </div>
-          </div>
+          <div class="panel-head"><h3>Open Solar Faults</h3><a href="solar-operations.html">Review</a></div>
+          <div class="empty-state"><div><strong>No active faults</strong><span>Solar alarms and field-reported faults will appear here.</span></div></div>
         </aside>
       </section>
       <section class="split">
         <div class="table-card">
-          <div class="panel-head card">
-            <h3>Recent Jobs</h3>
-            <a href="jobs.html">View all</a>
-          </div>
-          <div class="empty-state">
-            <div>
-              <strong>No recent jobs</strong>
-              <span>Completed and active jobs will appear here.</span>
-            </div>
-          </div>
+          <div class="panel-head card"><h3>Recent Work Orders</h3><a href="jobs.html">View all</a></div>
+          <div class="empty-state"><div><strong>No recent solar work</strong><span>Installation, inspection, cleaning, maintenance, and fault work orders will appear here.</span></div></div>
         </div>
         <aside class="panel">
-          <div class="panel-head">
-            <h3>Pipeline</h3>
-            <a href="quotes.html">Quotes</a>
-          </div>
-          <div class="empty-state">
-            <div>
-              <strong>No leads or quotes</strong>
-              <span>Your sales pipeline starts empty.</span>
-            </div>
-          </div>
+          <div class="panel-head"><h3>Solar Sales Pipeline</h3><a href="leads.html">Leads</a></div>
+          <div class="empty-state"><div><strong>No solar enquiries or quotes</strong><span>New project and O&amp;M opportunities will appear here.</span></div></div>
         </aside>
       </section>
     </section>
   </body>
 </html>
-

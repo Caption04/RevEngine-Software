@@ -3,33 +3,32 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rev Engine Service Contracts</title>
+    <title>Rev Engine Solar O&amp;M Contracts</title>
     <link rel="stylesheet" href="assets/app.css">
     <script defer src="assets/ui-feedback.js"></script>
     <script defer src="assets/layout.js"></script>
-    <script defer src="assets/api.js?v=assets-contracts-1"></script>
+    <script defer src="assets/api.js?v=solar-vertical-1"></script>
   </head>
-  <body data-page="service-contracts" data-title="Service Contracts">
+  <body data-page="service-contracts" data-title="O&amp;M Contracts">
     <section class="page">
       <div class="hero-row">
         <div class="hero-copy">
-          <h2>Service Contracts</h2>
-          <p>Manage maintenance agreements, SLA settings, covered assets, and upcoming due work.</p>
+          <p class="eyebrow">Solar maintenance agreements</p>
+          <h2>Solar O&amp;M Contracts</h2>
+          <p>Manage recurring inspections, cleaning visits, response and resolution SLAs, covered equipment, included visits, and upcoming preventive maintenance.</p>
         </div>
-        <button class="primary-button" type="button" data-create-resource="service-contracts">+ New Contract</button>
+        <button class="primary-button" type="button" data-create-resource="service-contracts">+ New O&amp;M Contract</button>
       </div>
       <section class="stats">
-        <article class="card stat-card"><div class="stat-label">Active</div><div class="stat-value">0</div><div class="trend">Live agreements</div></article>
-        <article class="card stat-card"><div class="stat-label">Suspended</div><div class="stat-value">0</div><div class="trend">Paused service</div></article>
-        <article class="card stat-card"><div class="stat-label">Draft</div><div class="stat-value">0</div><div class="trend">In setup</div></article>
-        <article class="card stat-card"><div class="stat-label">Due Work</div><div class="stat-value">0</div><div class="trend">Upcoming visits</div></article>
+        <article class="card stat-card"><div class="stat-label">Active O&amp;M Contracts</div><div class="stat-value">0</div><div class="trend">Solar sites under agreement</div></article>
+        <article class="card stat-card"><div class="stat-label">Suspended</div><div class="stat-value">0</div><div class="trend">Paused O&amp;M coverage</div></article>
+        <article class="card stat-card"><div class="stat-label">Draft</div><div class="stat-value">0</div><div class="trend">Agreements in setup</div></article>
+        <article class="card stat-card"><div class="stat-label">Maintenance Due</div><div class="stat-value">0</div><div class="trend">Upcoming solar visits</div></article>
       </section>
-      <div class="toolbar">
-        <span class="api-status" data-api-status>Connecting...</span>
-      </div>
+      <div class="toolbar"><span class="api-status" data-api-status>Connecting...</span></div>
       <section class="table-card">
-        <div class="empty-state"><div><strong>No contracts yet</strong><span>Create contract records for recurring service and SLA tracking.</span></div></div>
-        <footer class="table-footer"><span>Showing 0 contracts</span><div class="pager"><span class="page-dot active">1</span></div></footer>
+        <div class="empty-state"><div><strong>No solar O&amp;M contracts yet</strong><span>Create an agreement for recurring service and SLA tracking.</span></div></div>
+        <footer class="table-footer"><span>Showing 0 O&amp;M contracts</span><div class="pager"><span class="page-dot active">1</span></div></footer>
       </section>
     </section>
   </body>

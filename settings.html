@@ -21,7 +21,7 @@
       <section class="settings-layout">
         <aside class="panel settings-tabs" aria-label="Settings sections">
           <button class="settings-tab active" type="button" data-settings-target="company" data-required-any-permission="company.settings.view,company.settings.manage,company.branding.manage">Company Information</button>
-          <button class="settings-tab" type="button" data-settings-target="jobs" data-required-permission="company.settings.manage">Job Defaults</button>
+          <button class="settings-tab" type="button" data-settings-target="jobs" data-required-permission="company.settings.manage">Solar Work Order Defaults</button>
           <button class="settings-tab" type="button" data-settings-target="scheduling" data-required-permission="company.settings.manage">Scheduling</button>
           <button class="settings-tab" type="button" data-settings-target="billing" data-required-permission="settings.finance.manage">Invoice Defaults</button>
           <button class="settings-tab" type="button" data-settings-target="finance" data-required-any-permission="settings.finance.manage,finance.exports.manage">Money Settings &amp; Files</button>
@@ -131,12 +131,12 @@
 
           <div class="panel settings-panel" data-settings-panel="jobs" data-required-permission="company.settings.manage" hidden>
             <div class="panel-head">
-              <h2>Job Defaults</h2>
+              <h2>Solar Work Order Defaults</h2>
               <span class="badge gray">Operations</span>
             </div>
             <form class="form-grid" data-job-defaults-form>
               <div class="field">
-                <label for="jobDuration">Default Job Duration</label>
+                <label for="jobDuration">Default Work Order Duration</label>
                 <select id="jobDuration" name="defaultJobDurationMinutes" data-scheduling-field="defaultJobDurationMinutes">
                   <option value="60">1 hour</option>
                   <option value="120">2 hours</option>
@@ -145,7 +145,7 @@
                 </select>
               </div>
               <div class="field">
-                <label for="jobStatus">Default Job Status</label>
+                <label for="jobStatus">Default Work Order Status</label>
                 <select id="jobStatus" name="defaultJobStatus" data-scheduling-field="defaultJobStatus">
                   <option value="NEW">NEW</option>
                   <option value="SCHEDULED">SCHEDULED</option>
@@ -165,7 +165,7 @@
                 <label><input type="checkbox" name="requireProofPhotos" data-scheduling-field="requireProofPhotos"> Require proof-of-work photos</label>
               </div>
               <div class="form-actions span-2">
-                <button class="primary-button" type="submit">Save Job Defaults</button>
+                <button class="primary-button" type="submit">Save Work Order Defaults</button>
               </div>
               <p class="fc-form-error span-2" data-job-defaults-message hidden></p>
             </form>
@@ -240,7 +240,7 @@
           <div class="panel settings-panel" data-settings-panel="billing" data-required-permission="settings.finance.manage" hidden>
             <div class="panel-head">
               <h2>Invoice &amp; Payment Defaults</h2>
-              <span class="badge gray">Customer billing</span>
+              <span class="badge gray">Solar client billing</span>
             </div>
             <form class="form-grid" data-invoice-defaults-form>
               <div class="field">
@@ -286,7 +286,7 @@
                 <h2>Finance &amp; Exports</h2>
                 <p class="muted">Set how this business invoices customers, accepts customer payments, and exports finance data.</p>
               </div>
-              <span class="badge gray">Customer finance</span>
+              <span class="badge gray">Solar client finance</span>
             </div>
             <form class="form-grid finance-user-form" data-finance-settings-form data-required-permission="settings.finance.manage">
               <div class="form-section-title span-2">
@@ -340,12 +340,12 @@
                 <input id="financeQuoteExpiryDays" name="quoteExpiryDays" type="number" min="1" max="365" data-finance-field="quoteExpiryDays">
               </div>
               <div class="field">
-                <label for="financePaymentTermsDays">Customer Payment Terms Days</label>
+                <label for="financePaymentTermsDays">Client Payment Terms Days</label>
                 <input id="financePaymentTermsDays" name="paymentTermsDays" type="number" min="0" max="365" data-finance-field="paymentTermsDays">
               </div>
 
               <div class="form-section-title span-2">
-                <strong>Customer Payment Options</strong>
+                <strong>Client Payment Options</strong>
                 <span>Only local digital payment providers are shown for the selected market.</span>
               </div>
               <input type="hidden" name="allowedPaymentMethods" data-finance-field="allowedPaymentMethods">
@@ -401,7 +401,7 @@
                 </label>
               </div>
               <div class="field span-2">
-                <label for="financePaymentInstructions">Customer Payment Instructions</label>
+                <label for="financePaymentInstructions">Client Payment Instructions</label>
                 <textarea id="financePaymentInstructions" name="paymentInstructions" data-finance-field="paymentInstructions" placeholder="Shown on customer invoices and payment pages. Example: Please use your invoice number as the bank transfer reference."></textarea>
               </div>
               <div class="field span-2">

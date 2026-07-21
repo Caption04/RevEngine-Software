@@ -11,39 +11,41 @@
   let currentPermissionSet = new Set();
 
   const adminPages = [
-    ['dashboard', 'Dashboard', 'index.html', 'dashboard'],
-    ['jobs', 'Jobs', 'jobs.html', 'briefcase'],
-    ['schedule', 'Schedule', 'schedule.html', 'schedule'],
-    ['map', 'Map', 'map.html', 'map'],
-    ['booking-requests', 'Booking Requests', 'booking-requests.html', 'inbox'],
-    ['leads', 'Leads', 'leads.html', 'inbox'],
-    ['customers', 'Customers', 'customers.html', 'users'],
+    ['dashboard', 'Solar Dashboard', 'index.html', 'dashboard'],
+    ['solar-operations', 'Solar Operations', 'solar-operations.html', 'chart'],
+    ['jobs', 'Solar Work Orders', 'jobs.html', 'briefcase'],
+    ['schedule', 'Solar Schedule', 'schedule.html', 'schedule'],
+    ['map', 'Technician Map', 'map.html', 'map'],
+    ['booking-requests', 'Solar Service Requests', 'booking-requests.html', 'inbox'],
+    ['leads', 'Solar Leads', 'leads.html', 'inbox'],
+    ['customers', 'Solar Clients', 'customers.html', 'users'],
     ['members', 'Company Members', 'members.html', 'users'],
+    ['workspaces', 'Business Group', 'workspaces.html', 'settings'],
     ['branches', 'Branches', 'branches.html', 'map'],
     ['approvals', 'Approvals', 'approvals.html', 'inbox'],
-    ['assets', 'Assets', 'assets.html', 'briefcase'],
-    ['service-contracts', 'Contracts', 'service-contracts.html', 'file'],
-    ['contract-automation', 'Contract Automation', 'contract-automation.html', 'settings'],
-    ['inventory', 'Inventory', 'inventory.html', 'briefcase'],
+    ['assets', 'Solar Equipment', 'assets.html', 'briefcase'],
+    ['service-contracts', 'O&M Contracts', 'service-contracts.html', 'file'],
+    ['contract-automation', 'Preventive Maintenance', 'contract-automation.html', 'settings'],
+    ['inventory', 'Solar Parts & Stock', 'inventory.html', 'briefcase'],
     ['purchase-requests', 'Purchase Requests', 'purchase-requests.html', 'inbox'],
     ['purchase-orders', 'Purchase Orders', 'purchase-orders.html', 'receipt'],
     ['procurement-costing', 'Procurement Costing', 'procurement-costing.html', 'chart'],
-    ['quotes', 'Quotes', 'quotes.html', 'file'],
+    ['quotes', 'Solar Quotes', 'quotes.html', 'file'],
     ['invoices', 'Invoices', 'invoices.html', 'receipt'],
     ['collections', 'Collections', 'collections.html', 'receipt'],
     ['mobile-sync', 'Mobile Sync', 'mobile-sync.html', 'settings'],
-    ['reports', 'Reports', 'reports.html', 'chart'],
+    ['reports', 'Solar & Business Reports', 'reports.html', 'chart'],
     ['executive-dashboard', 'Business Performance', 'executive-dashboard.html', 'chart'],
-    ['onboarding', 'Onboarding', 'onboarding.html', 'settings'],
+    ['onboarding', 'Solar Company Setup', 'onboarding.html', 'settings'],
     ['security-center', 'Security', 'security-center.html', 'settings'],
     ['settings', 'Settings', 'settings.html', 'settings']
   ];
 
   const workerPages = [
-    ['dashboard', 'Dashboard', 'index.html', 'dashboard'],
-    ['jobs', 'My Jobs', 'jobs.html', 'briefcase'],
-    ['schedule', 'My Schedule', 'schedule.html', 'schedule'],
-    ['map', 'Location', 'map.html', 'map']
+    ['dashboard', 'Solar Dashboard', 'index.html', 'dashboard'],
+    ['jobs', 'My Solar Work Orders', 'jobs.html', 'briefcase'],
+    ['schedule', 'My Solar Schedule', 'schedule.html', 'schedule'],
+    ['map', 'My Solar Field Location', 'map.html', 'map']
   ];
 
   const icons = {
@@ -79,17 +81,18 @@
   }
 
   const adminNavGroups = [
-    ['Core', 'Daily work', ['dashboard', 'leads', 'jobs', 'schedule', 'map', 'booking-requests', 'customers', 'members']],
-    ['Money', 'Quotes and payments', ['quotes', 'invoices', 'collections']],
+    ['Solar Operations', 'Plant health and field work', ['dashboard', 'solar-operations', 'leads', 'jobs', 'schedule', 'map', 'booking-requests', 'customers', 'members']],
+    ['Commercial', 'Solar quotes, invoices, and payments', ['quotes', 'invoices', 'collections']],
     ['Reports', 'Business results', ['executive-dashboard', 'reports']],
-    ['Enterprise', 'Advanced operations', ['branches', 'approvals', 'assets', 'service-contracts', 'contract-automation', 'inventory', 'purchase-requests', 'purchase-orders', 'procurement-costing']],
-    ['Workspace', 'Company setup', ['settings']]
+    ['O&M Management', 'Sites, equipment, contracts, and stock', ['branches', 'approvals', 'assets', 'service-contracts', 'contract-automation', 'inventory', 'purchase-requests', 'purchase-orders', 'procurement-costing']],
+    ['Workspace', 'Company setup', ['workspaces', 'settings']]
   ];
 
   const pagePermissions = {
     dashboard: ['dashboard.operational.view', 'dashboard.financial.view', 'dashboard.executive.view'], leads: 'leads.view', jobs: 'jobs.view', schedule: 'schedule.view', map: 'workers.location.view', 'booking-requests': 'bookings.view', customers: 'customers.view', members: 'members.view',
     quotes: 'quotes.view', invoices: 'invoices.view', collections: 'payments.view', branches: 'branch.view', approvals: 'approval.request.decide',
-    assets: 'contract.automation.manage', 'service-contracts': 'contract.automation.manage', 'contract-automation': 'contract.automation.manage',
+    workspaces: 'company.settings.view',
+    'solar-operations': 'contract.automation.manage', assets: 'contract.automation.manage', 'service-contracts': 'contract.automation.manage', 'contract-automation': 'contract.automation.manage',
     inventory: 'inventory.view', 'purchase-requests': 'purchaseRequest.create', 'purchase-orders': 'purchaseOrder.manage', 'procurement-costing': 'inventory.manage',
     'mobile-sync': 'mobile.sync.manage', reports: ['reports.money.view', 'reports.work.view', 'reports.workers.view', 'reports.sales.view', 'reports.stock.view'], 'executive-dashboard': 'dashboard.executive.view', onboarding: 'company.settings.manage',
     settings: ['company.settings.view', 'company.settings.manage', 'company.branding.manage', 'settings.finance.manage', 'finance.exports.manage', 'notifications.view', 'integration.view', 'integration.manage', 'audit.view'], 'security-center': 'security.view'
@@ -144,13 +147,13 @@
   function quickCard() {
     return `<div class="quick-card" data-quick-card hidden>
       <strong>Quick Create</strong>
-      <p>Add a lead or create a job in seconds.</p>
-      <a href="leads.html">+ New Lead</a>
+      <p>Add a solar lead or create a work order in seconds.</p>
+      <a href="leads.html">+ New Solar Lead</a>
     </div>`;
   }
 
   function accountInitials(user) {
-    return String(user && (user.name || user.email) || 'FC')
+    return String(user && (user.name || user.email) || 'RE')
       .split(/\s+/)
       .filter(Boolean)
       .slice(0, 2)
@@ -181,6 +184,7 @@
     currentPermissionSet = new Set(user && user.effectivePermissions || []);
     if (navNode) navNode.innerHTML = nav(current, role, user && user.effectivePermissions);
     renderAccountIdentity(user);
+    renderWorkspaceSwitcher(user);
 
     if (quick) {
       quick.hidden = !shouldShowQuickCard(current, role, user && user.effectivePermissions);
@@ -194,6 +198,42 @@
     document.querySelectorAll('[data-required-any-permission]').forEach((node) => {
       const required = String(node.dataset.requiredAnyPermission || '').split(',').map((item) => item.trim()).filter(Boolean);
       node.hidden = role !== 'OWNER' && !required.some((permission) => permissionSet.has(permission));
+    });
+  }
+
+  function renderWorkspaceSwitcher(user) {
+    const target = document.querySelector('[data-workspace-switcher]');
+    if (!target) return;
+    const organization = user && user.organization;
+    const workspaces = organization && Array.isArray(organization.workspaces) ? organization.workspaces : [];
+    if (!workspaces.length) {
+      target.hidden = true;
+      return;
+    }
+    const active = workspaces.find((workspace) => workspace.id === organization.activeWorkspaceId) || workspaces[0];
+    target.hidden = false;
+    target.innerHTML = `<label><span>${escape(organization.group && organization.group.name || 'Workspace')}</span><select data-workspace-select aria-label="Switch workspace">${workspaces.map((workspace) => `<option value="${escape(workspace.id)}"${workspace.id === active.id ? ' selected' : ''}>${escape(workspace.name)}</option>`).join('')}</select></label>`;
+    const select = target.querySelector('[data-workspace-select]');
+    if (!select || workspaces.length < 2) {
+      if (select) select.disabled = true;
+      return;
+    }
+    select.addEventListener('change', async () => {
+      select.disabled = true;
+      try {
+        const response = await fetch(`${API_BASE}/organization/switch-workspace`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ companyId: select.value })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error && payload.error.message || 'Could not switch workspace.');
+        window.location.reload();
+      } catch (error) {
+        select.disabled = false;
+        if (window.RevEngineUI) window.RevEngineUI.notify(error.message, { type: 'error' });
+      }
     });
   }
 
@@ -215,8 +255,8 @@
 
   function searchBox() {
     return `<div class="global-search-shell">
-      <label for="globalSearch">System search</label>
-      <input id="globalSearch" type="search" placeholder="Search system..." autocomplete="off" data-global-search>
+      <label for="globalSearch">Solar operations search</label>
+      <input id="globalSearch" type="search" placeholder="Search sites, equipment, work orders..." autocomplete="off" data-global-search>
       <div class="global-search-results" data-global-search-results hidden></div>
     </div>`;
   }
@@ -387,13 +427,13 @@
 
   const searchResources = [
     ['leads', '/leads', 'Leads', (item) => item.name || item.companyName || item.email || item.phone],
-    ['jobs', '/jobs', 'Jobs', (item) => item.title || item.number || item.id],
-    ['customers', '/customers', 'Customers', (item) => item.name || item.email || item.phone],
+    ['jobs', '/jobs', 'Work orders', (item) => item.title || item.number || item.id],
+    ['customers', '/customers', 'Clients', (item) => item.name || item.email || item.phone],
     ['quotes', '/quotes', 'Quotes', (item) => item.title || item.number || item.id],
     ['invoices', '/invoices', 'Invoices', (item) => item.number || item.customer && item.customer.name],
-    ['booking-requests', '/booking-requests', 'Booking requests', (item) => item.customerName || item.serviceName],
-    ['assets', '/assets', 'Assets', (item) => item.name || item.assetTag || item.serialNumber],
-    ['service-contracts', '/service-contracts', 'Contracts', (item) => item.name || item.contractNumber],
+    ['booking-requests', '/booking-requests', 'Service requests', (item) => item.customerName || item.serviceName],
+    ['assets', '/assets', 'Solar equipment', (item) => item.name || item.assetTag || item.serialNumber],
+    ['service-contracts', '/service-contracts', 'O&M contracts', (item) => item.name || item.contractNumber],
     ['branches', '/branches', 'Branches', (item) => item.name || item.code || item.city]
   ];
 
@@ -465,7 +505,7 @@
       ${quickCard()}
     </aside>
     <main class="content">
-      <div class="content-account-bar"><button class="menu-toggle" type="button">Menu</button>${accountMenu()}</div>
+      <div class="content-account-bar"><button class="menu-toggle" type="button">Menu</button><div class="workspace-switcher" data-workspace-switcher hidden></div>${accountMenu()}</div>
       ${pageSearchBox()}
       <div class="page-mount"></div>
     </main>`;

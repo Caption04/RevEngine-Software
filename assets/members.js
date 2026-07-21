@@ -25,7 +25,7 @@
   }
 
   function accessLabel(type) {
-    return ({ COMPANY: 'Whole company', BRANCH: 'Selected branches', TEAM: 'Selected teams', SELF: 'Own work only' })[type] || 'Whole company';
+    return ({ COMPANY: 'Whole workspace', BRANCH: 'Selected branches', TEAM: 'Selected teams', SELF: 'Own work only' })[type] || 'Whole workspace';
   }
 
   const permissionLabels = {
@@ -242,6 +242,12 @@
 
     function updateScope(selectedIds = []) {
       const needsChoice = ['BRANCH', 'TEAM'].includes(form.scopeType.value);
+      const isWholeWorkspace = form.scopeType.value === 'COMPANY';
+      fullAccess.disabled = !isWholeWorkspace;
+      if (!isWholeWorkspace && fullAccess.checked) {
+        fullAccess.checked = false;
+        fullAccess.dispatchEvent(new Event('change'));
+      }
       scopeWrap.hidden = !needsChoice;
       scopeWrap.innerHTML = needsChoice ? scopePickerHtml(form.scopeType.value, selectedIds) : '';
       if (window.RevEngineFormUX) window.RevEngineFormUX.refresh();
@@ -397,11 +403,11 @@
       <label class="member-choice span-2">
         <input name="fullAccess" type="checkbox">
         <span class="member-choice-box" aria-hidden="true"></span>
-        <span class="member-choice-copy"><strong>Give access to all company tools</strong><small class="ownership-note"><em>*Not Ownership*</em></small></span>
+        <span class="member-choice-copy"><strong>Make workspace manager</strong><small>Full control of this workspace, without ownership rights.</small></span>
       </label>
       <div class="permission-help span-2"><strong>Choose what they can use</strong><span>Select the tools this role needs.</span></div>
       <div class="permission-editor span-2" data-permission-editor></div>
-      <div class="field span-2 access-area-field"><label>Which work can they see?</label><select name="scopeType"><option value="COMPANY">All company work</option><option value="BRANCH">Work in selected branches</option><option value="TEAM">Work for selected teams</option><option value="SELF">Only work assigned to them</option></select><small>This only limits the jobs, customers, and workers they can see.</small></div>
+      <div class="field span-2 access-area-field"><label>Which work can they see?</label><select name="scopeType"><option value="COMPANY">All workspace work</option><option value="BRANCH">Work in selected branches</option><option value="TEAM">Work for selected teams</option><option value="SELF">Only work assigned to them</option></select><small>Choose selected branches for a branch manager.</small></div>
       <div class="field span-2" data-scope-picker hidden></div>`;
   }
 

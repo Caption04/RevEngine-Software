@@ -114,7 +114,7 @@ function renderRequests(container, requests) {
   container.innerHTML = requests.map(function(item) {
     return listCard({
       id: item.id,
-      title: item.serviceName || (item.service && item.service.name) || "Service Request",
+      title: item.serviceName || (item.service && item.service.name) || "Solar Service Request",
       meta: [item.address, date(item.preferredDate)].filter(Boolean).join(" - "),
       badge: badge(item.status)
     });
@@ -123,15 +123,15 @@ function renderRequests(container, requests) {
 
 const sectionCopy = {
   dashboard: { label: "Overview", title: "Dashboard" },
-  requests: { label: "Service Requests", title: "My Requests" },
+  requests: { label: "Solar Service Requests", title: "My Requests" },
   quotes: { label: "Quotes", title: "My Quotes" },
-  jobs: { label: "Jobs", title: "My Jobs" },
-  assets: { label: "Assets", title: "Assets" },
-  contracts: { label: "Contracts", title: "Service Contracts" },
+  jobs: { label: "Solar Work", title: "My Solar Work Orders" },
+  assets: { label: "Solar Equipment", title: "Solar Equipment" },
+  contracts: { label: "O&M Coverage", title: "Solar O&M Contracts" },
   invoices: { label: "Invoices", title: "My Invoices" },
   receipts: { label: "Receipts", title: "Receipts" },
   profile: { label: "Account", title: "Profile" },
-  properties: { label: "Addresses", title: "Properties" }
+  properties: { label: "Solar Sites", title: "Solar Sites" }
 };
 
 function activateTab(name) {
@@ -232,7 +232,7 @@ function renderDashboard() {
   const activity = document.querySelector("[data-client-activity]");
   const rows = []
     .concat((state.dashboard && state.dashboard.recentQuotes || []).map(function(item) { return { title: "Quote " + item.status.toLowerCase(), meta: item.title + " - " + money(item.total), badge: badge(item.status), id: item.id, action: "quote-detail" }; }))
-    .concat((state.dashboard && state.dashboard.recentJobs || []).map(function(item) { return { title: "Job " + item.status.toLowerCase().replace(/_/g, " "), meta: item.title + " - " + dateTime(item.scheduledStart), badge: badge(item.status), id: item.id, action: "job-detail" }; }))
+    .concat((state.dashboard && state.dashboard.recentJobs || []).map(function(item) { return { title: "Solar work " + item.status.toLowerCase().replace(/_/g, " "), meta: item.title + " - " + dateTime(item.scheduledStart), badge: badge(item.status), id: item.id, action: "job-detail" }; }))
     .slice(0, 6);
   activity.innerHTML = rows.length ? rows.map(listCard).join("") : empty("No recent activity yet.");
 }
@@ -247,25 +247,25 @@ function renderQuotes() {
 
 function renderJobs() {
   const container = document.querySelector("[data-client-jobs]");
-  if (!state.jobs.length) { container.innerHTML = empty("No jobs yet. Accepted quotes and scheduled work will appear here."); return; }
+  if (!state.jobs.length) { container.innerHTML = empty("No solar work orders yet. Accepted quotes and scheduled solar work will appear here."); return; }
   container.innerHTML = state.jobs.map(function(item) {
-    return listCard({ id: item.id, title: item.title || "Job", meta: [dateTime(item.scheduledStart), item.address].filter(Boolean).join(" - "), badge: badge(item.status), action: "job-detail" });
+    return listCard({ id: item.id, title: item.title || "Solar Work Order", meta: [dateTime(item.scheduledStart), item.address].filter(Boolean).join(" - "), badge: badge(item.status), action: "job-detail" });
   }).join("");
 }
 
 function renderAssets() {
   const container = document.querySelector("[data-client-assets]");
-  if (!state.assets.length) { container.innerHTML = empty("No linked assets yet."); return; }
+  if (!state.assets.length) { container.innerHTML = empty("No linked solar equipment yet."); return; }
   container.innerHTML = state.assets.map(function(item) {
-    return listCard({ id: item.id, title: item.name || "Asset", meta: [item.assetType, item.assetTag || item.serialNumber, item.locationLabel].filter(Boolean).join(" - "), badge: badge(item.status || "ACTIVE"), action: "asset-detail" });
+    return listCard({ id: item.id, title: item.name || "Solar Equipment", meta: [item.assetType, item.assetTag || item.serialNumber, item.locationLabel].filter(Boolean).join(" - "), badge: badge(item.status || "ACTIVE"), action: "asset-detail" });
   }).join("");
 }
 
 function renderContracts() {
   const container = document.querySelector("[data-client-contracts]");
-  if (!state.contracts.length) { container.innerHTML = empty("No service contracts yet."); return; }
+  if (!state.contracts.length) { container.innerHTML = empty("No solar O&M contracts yet."); return; }
   container.innerHTML = state.contracts.map(function(item) {
-    return listCard({ id: item.id, title: item.name || item.contractNumber || "Contract", meta: [item.contractNumber, "Assets " + ((item.assets || []).length), "Due " + ((item.upcomingDueWork || []).length)].filter(Boolean).join(" - "), badge: badge(item.status), action: "contract-detail" });
+    return listCard({ id: item.id, title: item.name || item.contractNumber || "O&M Contract", meta: [item.contractNumber, "Covered equipment " + ((item.assets || []).length), "Due " + ((item.upcomingDueWork || []).length)].filter(Boolean).join(" - "), badge: badge(item.status), action: "contract-detail" });
   }).join("");
 }
 
@@ -289,7 +289,7 @@ function renderProperties() {
   const container = document.querySelector("[data-client-properties]");
   if (!state.properties.length) { container.innerHTML = empty("No properties yet."); return; }
   container.innerHTML = state.properties.map(function(item) {
-    return '<article class="client-resource-card"><div><strong>' + escapeHtml(item.label || "Property") + '</strong><span>' + escapeHtml([item.address, item.city].filter(Boolean).join(" - ")) + '</span></div><div class="client-card-actions">' + (item.isDefault ? badge("DEFAULT") : "") + '<button class="secondary-button" data-action="property-edit" data-id="' + item.id + '" type="button">Edit</button><button class="secondary-button" data-action="property-delete" data-id="' + item.id + '" type="button">Delete</button></div></article>';
+    return '<article class="client-resource-card"><div><strong>' + escapeHtml(item.label || "Solar Site") + '</strong><span>' + escapeHtml([item.address, item.city].filter(Boolean).join(" - ")) + '</span></div><div class="client-card-actions">' + (item.isDefault ? badge("DEFAULT") : "") + '<button class="secondary-button" data-action="property-edit" data-id="' + item.id + '" type="button">Edit</button><button class="secondary-button" data-action="property-delete" data-id="' + item.id + '" type="button">Delete</button></div></article>';
   }).join("");
 }
 
@@ -351,11 +351,11 @@ function receiptDetail(item) {
 
 function assetDetail(item) {
   const history = item.jobHistory || [];
-  return '<div class="client-detail-stack">' + badge(item.status || "ACTIVE") + '<div class="client-detail-lines"><div><span>Type</span><strong>' + escapeHtml(item.assetType || "-") + '</strong><small>' + escapeHtml(item.assetTag || item.serialNumber || "") + '</small></div><div><span>Warranty</span><strong>' + escapeHtml(item.warrantyStatus || "UNKNOWN") + '</strong><small>' + date(item.warrantyEndAt) + '</small></div><div><span>Location</span><strong>' + escapeHtml(item.locationLabel || item.property && item.property.address || "Not set") + '</strong></div></div><h3>Service History</h3>' + (history.length ? history.map(function(job) { return listCard({ title: job.title || "Job", meta: dateTime(job.completedAt || job.scheduledStart), badge: badge(job.status) }); }).join("") : empty("No linked service history yet.")) + "</div>";
+  return '<div class="client-detail-stack">' + badge(item.status || "ACTIVE") + '<div class="client-detail-lines"><div><span>Equipment Type</span><strong>' + escapeHtml(item.assetType || "-") + '</strong><small>' + escapeHtml(item.assetTag || item.serialNumber || "") + '</small></div><div><span>Warranty</span><strong>' + escapeHtml(item.warrantyStatus || "UNKNOWN") + '</strong><small>' + date(item.warrantyEndAt) + '</small></div><div><span>Location</span><strong>' + escapeHtml(item.locationLabel || item.property && item.property.address || "Not set") + '</strong></div></div><h3>Solar Service History</h3>' + (history.length ? history.map(function(job) { return listCard({ title: job.title || "Solar Work Order", meta: dateTime(job.completedAt || job.scheduledStart), badge: badge(job.status) }); }).join("") : empty("No linked solar service history yet.")) + "</div>";
 }
 
 function contractDetail(item) {
-  return '<div class="client-detail-stack">' + badge(item.status) + '<div class="client-detail-lines"><div><span>Contract</span><strong>' + escapeHtml(item.contractNumber || item.id) + '</strong><small>' + date(item.startDate) + " - " + date(item.endDate) + '</small></div><div><span>Response SLA</span><strong>' + escapeHtml(item.responseSlaHours ? item.responseSlaHours + " hours" : "Not set") + '</strong></div><div><span>Completion SLA</span><strong>' + escapeHtml(item.completionSlaHours ? item.completionSlaHours + " hours" : "Not set") + '</strong></div></div><h3>Covered Assets</h3>' + ((item.assets || []).length ? item.assets.map(function(asset) { return listCard({ title: asset.name || "Asset", meta: asset.assetType || "", badge: badge(asset.status || "ACTIVE") }); }).join("") : empty("No covered assets listed.")) + '<h3>Upcoming Due Work</h3>' + ((item.upcomingDueWork || []).length ? item.upcomingDueWork.map(function(work) { return listCard({ title: work.title || "Due work", meta: dateTime(work.nextDueAt), badge: badge("DUE") }); }).join("") : empty("No upcoming due work.")) + "</div>";
+  return '<div class="client-detail-stack">' + badge(item.status) + '<div class="client-detail-lines"><div><span>O&M Contract</span><strong>' + escapeHtml(item.contractNumber || item.id) + '</strong><small>' + date(item.startDate) + " - " + date(item.endDate) + '</small></div><div><span>Response SLA</span><strong>' + escapeHtml(item.responseSlaHours ? item.responseSlaHours + " hours" : "Not set") + '</strong></div><div><span>Completion SLA</span><strong>' + escapeHtml(item.completionSlaHours ? item.completionSlaHours + " hours" : "Not set") + '</strong></div></div><h3>Covered Solar Equipment</h3>' + ((item.assets || []).length ? item.assets.map(function(asset) { return listCard({ title: asset.name || "Solar Equipment", meta: asset.assetType || "", badge: badge(asset.status || "ACTIVE") }); }).join("") : empty("No covered solar equipment listed.")) + '<h3>Upcoming Due Work</h3>' + ((item.upcomingDueWork || []).length ? item.upcomingDueWork.map(function(work) { return listCard({ title: work.title || "Due work", meta: dateTime(work.nextDueAt), badge: badge("DUE") }); }).join("") : empty("No upcoming due work.")) + "</div>";
 }
 
 async function loadAll() {
@@ -418,7 +418,7 @@ function resetPropertyForm() {
   const form = document.querySelector("[data-client-property-form]");
   form.reset();
   form.id.value = "";
-  document.querySelector("[data-property-form-title]").textContent = "Add Property";
+  document.querySelector("[data-property-form-title]").textContent = "Add Solar Site";
 }
 
 async function refresh() {
@@ -474,8 +474,8 @@ async function loadPortal() {
     try {
       await api(id ? "/client/properties/" + id : "/client/properties", { method: id ? "PATCH" : "POST", body: JSON.stringify(formData) });
       resetPropertyForm();
-      message(msg, "Property saved.", true);
-      notify("Property saved.", true);
+      message(msg, "Solar site saved.", true);
+      notify("Solar site saved.", true);
       await refresh();
     } catch (error) { message(msg, error.message); notify(error.message, false); }
   });
@@ -513,17 +513,17 @@ document.addEventListener("click", async function(event) {
     }
     if (action === "job-detail") {
       const item = await api("/client/jobs/" + id);
-      openDetail(item.title || "Job", jobDetail(item));
+      openDetail(item.title || "Solar Work Order", jobDetail(item));
       return;
     }
     if (action === "asset-detail") {
       const item = await api("/client/assets/" + id);
-      openDetail(item.name || "Asset", assetDetail(item));
+      openDetail(item.name || "Solar Equipment", assetDetail(item));
       return;
     }
     if (action === "contract-detail") {
       const item = await api("/client/service-contracts/" + id);
-      openDetail(item.name || "Contract", contractDetail(item));
+      openDetail(item.name || "O&M Contract", contractDetail(item));
       return;
     }
     if (action === "receipt-detail") {
@@ -589,12 +589,12 @@ document.addEventListener("click", async function(event) {
       form.city.value = item.city || "";
       form.notes.value = item.notes || "";
       form.elements.isDefault.checked = Boolean(item.isDefault);
-      document.querySelector("[data-property-form-title]").textContent = "Edit Property";
+      document.querySelector("[data-property-form-title]").textContent = "Edit Solar Site";
       return;
     }
     if (action === "property-delete") {
       const confirmed = await window.RevEngineUI.confirm({
-        title: "Delete this property?",
+        title: "Delete this solar site?",
         message: "This address will be removed from your account.",
         confirmLabel: "Delete property",
         danger: true
@@ -602,7 +602,7 @@ document.addEventListener("click", async function(event) {
       if (!confirmed) return;
       await api("/client/properties/" + id, { method: "DELETE" });
       await refresh();
-      notify("Property deleted.", true);
+      notify("Solar site deleted.", true);
     }
   } catch (error) {
     notify(error.message || "Something went wrong.", false);

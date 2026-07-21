@@ -3645,6 +3645,11 @@ form textarea:focus {
 
 .content-account-bar { display:flex; align-items:center; justify-content:flex-end; min-height:48px; margin-bottom:8px; }
 .content-account-bar .menu-toggle { margin-right:auto; }
+.workspace-switcher { min-width:240px; margin-right:10px; }
+.workspace-switcher label { display:grid; gap:3px; }
+.workspace-switcher label > span { color:#71809a; font-size:10px; font-weight:850; letter-spacing:.05em; text-transform:uppercase; }
+.workspace-switcher select { min-height:40px; width:100%; padding:0 34px 0 11px; border:1px solid #dbe5f2; border-radius:11px; background:#fff; color:#14213b; font-weight:780; box-shadow:0 7px 20px rgba(15,23,42,.05); }
+.workspace-switcher select:disabled { opacity:.85; cursor:default; }
 .account-menu { position:relative; z-index:30; }
 .account-trigger { display:flex; align-items:center; gap:10px; min-width:210px; padding:7px 10px 7px 7px; border:1px solid #dbe5f2; border-radius:12px; background:#fff; color:#14213b; cursor:pointer; box-shadow:0 7px 20px rgba(15,23,42,.06); transition:.16s ease; }
 .account-trigger:hover,.account-trigger[aria-expanded="true"] { border-color:#b8cdf8; box-shadow:0 10px 24px rgba(35,99,255,.12); transform:translateY(-1px); }
@@ -3659,7 +3664,19 @@ form textarea:focus {
 .account-dropdown a,.account-dropdown button { width:100%; display:flex; align-items:center; min-height:40px; padding:0 12px; border:0; border-radius:8px; background:transparent; color:#243651; font:inherit; font-size:13px; font-weight:760; text-align:left; cursor:pointer; }
 .account-dropdown a:hover,.account-dropdown a:focus-visible,.account-dropdown button:hover,.account-dropdown button:focus-visible { background:#edf4ff; color:var(--blue); outline:none; }
 .account-dropdown button[data-logout] { margin-top:5px; border-top:1px solid #edf1f6; border-radius:0 0 8px 8px; color:#c7344a; }
-@media(max-width:720px){.account-trigger{min-width:0}.account-trigger-copy{display:none}.content-account-bar{position:relative}.account-dropdown{position:fixed;top:70px;right:16px}}
+@media(max-width:720px){.account-trigger{min-width:0}.account-trigger-copy{display:none}.content-account-bar{position:relative}.account-dropdown{position:fixed;top:70px;right:16px}.workspace-switcher{min-width:0;max-width:190px;flex:1;margin-left:8px}.workspace-switcher label>span{display:none}}
+
+.workspace-card-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+.workspace-card { display:grid; gap:14px; padding:18px; border:1px solid #dfe7f2; border-radius:14px; background:#fff; box-shadow:0 10px 28px rgba(15,23,42,.05); }
+.workspace-card.is-active { border-color:#9bbafc; box-shadow:0 12px 30px rgba(35,99,255,.12); }
+.workspace-card-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+.workspace-card-head h3 { margin:0 0 4px; }
+.workspace-card-meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.workspace-card-meta div { padding:10px; border-radius:9px; background:#f6f9fd; }
+.workspace-card-meta strong,.workspace-card-meta span { display:block; }
+.workspace-card-meta strong { color:#71809a; font-size:10px; text-transform:uppercase; }
+.workspace-card-meta span { margin-top:3px; color:#1c2c47; font-weight:760; }
+@media(max-width:800px){.workspace-card-grid{grid-template-columns:1fr}.workspace-card-meta{grid-template-columns:1fr 1fr}}
 
 .role-template-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; padding:18px; }
 .role-template-card { display:flex; min-height:150px; flex-direction:column; justify-content:space-between; gap:16px; }
@@ -5193,3 +5210,28 @@ body[data-page="executive-dashboard"] .report-table-scroll table {
     text-align: left;
   }
 }
+
+/* Solar O&M vertical */
+.solar-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.solar-health-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.solar-health-card{display:grid;gap:6px;min-height:118px;align-content:center}
+.solar-health-card span,.solar-health-card small{color:var(--muted,#60708d)}
+.solar-health-card strong{font-size:28px;letter-spacing:-.04em;color:#071b3a}
+.solar-layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(320px,.85fr);gap:20px;align-items:start}
+.solar-list{display:grid;gap:12px}
+.solar-site-row,.solar-fault-row{display:flex;align-items:center;gap:14px;border:1px solid #dce7f7;border-radius:12px;padding:15px;background:#fff}
+.solar-site-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(145deg,#fff6c4,#ffe386);color:#9b6900;font-size:22px;flex:0 0 42px}
+.solar-site-main{display:grid;gap:4px;min-width:0;flex:1}
+.solar-site-title,.solar-fault-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.solar-site-main>span,.solar-fault-row span{color:#536684}
+.solar-site-main>small,.solar-fault-row small{color:#7b8ca7}
+.solar-site-metrics{display:grid;grid-template-columns:repeat(3,minmax(74px,1fr));gap:8px;text-align:right}
+.solar-site-metrics span{display:grid;gap:2px}.solar-site-metrics small{color:#7b8ca7}.solar-site-metrics strong{color:#071b3a}
+.solar-fault-row{align-items:flex-start;justify-content:space-between}.solar-fault-row>div:first-child{display:grid;gap:4px;min-width:0}
+.solar-fault-actions{display:flex;align-items:flex-end;gap:6px;flex-direction:column;white-space:nowrap}
+.text-button{border:0;background:transparent;color:#155bd7;font:inherit;font-weight:800;cursor:pointer;padding:3px 0}
+.solar-reading-table td,.solar-reading-table th{white-space:nowrap}
+.solar-dialog{width:min(820px,calc(100vw - 32px));max-height:90vh;overflow:auto}
+.eyebrow{text-transform:uppercase;letter-spacing:.12em;font-size:12px;font-weight:900;color:#155bd7}
+@media(max-width:1100px){.solar-health-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.solar-layout{grid-template-columns:1fr}.solar-site-metrics{text-align:left}}
+@media(max-width:700px){.solar-actions{justify-content:flex-start}.solar-health-strip{grid-template-columns:1fr 1fr}.solar-site-row{align-items:flex-start;flex-wrap:wrap}.solar-site-metrics{width:100%;grid-template-columns:repeat(3,1fr)}.solar-fault-row{flex-direction:column}.solar-fault-actions{align-items:flex-start;flex-direction:row;flex-wrap:wrap}}

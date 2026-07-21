@@ -2,7 +2,7 @@
   <head>
     <meta charset=UTF-8>
     <meta name=viewport content=width=device-width,initial-scale=1.0>
-    <title>Book Service</title>
+    <title>Request Solar Service</title>
     <link rel=stylesheet href=assets/app.css>
     <script defer src=assets/booking.js?v=photo-preview-fix-1></script>
   </head>
@@ -21,21 +21,21 @@
           <div class=field><label for=serviceName>Other Service</label><input id=serviceName name=serviceName maxlength=160></div>
           <div class=field><label for=address>Address</label><input id=address name=address required maxlength=300></div>
           <div class=field><label for=city>City / Suburb</label><input id=city name=city maxlength=120></div>
-          <div class=field><label for=propertyType>Property Type</label><select id=propertyType name=propertyType><option value=>Select type</option><option>House</option><option>Apartment</option><option>Office</option><option>Shop</option><option>Industrial site</option><option>Other</option></select></div>
-          <div class=field><label for=accessNotes>Access Notes</label><textarea id=accessNotes name=accessNotes maxlength=1000></textarea></div>
+          <div class=field><label for=propertyType>Solar Site Type</label><select id=propertyType name=propertyType><option value=>Select type</option><option>Residential rooftop</option><option>Commercial rooftop</option><option>Industrial site</option><option>Ground-mount plant</option><option>Off-grid system</option><option>Hybrid solar and battery site</option><option>Other solar site</option></select></div>
+          <div class=field><label for=accessNotes>Site Access / Safety Notes</label><textarea id=accessNotes name=accessNotes maxlength=1000></textarea></div>
           <div class=field><label for=preferredDate>Preferred Date</label><input id=preferredDate name=preferredDate type=date></div>
           <div class=field><label for=preferredTimeWindow>Preferred Time</label><select id=preferredTimeWindow name=preferredTimeWindow><option value=ANY_TIME>Any time</option><option value=MORNING>Morning</option><option value=AFTERNOON>Afternoon</option><option value=EVENING>Evening</option></select></div>
           <div class=field><label for=photos>Photos</label><div class=evidence-upload><div class=proof-selected-preview data-booking-photo-preview><strong>No photos selected</strong></div><div class=logo-upload-controls><div class=file-upload-row><label class=file-upload-button for=photos>Choose photos</label><span class=file-name data-booking-photo-name>No files selected</span></div><input id=photos name=photos type=file accept="image/png,image/jpeg,image/webp" multiple hidden><small>Upload up to 5 PNG, JPG, or WEBP photos. Max 5MB each.</small></div></div></div>
-          <div class=field span-2><label for=notes>Issue Description</label><textarea id=notes name=notes maxlength=2000></textarea></div>
-          <div class=fc-form-actions span-2><button class=primary-button type=submit>Submit Request</button></div>
+          <div class=field span-2><label for=notes>Solar System / Issue Description</label><textarea id=notes name=notes maxlength=2000></textarea></div>
+          <div class=fc-form-actions span-2><button class=primary-button type=submit>Submit Solar Request</button></div>
           <p class=fc-form-error span-2 data-booking-message hidden></p>
         </form>
         <section class=booking-tracking-panel>
-          <div class=panel-head><h3>Track Request</h3></div>
+          <div class=panel-head><h3>Track Solar Request</h3></div>
           <form class=form-grid data-tracking-form>
             <div class=field><label for=trackingReference>Request Reference</label><input id=trackingReference name=reference required maxlength=40></div>
             <div class=field><label for=trackingContact>Email or Phone</label><input id=trackingContact name=contact required maxlength=160></div>
-            <div class=fc-form-actions span-2><button class=secondary-button type=submit>Track Request</button></div>
+            <div class=fc-form-actions span-2><button class=secondary-button type=submit>Track Solar Request</button></div>
             <p class=fc-form-error span-2 data-tracking-message hidden></p>
           </form>
           <div class=tracking-result data-tracking-result hidden></div>

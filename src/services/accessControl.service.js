@@ -300,6 +300,23 @@ function expandPermissionDependencies(values) {
 const operationsPermissions = delegatablePermissionKeys.filter((key) => !key.startsWith('subscription.') && !key.startsWith('security.') && !['dashboard.financial.view', 'dashboard.executive.view', 'reports.money.view', 'settings.finance.manage', 'finance.exports.manage', 'finance.integrations.manage', 'integration.manage', 'permissions.manage', 'roles.manage'].includes(key));
 const financePermissions = delegatablePermissionKeys.filter((key) => key.startsWith('invoices.') || key.startsWith('payments.') || key === 'finance.exports.manage' || key === 'finance.integrations.manage' || key === 'reports.money.view' || key === 'settings.finance.manage' || key === 'dashboard.financial.view' || key === 'invoice.void' || key === 'invoice.discount.approve' || key === 'payment.refund');
 const workerPermissions = ['dashboard.operational.view', 'jobs.view', 'schedule.view'];
+const branchManagerPermissions = delegatablePermissionKeys.filter((key) => !key.startsWith('subscription.') && ![
+  'company.settings.view',
+  'company.settings.manage',
+  'company.branding.manage',
+  'settings.finance.manage',
+  'finance.integrations.manage',
+  'members.view',
+  'members.invite',
+  'members.manage',
+  'roles.manage',
+  'permissions.manage',
+  'security.view',
+  'audit.view',
+  'integration.view',
+  'integration.manage',
+  'mobile.sync.manage'
+].includes(key));
 
 const defaultPermissionBundles = {
   OWNER: delegatablePermissionKeys,
@@ -310,6 +327,8 @@ const defaultPermissionBundles = {
 
 const SYSTEM_ROLE_TEMPLATES = [
   { key: 'owner', name: 'Owner', description: 'Legal company owner with full access.', systemRole: 'OWNER', permissions: delegatablePermissionKeys, scope: 'COMPANY' },
+  { key: 'workspace-manager', name: 'Workspace Manager', description: 'Full control of one workspace without ownership rights.', systemRole: 'ADMIN', permissions: delegatablePermissionKeys, scope: 'COMPANY' },
+  { key: 'branch-manager', name: 'Branch Manager', description: 'Full operational control of assigned branches without workspace ownership rights.', systemRole: 'ADMIN', permissions: branchManagerPermissions, scope: 'BRANCH' },
   { key: 'executive', name: 'Executive / COO', description: 'Senior executive access across the company without ownership powers.', systemRole: 'ADMIN', permissions: delegatablePermissionKeys, scope: 'COMPANY' },
   { key: 'general-manager', name: 'General Manager', description: 'Broad company management excluding ownership powers.', systemRole: 'ADMIN', permissions: defaultPermissionBundles.ADMIN, scope: 'COMPANY' },
   { key: 'operations-manager', name: 'Operations Manager', description: 'Jobs, scheduling, workers, customers, and work reports.', systemRole: 'ADMIN', permissions: operationsPermissions, scope: 'COMPANY' },
@@ -420,6 +439,8 @@ async function effectiveAccessForUser(user, options = {}) {
     delegatablePermissionKeys.forEach((key) => permissions.add(key));
     permissions.add('finance.integrations.manage');
     scopeType = 'COMPANY';
+  } else if (user.fullBusinessAccess === true && scopeType === 'COMPANY') {
+    delegatablePermissionKeys.forEach((key) => permissions.add(key));
   }
   return { permissions: expandPermissionDependencies([...permissions]).filter((key) => permissionKeys.includes(key)).sort(), scopeType, branchIds, teamIds };
 }

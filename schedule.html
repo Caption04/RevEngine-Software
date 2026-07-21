@@ -3,27 +3,27 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rev Engine Schedule</title>
+    <title>Rev Engine Solar Schedule</title>
     <link rel="stylesheet" href="assets/app.css">
     <script defer src="assets/ui-feedback.js"></script>
     <script defer src="assets/layout.js"></script>
     <script defer src="assets/api.js?v=worker-activity-notes-1"></script>
   </head>
-  <body data-page="schedule" data-title="Schedule">
+  <body data-page="schedule" data-title="Solar Schedule">
     <section class="page">
       <div class="hero-row">
         <div class="hero-copy">
-          <h2>Schedule</h2>
-          <p>The calendar starts empty until jobs are assigned to dates and workers.</p>
+          <h2>Solar Schedule</h2>
+          <p>Dispatch solar installations, inspections, maintenance, cleaning, diagnostics, and fault-response work to technicians.</p>
         </div>
         <div class="toolbar-actions">
           <span class="api-status" data-api-status>Connecting...</span>
-          <button class="primary-button">+ New Job</button>
+          <button class="primary-button" data-create-resource="jobs" type="button">+ New Solar Work Order</button>
         </div>
       </div>
       <section class="dispatch-board" data-dispatch-board hidden>
         <div class="panel-head dispatch-board-head">
-          <div><h3>Dispatch Board</h3><p>See work that needs a worker or a time.</p></div>
+          <div><h3>Solar Dispatch Board</h3><p>See solar work orders that still need a technician or scheduled time.</p></div>
           <span class="badge gray" data-dispatch-generated>Loading...</span>
         </div>
         <section class="stats dispatch-stats">
@@ -34,16 +34,16 @@
         </section>
         <div class="dispatch-grid">
           <section class="panel dispatch-queue-panel">
-            <div class="panel-head"><h3>Needs dispatch</h3><span class="badge gray" data-dispatch-queue-label>0 jobs</span></div>
+            <div class="panel-head"><h3>Needs dispatch</h3><span class="badge gray" data-dispatch-queue-label>0 work orders</span></div>
             <div class="dispatch-queue" data-dispatch-queue></div>
           </section>
           <section class="panel dispatch-suggestions-panel">
-            <div class="panel-head"><h3>Best workers</h3><span class="badge gray">Suggested</span></div>
+            <div class="panel-head"><h3>Best Solar Technicians</h3><span class="badge gray">Suggested</span></div>
             <div class="dispatch-suggestions" data-dispatch-suggestions></div>
           </section>
         </div>
         <section class="panel dispatch-risk-panel">
-          <div class="panel-head"><h3>Jobs needing attention</h3><span class="badge gray" data-dispatch-risk-label>0 jobs</span></div>
+          <div class="panel-head"><h3>Solar Work Needing Attention</h3><span class="badge gray" data-dispatch-risk-label>0 work orders</span></div>
           <div class="dispatch-risk-list" data-dispatch-risks></div>
         </section>
       </section>
@@ -84,8 +84,8 @@
       </form>
       <section class="table-card">
         <div class="panel-head card schedule-range-head">
-          <h3 data-schedule-range>Schedule</h3>
-          <span class="badge gray" data-schedule-count>0 jobs</span>
+          <h3 data-schedule-range>Solar Schedule</h3>
+          <span class="badge gray" data-schedule-count>0 work orders</span>
         </div>
         <div class="table-scroll">
           <div class="schedule-grid" data-schedule-grid></div>
@@ -93,7 +93,7 @@
         <div class="empty-state">
           <div>
             <strong>No scheduled work</strong>
-            <span>Jobs from the local API will appear on this calendar.</span>
+            <span>Scheduled solar work orders will appear on this calendar.</span>
           </div>
         </div>
       </section>

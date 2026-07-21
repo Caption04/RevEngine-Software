@@ -5,6 +5,60 @@ const { seedSystemRoleTemplates } = require('../src/services/accessControl.servi
 const prisma = new PrismaClient();
 const legacyEnvName = (suffix) => 'FIELD' + 'CORE_' + suffix;
 
+
+const solarDefaultServices = [
+  { key: 'site-assessment', name: 'Solar Site Assessment', description: 'Site survey, system inventory, capacity capture, safety review, and baseline condition report.' },
+  { key: 'preventive-maintenance', name: 'Solar Preventive Maintenance', description: 'Planned mechanical and electrical inspection of the complete solar plant.' },
+  { key: 'inverter-diagnostics', name: 'Inverter Diagnostics', description: 'Alarm review, electrical measurements, firmware checks, and inverter fault diagnosis.' },
+  { key: 'module-cleaning', name: 'PV Module Cleaning', description: 'Safe module cleaning with before-and-after condition evidence.' },
+  { key: 'battery-health', name: 'Battery Health Assessment', description: 'Battery state-of-charge, state-of-health, voltage, temperature, and connection checks.' },
+  { key: 'fault-callout', name: 'Solar Fault Callout', description: 'Reactive investigation and corrective work for an underperforming or offline solar site.' }
+];
+
+const solarChecklistDefinitions = [
+  {
+    serviceName: 'Solar Preventive Maintenance',
+    name: 'Solar Plant Preventive Maintenance',
+    description: 'Required field checks for a complete solar O&M visit.',
+    items: [
+      ['Confirm isolators, labels, guards, and access controls are safe', 'PASS_FAIL', true, false],
+      ['Inspect modules for cracks, delamination, hotspots, shading, and soiling', 'PASS_FAIL', true, true],
+      ['Inspect mounting structure, clamps, roof penetrations, and corrosion', 'PASS_FAIL', true, true],
+      ['Inspect DC cabling, connectors, combiner boxes, and surge protection', 'PASS_FAIL', true, true],
+      ['Record inverter alarms and operating state', 'TEXT', true, false],
+      ['Record DC voltage', 'NUMBER', false, false],
+      ['Record AC voltage', 'NUMBER', false, false],
+      ['Record power output in kW', 'NUMBER', false, false],
+      ['Record energy generated today in kWh', 'NUMBER', false, false],
+      ['Capture final site condition photo', 'PHOTO', true, true]
+    ]
+  },
+  {
+    serviceName: 'Battery Health Assessment',
+    name: 'Battery Health Assessment',
+    description: 'Battery condition, electrical readings, and safety checks.',
+    items: [
+      ['Inspect battery enclosure, ventilation, cabling, and terminals', 'PASS_FAIL', true, true],
+      ['Record battery state of charge percentage', 'NUMBER', true, false],
+      ['Record battery state of health percentage', 'NUMBER', false, false],
+      ['Record battery voltage', 'NUMBER', true, false],
+      ['Check BMS alarms and communication status', 'PASS_FAIL', true, false],
+      ['Capture battery bank condition photo', 'PHOTO', true, true]
+    ]
+  },
+  {
+    serviceName: 'PV Module Cleaning',
+    name: 'PV Module Cleaning Proof',
+    description: 'Cleaning quality and damage evidence.',
+    items: [
+      ['Record module condition before cleaning', 'PHOTO', true, true],
+      ['Confirm approved water and cleaning method were used', 'YES_NO', true, false],
+      ['Report cracked or damaged modules found during cleaning', 'TEXT', false, false],
+      ['Record module condition after cleaning', 'PHOTO', true, true]
+    ]
+  }
+];
+
 const saasPlans = [
   {
     id: 'starter',
@@ -83,7 +137,7 @@ const REGION_CONFIGS = {
       client: 'client.zw@fieldcore.test'
     },
     people: { owner: 'Zimbabwe Demo Owner', admin: 'Zimbabwe Demo Admin', worker: 'Tariro Technician', client: 'Harare Demo Client' },
-    sample: { customerName: 'Harare Facilities Client', customerPhone: '+263 000 000 120', customerAddress: 'Borrowdale, Harare', serviceName: 'Commercial Maintenance Visit', servicePrice: 450, invoiceNumber: 'ZW-INV-0001' }
+    sample: { customerName: 'Harare Solar Client', customerPhone: '+263 000 000 120', customerAddress: 'Borrowdale, Harare', serviceName: 'Solar Preventive Maintenance', servicePrice: 450, invoiceNumber: 'ZW-INV-0001', siteName: 'Borrowdale Solar Site', siteCode: 'ZW-SOLAR-001', dcCapacityKwp: 24.8, acCapacityKw: 20, batteryCapacityKwh: 30, moduleCount: 40, inverterCount: 2 }
   },
   SA: {
     market: 'SA',
@@ -115,7 +169,7 @@ const REGION_CONFIGS = {
       client: 'client.sa@fieldcore.test'
     },
     people: { owner: 'South Africa Demo Owner', admin: 'South Africa Demo Admin', worker: 'Thabo Technician', client: 'Johannesburg Demo Client' },
-    sample: { customerName: 'Johannesburg Facilities Client', customerPhone: '+27 000 000 120', customerAddress: 'Rosebank, Johannesburg', serviceName: 'Commercial Maintenance Visit', servicePrice: 8500, invoiceNumber: 'SA-INV-0001' }
+    sample: { customerName: 'Johannesburg Solar Client', customerPhone: '+27 000 000 120', customerAddress: 'Rosebank, Johannesburg', serviceName: 'Solar Preventive Maintenance', servicePrice: 8500, invoiceNumber: 'SA-INV-0001', siteName: 'Rosebank Commercial Solar Plant', siteCode: 'SA-SOLAR-001', dcCapacityKwp: 120, acCapacityKw: 100, batteryCapacityKwh: 200, moduleCount: 192, inverterCount: 4 }
   }
 };
 
@@ -149,6 +203,33 @@ async function upsertUser({ email, name, role, companyId, passwordHash }) {
   });
 }
 
+
+async function seedSolarDefaults(companyId) {
+  const services = [];
+  for (const definition of solarDefaultServices) {
+    let service = await prisma.service.findFirst({ where: { companyId, name: definition.name } });
+    if (!service) {
+      service = await prisma.service.create({ data: { companyId, name: definition.name, description: definition.description, price: 0, active: true } });
+    } else {
+      service = await prisma.service.update({ where: { id: service.id }, data: { description: definition.description, active: true } });
+    }
+    services.push(service);
+  }
+
+  if (!prisma.jobChecklistTemplate || !prisma.jobChecklistItem) return services;
+  for (const [templateIndex, definition] of solarChecklistDefinitions.entries()) {
+    const service = services.find((item) => item.name === definition.serviceName);
+    let template = await prisma.jobChecklistTemplate.findFirst({ where: { companyId, name: definition.name } });
+    if (!template) {
+      template = await prisma.jobChecklistTemplate.create({ data: { companyId, serviceId: service && service.id, name: definition.name, description: definition.description, active: true, requiredForCompletion: true, sortOrder: templateIndex } });
+      for (const [itemIndex, [label, answerType, required, photoRequired]] of definition.items.entries()) {
+        await prisma.jobChecklistItem.create({ data: { companyId, templateId: template.id, label, answerType, required, photoRequired, passFail: answerType === 'PASS_FAIL', sortOrder: itemIndex, active: true } });
+      }
+    }
+  }
+  return services;
+}
+
 async function seedCompany(config, passwordHash, includeSampleData) {
   const company = await prisma.company.upsert({
     where: { id: config.companyId },
@@ -162,7 +243,7 @@ async function seedCompany(config, passwordHash, includeSampleData) {
       phone: config.phone,
       email: config.supportEmail,
       market: config.market,
-      verticalKey: 'generic',
+      verticalKey: 'solar-om',
       onboardingState: 'COMPLETED'
     },
     create: {
@@ -176,7 +257,7 @@ async function seedCompany(config, passwordHash, includeSampleData) {
       phone: config.phone,
       email: config.supportEmail,
       market: config.market,
-      verticalKey: 'generic',
+      verticalKey: 'solar-om',
       onboardingState: 'COMPLETED'
     }
   });
@@ -272,6 +353,8 @@ async function seedCompany(config, passwordHash, includeSampleData) {
     create: { companyId: company.id, timezone: config.branch.timezone, defaultJobDurationMinutes: 90, defaultTravelBufferMinutes: 30, allowOverbooking: false, defaultJobStatus: 'NEW', requireCompletionNotes: true, requireProofPhotos: true, requireLocation: true, workingDayStart: '08:00', workingDayEnd: '17:00' }
   });
 
+  const solarServices = await seedSolarDefaults(company.id);
+
   const branch = await prisma.branch.upsert({
     where: { companyId_code: { companyId: company.id, code: config.branch.code } },
     update: { name: config.branch.name, country: config.branch.country, city: config.branch.city, timezone: config.branch.timezone, active: true },
@@ -286,18 +369,18 @@ async function seedCompany(config, passwordHash, includeSampleData) {
   const adminUser = await upsertUser({ email: config.users.admin, name: config.people.admin, role: 'ADMIN', companyId: company.id, passwordHash });
   await prisma.user.update({ where: { id: adminUser.id }, data: { jobTitle: 'General Manager', roleTemplateId: adminTemplate && adminTemplate.id, defaultScopeType: 'COMPANY', fullBusinessAccess: false } });
   const workerUser = await upsertUser({ email: config.users.worker, name: config.people.worker, role: 'WORKER', companyId: company.id, passwordHash });
-  await prisma.user.update({ where: { id: workerUser.id }, data: { jobTitle: 'Field Technician', roleTemplateId: workerTemplate && workerTemplate.id, defaultScopeType: 'SELF', fullBusinessAccess: false } });
+  await prisma.user.update({ where: { id: workerUser.id }, data: { jobTitle: 'Solar Technician', roleTemplateId: workerTemplate && workerTemplate.id, defaultScopeType: 'SELF', fullBusinessAccess: false } });
 
   const role = await prisma.workerRole.upsert({
-    where: { companyId_name: { companyId: company.id, name: 'Field Technician' } },
+    where: { companyId_name: { companyId: company.id, name: 'Solar Technician' } },
     update: { active: true },
-    create: { companyId: company.id, name: 'Field Technician', active: true }
+    create: { companyId: company.id, name: 'Solar Technician', active: true }
   });
 
   const worker = await prisma.workerProfile.upsert({
     where: { userId: workerUser.id },
-    update: { companyId: company.id, branchId: branch.id, roleId: role.id, title: 'Field Technician', phone: config.phone, active: true },
-    create: { companyId: company.id, branchId: branch.id, userId: workerUser.id, roleId: role.id, title: 'Field Technician', phone: config.phone, active: true }
+    update: { companyId: company.id, branchId: branch.id, roleId: role.id, title: 'Solar Technician', phone: config.phone, active: true },
+    create: { companyId: company.id, branchId: branch.id, userId: workerUser.id, roleId: role.id, title: 'Solar Technician', phone: config.phone, active: true }
   });
 
   await prisma.workerDevice.upsert({
@@ -313,16 +396,49 @@ async function seedCompany(config, passwordHash, includeSampleData) {
       create: { id: `${config.companyId}-customer`, companyId: company.id, branchId: branch.id, name: config.sample.customerName, email: config.users.client, phone: config.sample.customerPhone, address: config.sample.customerAddress, notes: `${config.market} clean demo customer.` }
     });
 
-    await prisma.clientAccount.upsert({
+    const clientAccount = await prisma.clientAccount.upsert({
       where: { companyId_email: { companyId: company.id, email: config.users.client } },
       update: { customerId: customer.id, name: config.people.client, phone: config.sample.customerPhone, passwordHash, status: 'ACTIVE' },
       create: { companyId: company.id, customerId: customer.id, name: config.people.client, email: config.users.client, phone: config.sample.customerPhone, passwordHash, status: 'ACTIVE' }
     });
 
-    const service = await prisma.service.upsert({
-      where: { id: `${config.companyId}-service` },
-      update: { companyId: company.id, name: config.sample.serviceName, price: config.sample.servicePrice, active: true },
-      create: { id: `${config.companyId}-service`, companyId: company.id, name: config.sample.serviceName, description: `${config.market} sample service for QA.`, price: config.sample.servicePrice, active: true }
+    const service = solarServices.find((item) => item.name === config.sample.serviceName) || solarServices[0];
+    await prisma.service.update({ where: { id: service.id }, data: { price: config.sample.servicePrice, active: true } });
+
+    const property = await prisma.customerProperty.upsert({
+      where: { id: `${config.companyId}-solar-site` },
+      update: { companyId: company.id, branchId: branch.id, customerId: customer.id, clientAccountId: clientAccount.id, label: config.sample.siteName, address: config.sample.customerAddress, city: config.branch.city, notes: 'Solar O&M demo site.', isDefault: true },
+      create: { id: `${config.companyId}-solar-site`, companyId: company.id, branchId: branch.id, customerId: customer.id, clientAccountId: clientAccount.id, label: config.sample.siteName, address: config.sample.customerAddress, city: config.branch.city, notes: 'Solar O&M demo site.', isDefault: true }
+    });
+
+    await prisma.solarSiteProfile.upsert({
+      where: { propertyId: property.id },
+      update: { companyId: company.id, customerId: customer.id, siteCode: config.sample.siteCode, status: 'OPERATIONAL', installedCapacityKwp: config.sample.dcCapacityKwp, acCapacityKw: config.sample.acCapacityKw, batteryCapacityKwh: config.sample.batteryCapacityKwh, moduleCount: config.sample.moduleCount, inverterCount: config.sample.inverterCount, monitoringProvider: 'Demo Monitoring Portal', monitoringSiteId: config.sample.siteCode, gridConnectionType: 'HYBRID', targetPerformanceRatioPct: 75, targetAvailabilityPct: 98 },
+      create: { companyId: company.id, customerId: customer.id, propertyId: property.id, siteCode: config.sample.siteCode, status: 'OPERATIONAL', installedCapacityKwp: config.sample.dcCapacityKwp, acCapacityKw: config.sample.acCapacityKw, batteryCapacityKwh: config.sample.batteryCapacityKwh, moduleCount: config.sample.moduleCount, inverterCount: config.sample.inverterCount, monitoringProvider: 'Demo Monitoring Portal', monitoringSiteId: config.sample.siteCode, gridConnectionType: 'HYBRID', targetPerformanceRatioPct: 75, targetAvailabilityPct: 98 }
+    });
+
+    const plant = await prisma.asset.upsert({
+      where: { id: `${config.companyId}-solar-plant` },
+      update: { companyId: company.id, branchId: branch.id, customerId: customer.id, propertyId: property.id, serviceId: service.id, name: config.sample.siteName, assetType: 'SOLAR_PLANT', assetTag: `${config.market}-PLANT-001`, monitoringIdentifier: config.sample.siteCode, locationLabel: config.sample.customerAddress, dcCapacityKw: config.sample.dcCapacityKwp, acCapacityKw: config.sample.acCapacityKw, batteryCapacityKwh: config.sample.batteryCapacityKwh, moduleCount: config.sample.moduleCount, status: 'ACTIVE' },
+      create: { id: `${config.companyId}-solar-plant`, companyId: company.id, branchId: branch.id, customerId: customer.id, propertyId: property.id, serviceId: service.id, name: config.sample.siteName, assetType: 'SOLAR_PLANT', assetTag: `${config.market}-PLANT-001`, monitoringIdentifier: config.sample.siteCode, locationLabel: config.sample.customerAddress, dcCapacityKw: config.sample.dcCapacityKwp, acCapacityKw: config.sample.acCapacityKw, batteryCapacityKwh: config.sample.batteryCapacityKwh, moduleCount: config.sample.moduleCount, status: 'ACTIVE' }
+    });
+
+    const inverter = await prisma.asset.upsert({
+      where: { id: `${config.companyId}-inverter-01` },
+      update: { companyId: company.id, branchId: branch.id, customerId: customer.id, propertyId: property.id, serviceId: service.id, parentAssetId: plant.id, name: 'Main Inverter 01', assetType: 'INVERTER', assetTag: `${config.market}-INV-001`, serialNumber: `${config.market}-DEMO-INVERTER-001`, monitoringIdentifier: `${config.sample.siteCode}-INV-01`, acCapacityKw: config.sample.acCapacityKw / config.sample.inverterCount, status: 'ACTIVE' },
+      create: { id: `${config.companyId}-inverter-01`, companyId: company.id, branchId: branch.id, customerId: customer.id, propertyId: property.id, serviceId: service.id, parentAssetId: plant.id, name: 'Main Inverter 01', assetType: 'INVERTER', assetTag: `${config.market}-INV-001`, serialNumber: `${config.market}-DEMO-INVERTER-001`, monitoringIdentifier: `${config.sample.siteCode}-INV-01`, acCapacityKw: config.sample.acCapacityKw / config.sample.inverterCount, status: 'ACTIVE' }
+    });
+
+    await prisma.asset.upsert({
+      where: { id: `${config.companyId}-battery-bank` },
+      update: { companyId: company.id, branchId: branch.id, customerId: customer.id, propertyId: property.id, serviceId: service.id, parentAssetId: plant.id, name: 'Main Battery Bank', assetType: 'BATTERY_BANK', assetTag: `${config.market}-BAT-001`, batteryCapacityKwh: config.sample.batteryCapacityKwh, status: 'ACTIVE' },
+      create: { id: `${config.companyId}-battery-bank`, companyId: company.id, branchId: branch.id, customerId: customer.id, propertyId: property.id, serviceId: service.id, parentAssetId: plant.id, name: 'Main Battery Bank', assetType: 'BATTERY_BANK', assetTag: `${config.market}-BAT-001`, batteryCapacityKwh: config.sample.batteryCapacityKwh, status: 'ACTIVE' }
+    });
+
+    await prisma.solarReading.upsert({
+      where: { id: `${config.companyId}-solar-reading` },
+      update: { customerId: customer.id, propertyId: property.id, assetId: inverter.id, capturedById: owner.id, source: 'MANUAL', condition: 'NORMAL', recordedAt: new Date(), powerKw: config.sample.acCapacityKw * 0.72, energyTodayKwh: config.sample.dcCapacityKwp * 3.5, performanceRatioPct: 78.4, availabilityPct: 99.2, batterySocPct: 82 },
+      create: { id: `${config.companyId}-solar-reading`, companyId: company.id, customerId: customer.id, propertyId: property.id, assetId: inverter.id, capturedById: owner.id, source: 'MANUAL', condition: 'NORMAL', recordedAt: new Date(), powerKw: config.sample.acCapacityKw * 0.72, energyTodayKwh: config.sample.dcCapacityKwp * 3.5, performanceRatioPct: 78.4, availabilityPct: 99.2, batterySocPct: 82 }
     });
 
     await prisma.companyInvoiceCounter.upsert({

@@ -27,6 +27,11 @@ enum AccessScopeType {
   SELF
 }
 
+enum BusinessGroupRole {
+  OWNER
+  MANAGER
+}
+
 enum InvitationStatus {
   PENDING
   ACCEPTED
@@ -299,6 +304,30 @@ enum AssetStatus {
   RETIRED
 }
 
+enum SolarSiteStatus {
+  COMMISSIONING
+  OPERATIONAL
+  DEGRADED
+  OFFLINE
+  MAINTENANCE
+}
+
+enum SolarFaultSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SolarFaultStatus {
+  OPEN
+  ACKNOWLEDGED
+  IN_PROGRESS
+  RESOLVED
+  IGNORED
+}
+
 enum ServiceContractStatus {
   DRAFT
   ACTIVE
@@ -513,8 +542,34 @@ enum ApprovalStatus {
   CANCELLED
 }
 
+model BusinessGroup {
+  id          String                    @id @default(cuid())
+  name        String
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  companies   Company[]
+  memberships BusinessGroupMembership[]
+}
+
+model BusinessGroupMembership {
+  id        String            @id @default(cuid())
+  groupId   String
+  userId    String
+  role      BusinessGroupRole @default(MANAGER)
+  active    Boolean           @default(true)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+  group     BusinessGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId, active])
+  @@index([groupId, role, active])
+}
+
 model Company {
   id                                String                             @id @default(cuid())
+  groupId                           String?
   name                              String
   legalName                         String?
   tradingName                       String?
@@ -533,6 +588,7 @@ model Company {
   verticalKey                       String                             @default("generic")
   teamSizeBand                      String?
   onboardingState                   OnboardingState                    @default(COMPLETED)
+  group                             BusinessGroup?                     @relation(fields: [groupId], references: [id], onDelete: SetNull)
   users                             User[]
   customers                         Customer[]
   workers                           WorkerProfile[]
@@ -593,6 +649,9 @@ model Company {
   subscription                      CompanySubscription?
   saasBillingEvents                 SaaSBillingEvent[]
   assets                            Asset[]
+  solarSiteProfiles                 SolarSiteProfile[]
+  solarReadings                     SolarReading[]
+  solarFaults                       SolarFault[]
   jobAssets                         JobAsset[]
   serviceContracts                  ServiceContract[]
   serviceContractAssets             ServiceContractAsset[]
@@ -634,6 +693,8 @@ model Company {
   onboardingPackages                CompanyOnboardingPackage[]
   dataImportJobs                    DataImportJob[]
   dataImportRowErrors               DataImportRowError[]
+
+  @@index([groupId])
 }
 
 model SaaSPlan {
@@ -764,6 +825,8 @@ model User {
   invitationsAccepted         MemberInvitation[]       @relation("MemberInvitationAcceptedBy")
   assignedLeads               Lead[]                   @relation("LeadAssignedTo")
   createdLeadActivities       LeadActivity[]           @relation("LeadActivityCreatedBy")
+  solarReadingsCaptured        SolarReading[]            @relation("SolarReadingCapturedBy")
+  solarFaultsReported          SolarFault[]              @relation("SolarFaultReportedBy")
   twoFactorEnabled            Boolean                  @default(false)
   twoFactorSecretHash         String?
   twoFactorRecoveryCodes      Json?
@@ -775,6 +838,7 @@ model User {
   passwordChangedAt           DateTime?
   sessions                    UserSession[]
   securityEvents              SecurityEvent[]
+  businessGroupMemberships    BusinessGroupMembership[]
 
   @@index([companyId])
   @@index([companyId, role])
@@ -1047,6 +1111,9 @@ model Customer {
   messageLogs       MessageLog[]
   storageObjects    StorageObject[]
   assets            Asset[]
+  solarSiteProfiles SolarSiteProfile[]
+  solarReadings     SolarReading[]
+  solarFaults       SolarFault[]
   serviceContracts  ServiceContract[]
   unappliedCredits  UnappliedCustomerCredit[]
 
@@ -1094,6 +1161,9 @@ model CustomerProperty {
   customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
   clientAccount    ClientAccount?    @relation(fields: [clientAccountId], references: [id], onDelete: SetNull)
   assets           Asset[]
+  solarProfile     SolarSiteProfile?
+  solarReadings    SolarReading[]
+  solarFaults      SolarFault[]
   serviceContracts ServiceContract[]
 
   @@index([companyId, customerId])
@@ -1252,6 +1322,8 @@ model Job {
   jobPartUsages              JobPartUsage[]
   purchaseRequests           PurchaseRequest[]
   checklistAnswers           JobChecklistAnswer[]
+  solarReadings              SolarReading[]
+  solarFaults                SolarFault[]
 
   @@index([companyId])
   @@index([companyId, customerId])
@@ -1270,13 +1342,20 @@ model Asset {
   customerId            String
   propertyId            String?
   serviceId             String?
+  parentAssetId         String?
   name                  String
   assetType             String
   assetTag              String?
   serialNumber          String?
   manufacturer          String?
   modelNumber           String?
+  monitoringIdentifier  String?
   locationLabel         String?
+  dcCapacityKw          Decimal?               @db.Decimal(12, 3)
+  acCapacityKw          Decimal?               @db.Decimal(12, 3)
+  batteryCapacityKwh    Decimal?               @db.Decimal(12, 3)
+  moduleCount           Int?
+  commissionedAt        DateTime?
   installedAt           DateTime?
   warrantyStartAt       DateTime?
   warrantyEndAt         DateTime?
@@ -1295,16 +1374,132 @@ model Asset {
   customer              Customer               @relation(fields: [customerId], references: [id], onDelete: Restrict)
   property              CustomerProperty?      @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   service               Service?               @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  parentAsset           Asset?                 @relation("SolarAssetHierarchy", fields: [parentAssetId], references: [id], onDelete: SetNull)
+  childAssets           Asset[]                @relation("SolarAssetHierarchy")
   jobAssets             JobAsset[]
   serviceContractAssets ServiceContractAsset[]
   purchaseRequests      PurchaseRequest[]
   purchaseOrders        PurchaseOrder[]
+  solarReadings         SolarReading[]
+  solarFaults           SolarFault[]
 
   @@unique([companyId, assetTag])
   @@index([companyId, customerId])
   @@index([companyId, propertyId])
+  @@index([companyId, parentAssetId])
+  @@index([companyId, assetType])
   @@index([companyId, status])
   @@index([companyId, branchId])
+}
+
+model SolarSiteProfile {
+  id                        String           @id @default(cuid())
+  companyId                 String
+  customerId                String
+  propertyId                String           @unique
+  siteCode                  String?
+  status                    SolarSiteStatus  @default(COMMISSIONING)
+  installedCapacityKwp      Decimal?         @db.Decimal(12, 3)
+  acCapacityKw              Decimal?         @db.Decimal(12, 3)
+  batteryCapacityKwh        Decimal?         @db.Decimal(12, 3)
+  moduleCount               Int?
+  inverterCount             Int?
+  monitoringProvider        String?
+  monitoringSiteId          String?
+  gridConnectionType        String?
+  latitude                  Decimal?         @db.Decimal(10, 7)
+  longitude                 Decimal?         @db.Decimal(10, 7)
+  targetPerformanceRatioPct Decimal?         @db.Decimal(6, 2)
+  targetAvailabilityPct     Decimal?         @db.Decimal(6, 2)
+  lastInspectionAt          DateTime?
+  nextInspectionDueAt       DateTime?
+  notes                     String?
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+  company                   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer                  Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  property                  CustomerProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, siteCode])
+  @@index([companyId, customerId])
+  @@index([companyId, status])
+}
+
+model SolarReading {
+  id                  String           @id @default(cuid())
+  companyId           String
+  customerId          String
+  propertyId          String
+  assetId             String?
+  jobId               String?
+  capturedById        String?
+  source              String           @default("MANUAL")
+  condition           String           @default("NORMAL")
+  recordedAt          DateTime         @default(now())
+  powerKw             Decimal?         @db.Decimal(12, 3)
+  energyTodayKwh      Decimal?         @db.Decimal(14, 3)
+  lifetimeEnergyKwh   Decimal?         @db.Decimal(16, 3)
+  irradianceWm2       Decimal?         @db.Decimal(10, 2)
+  ambientTemperatureC Decimal?         @db.Decimal(7, 2)
+  moduleTemperatureC  Decimal?         @db.Decimal(7, 2)
+  dcVoltageV          Decimal?         @db.Decimal(12, 3)
+  dcCurrentA          Decimal?         @db.Decimal(12, 3)
+  acVoltageV          Decimal?         @db.Decimal(12, 3)
+  acCurrentA          Decimal?         @db.Decimal(12, 3)
+  frequencyHz         Decimal?         @db.Decimal(8, 3)
+  batterySocPct       Decimal?         @db.Decimal(6, 2)
+  batterySohPct       Decimal?         @db.Decimal(6, 2)
+  batteryVoltageV     Decimal?         @db.Decimal(12, 3)
+  performanceRatioPct Decimal?         @db.Decimal(6, 2)
+  availabilityPct     Decimal?         @db.Decimal(6, 2)
+  notes               String?
+  createdAt           DateTime         @default(now())
+  company             Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer            Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  property            CustomerProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  asset               Asset?           @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  job                 Job?             @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  capturedBy          User?            @relation("SolarReadingCapturedBy", fields: [capturedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, propertyId, recordedAt])
+  @@index([companyId, assetId, recordedAt])
+  @@index([companyId, condition, recordedAt])
+}
+
+model SolarFault {
+  id                     String             @id @default(cuid())
+  companyId              String
+  customerId             String
+  propertyId             String
+  assetId                String?
+  jobId                  String?
+  reportedById           String?
+  faultCode              String?
+  category               String?
+  title                  String
+  description            String?
+  severity               SolarFaultSeverity @default(MEDIUM)
+  status                 SolarFaultStatus   @default(OPEN)
+  detectedAt             DateTime           @default(now())
+  acknowledgedAt         DateTime?
+  resolvedAt             DateTime?
+  downtimeMinutes        Int?
+  estimatedEnergyLossKwh Decimal?            @db.Decimal(14, 3)
+  rootCause              String?
+  correctiveAction       String?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  company                Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer               Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  property               CustomerProperty   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  asset                  Asset?             @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  job                    Job?               @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  reportedBy             User?              @relation("SolarFaultReportedBy", fields: [reportedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, propertyId, status])
+  @@index([companyId, assetId, status])
+  @@index([companyId, severity, status])
+  @@index([companyId, detectedAt])
 }
 
 model JobAsset {

@@ -1091,7 +1091,8 @@ test('owner signup requires mock plan selection and annual pricing uses central 
   const company = app.locals.testDb.companies.find((item) => item.id === user.companyId);
   assert.equal(user.role, 'OWNER');
   assert.equal(company.onboardingState, 'PLAN_SELECTION_REQUIRED');
-  assert.equal(company.verticalKey, 'plumbing');
+  assert.equal(company.verticalKey, 'solar-om');
+  assert.equal(app.locals.testDb.services.some((item) => item.companyId === company.id && item.name === 'Solar Preventive Maintenance'), true);
 
   const catalog = await agent.get('/api/billing/catalog');
   assert.equal(catalog.status, 200);

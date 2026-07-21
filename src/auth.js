@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { prisma } = require('./db');
 const { AppError } = require('./errors');
+const { groupMembershipForCompany } = require('./services/organization.service');
 
 const COOKIE_NAME = process.env.COOKIE_NAME || 'revengine_token';
 const DEV_JWT_SECRET = 'dev-only-change-me';
@@ -43,9 +44,9 @@ const SAFE_USER_SELECT = {
 
 const SAFE_AUTH_USER_SELECT = {
   ...SAFE_USER_SELECT,
-  company: { select: { id: true, name: true, market: true, verticalKey: true, teamSizeBand: true, onboardingState: true } },
+  company: { select: { id: true, groupId: true, name: true, market: true, verticalKey: true, teamSizeBand: true, onboardingState: true, group: { select: { id: true, name: true } } } },
   roleTemplate: { select: { id: true, key: true, name: true, description: true, defaultScopeType: true } },
-  worker: { select: { id: true, roleId: true, title: true, phone: true, active: true, role: { select: { id: true, name: true } } } }
+  worker: { select: { id: true, companyId: true, roleId: true, title: true, phone: true, active: true, role: { select: { id: true, name: true } } } }
 };
 
 const SAFE_LOGIN_USER_SELECT = {
@@ -65,14 +66,16 @@ function publicUser(user) {
   return {
     id: user.id,
     companyId: user.companyId,
+    primaryCompanyId: user.primaryCompanyId || user.companyId,
     email: user.email,
     name: user.name,
     role: user.role,
     systemRole: user.role,
+    groupRole: user.groupRole || null,
     jobTitle: user.jobTitle || null,
     roleTemplate: user.roleTemplate || null,
     defaultScopeType: user.defaultScopeType || null,
-    company: user.company ? { id: user.company.id, name: user.company.name, market: user.company.market || null, verticalKey: user.company.verticalKey || 'generic', teamSizeBand: user.company.teamSizeBand || null, onboardingState: user.company.onboardingState || 'COMPLETED' } : undefined,
+    company: user.company ? { id: user.company.id, groupId: user.company.groupId || null, name: user.company.name, market: user.company.market || null, verticalKey: user.company.verticalKey || 'generic', teamSizeBand: user.company.teamSizeBand || null, onboardingState: user.company.onboardingState || 'COMPLETED', group: user.company.group || null } : undefined,
     worker: user.worker ? { id: user.worker.id, roleId: user.worker.roleId, title: user.worker.title, phone: user.worker.phone, active: user.worker.active, role: user.worker.role } : undefined
   };
 }
@@ -110,21 +113,23 @@ async function requireAuth(req, res, next) {
     if (!token) throw new AppError(401, 'Authentication required');
 
     const payload = jwt.verify(token, JWT_SECRET);
-    const user = await prisma.user.findUnique({
+    const baseUser = await prisma.user.findUnique({
       where: { id: payload.sub },
       select: SAFE_AUTH_USER_SELECT
     });
-    if (!user || user.disabledAt) throw new AppError(401, 'Authentication required');
-    if (user.passwordChangedAt && payload.iat && (payload.iat * 1000) < (new Date(user.passwordChangedAt).getTime() - 1000)) {
+    if (!baseUser || baseUser.disabledAt) throw new AppError(401, 'Authentication required');
+    if (baseUser.passwordChangedAt && payload.iat && (payload.iat * 1000) < (new Date(baseUser.passwordChangedAt).getTime() - 1000)) {
       throw new AppError(401, 'Authentication required');
     }
+    let activeCompanyId = payload.companyId || baseUser.companyId;
     if (payload.sid && prisma.userSession) {
-      const session = await prisma.userSession.findFirst({ where: { id: payload.sid, userId: user.id, companyId: user.companyId } });
+      const session = await prisma.userSession.findFirst({ where: { id: payload.sid, userId: baseUser.id } });
       if (!session || session.revokedAt || new Date(session.expiresAt).getTime() <= Date.now()) throw new AppError(401, 'Authentication required');
+      activeCompanyId = session.companyId || activeCompanyId;
       const lastSeenAt = session.lastSeenAt || session.createdAt;
       if (lastSeenAt && Date.now() - new Date(lastSeenAt).getTime() > SESSION_IDLE_TIMEOUT_MINUTES * 60 * 1000) {
         try {
-          await prisma.userSession.update({ where: { id: session.id }, data: { revokedAt: new Date(), revokedById: user.id } });
+          await prisma.userSession.update({ where: { id: session.id }, data: { revokedAt: new Date(), revokedById: baseUser.id } });
         } catch (error) {
           // Authentication still fails even if a mock cannot persist revocation.
         }
@@ -137,8 +142,31 @@ async function requireAuth(req, res, next) {
         // Non-critical for auth; keep request moving if a mock does not support lastSeen updates.
       }
     }
+    const activeCompany = activeCompanyId === baseUser.companyId
+      ? baseUser.company
+      : await prisma.company.findUnique({
+        where: { id: activeCompanyId },
+        select: { id: true, groupId: true, name: true, market: true, verticalKey: true, teamSizeBand: true, onboardingState: true, group: { select: { id: true, name: true } } }
+      });
+    if (!activeCompany) throw new AppError(401, 'Workspace access is no longer available');
+
+    const groupMembership = await groupMembershipForCompany(baseUser.id, activeCompany.id);
+    if (activeCompany.id !== baseUser.companyId && !groupMembership) throw new AppError(403, 'You do not have access to this workspace');
+
+    const groupRole = groupMembership && groupMembership.role;
+    const user = {
+      ...baseUser,
+      primaryCompanyId: baseUser.companyId,
+      companyId: activeCompany.id,
+      company: activeCompany,
+      groupRole: groupRole || null,
+      role: groupRole === 'OWNER' ? 'OWNER' : groupRole === 'MANAGER' ? 'ADMIN' : baseUser.role,
+      defaultScopeType: groupRole ? 'COMPANY' : baseUser.defaultScopeType,
+      fullBusinessAccess: groupRole ? true : baseUser.fullBusinessAccess,
+      worker: groupRole ? null : baseUser.worker && baseUser.worker.companyId === activeCompany.id ? baseUser.worker : null
+    };
     req.user = user;
-    req.companyId = user.companyId;
+    req.companyId = activeCompany.id;
     next();
   } catch (error) {
     next(error.status ? error : new AppError(401, 'Authentication required'));

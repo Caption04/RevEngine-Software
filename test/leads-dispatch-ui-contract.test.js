@@ -14,7 +14,7 @@ test('lead page and permission wiring are present', () => {
 
   assert.match(page, /data-page="leads"/);
   assert.match(page, /data-create-resource="leads"/);
-  assert.match(layout, /\['leads', 'Leads', 'leads\.html'/);
+  assert.match(layout, /\['leads', 'Solar Leads', 'leads\.html'/);
   assert.match(layout, /leads: 'leads\.view'/);
   assert.match(frontend, /action: '\/leads'/);
   assert.match(backend, /router\.get\('\/leads'/);
@@ -31,8 +31,8 @@ test('dispatch board is connected to the schedule without exposing unfinished cl
   assert.match(schedule, /data-dispatch-board/);
   assert.match(frontend, /api\('\/dispatch\/board'\)/);
   assert.match(backend, /router\.get\('\/dispatch\/board'/);
-  const enterpriseGroup = layout.split("['Enterprise', 'Advanced operations'")[1].split('],')[0];
-  assert.ok(!enterpriseGroup.includes('mobile-sync'));
-  assert.ok(!enterpriseGroup.includes('onboarding'));
+  const navGroups = layout.split('const adminNavGroups = [')[1].split('];')[0];
+  assert.ok(!navGroups.includes("'mobile-sync'"));
+  assert.ok(!navGroups.includes("'onboarding'"));
   assert.doesNotMatch(layout, /href="subscription\.html" data-full-access-only/);
 });

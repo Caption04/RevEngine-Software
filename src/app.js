@@ -14,6 +14,7 @@ const { prisma } = require('./db');
 const { errorHandler } = require('./errors');
 const { assertValidEnv } = require('./config/env');
 const { effectiveAccessForUser, hasFullBusinessAccess } = require('./services/accessControl.service');
+const { groupMembershipForCompany } = require('./services/organization.service');
 
 const app = express();
 const rootDir = path.resolve(__dirname, '..');
@@ -97,6 +98,7 @@ const staffHtmlPages = new Map([
   ['reports.html', ['OWNER', 'ADMIN', 'WORKER']],
   ['settings.html', ['OWNER', 'ADMIN', 'WORKER']],
   ['branches.html', ['OWNER', 'ADMIN', 'WORKER']],
+  ['workspaces.html', ['OWNER', 'ADMIN']],
   ['approvals.html', ['OWNER', 'ADMIN', 'WORKER']],
   ['assets.html', ['OWNER', 'ADMIN']],
   ['service-contracts.html', ['OWNER', 'ADMIN']],
@@ -119,6 +121,7 @@ const staffPagePermissions = new Map([
   ['index.html', ['dashboard.operational.view', 'dashboard.financial.view', 'dashboard.executive.view']], ['jobs.html', 'jobs.view'], ['schedule.html', 'schedule.view'], ['map.html', 'workers.location.view'],
   ['customers.html', 'customers.view'], ['members.html', 'members.view'], ['booking-requests.html', 'bookings.view'], ['quotes.html', 'quotes.view'], ['invoices.html', 'invoices.view'],
   ['reports.html', ['reports.money.view', 'reports.work.view', 'reports.workers.view', 'reports.sales.view', 'reports.stock.view']], ['settings.html', ['company.settings.view', 'company.settings.manage', 'company.branding.manage', 'settings.finance.manage', 'finance.exports.manage', 'notifications.view', 'integration.view', 'integration.manage', 'audit.view']], ['branches.html', 'branch.view'], ['approvals.html', 'approval.request.decide'],
+  ['workspaces.html', 'company.settings.view'],
   ['assets.html', 'contract.automation.manage'], ['service-contracts.html', 'contract.automation.manage'], ['contract-automation.html', 'contract.automation.manage'],
   ['inventory.html', 'inventory.view'], ['purchase-requests.html', 'purchaseRequest.create'], ['purchase-orders.html', 'purchaseOrder.manage'], ['procurement-costing.html', 'inventory.manage'],
   ['collections.html', 'payments.view'], ['mobile-sync.html', 'mobile.sync.manage'], ['executive-dashboard.html', 'dashboard.executive.view'], ['onboarding.html', 'company.settings.manage'],
@@ -128,6 +131,7 @@ const staffPagePermissions = new Map([
 const staffPagePriority = [
   'index.html', 'jobs.html', 'schedule.html', 'customers.html', 'booking-requests.html', 'quotes.html', 'invoices.html', 'collections.html',
   'map.html', 'members.html', 'inventory.html', 'purchase-requests.html', 'purchase-orders.html', 'branches.html', 'approvals.html',
+  'workspaces.html',
   'assets.html', 'service-contracts.html', 'contract-automation.html', 'procurement-costing.html', 'mobile-sync.html', 'reports.html',
   'executive-dashboard.html', 'settings.html', 'security-center.html', 'subscription.html'
 ];
@@ -169,10 +173,32 @@ async function staffPageUser(req) {
   if (!token) return null;
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    return prisma.user.findUnique({
+    const user = await prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { id: true, role: true, companyId: true, roleTemplateId: true, defaultScopeType: true, company: { select: { onboardingState: true } } }
+      select: { id: true, role: true, companyId: true, roleTemplateId: true, defaultScopeType: true, fullBusinessAccess: true, company: { select: { id: true, groupId: true, onboardingState: true } } }
     });
+    if (!user) return null;
+    let activeCompanyId = payload.companyId || user.companyId;
+    if (payload.sid && prisma.userSession) {
+      const session = await prisma.userSession.findFirst({ where: { id: payload.sid, userId: user.id, revokedAt: null } });
+      if (!session || new Date(session.expiresAt).getTime() <= Date.now()) return null;
+      activeCompanyId = session.companyId || activeCompanyId;
+    }
+    const activeCompany = activeCompanyId === user.companyId
+      ? user.company
+      : await prisma.company.findUnique({ where: { id: activeCompanyId }, select: { id: true, groupId: true, onboardingState: true } });
+    if (!activeCompany) return null;
+    const membership = await groupMembershipForCompany(user.id, activeCompany.id);
+    if (activeCompany.id !== user.companyId && !membership) return null;
+    const groupRole = membership && membership.role;
+    return {
+      ...user,
+      companyId: activeCompany.id,
+      company: activeCompany,
+      role: groupRole === 'OWNER' ? 'OWNER' : groupRole === 'MANAGER' ? 'ADMIN' : user.role,
+      defaultScopeType: groupRole ? 'COMPANY' : user.defaultScopeType,
+      fullBusinessAccess: groupRole ? true : user.fullBusinessAccess
+    };
   } catch (error) {
     return null;
   }
