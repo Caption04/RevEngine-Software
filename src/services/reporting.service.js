@@ -91,6 +91,7 @@ function applyOptionalFilters(records, filters) {
     if (filters.serviceId && record.serviceId !== filters.serviceId) return false;
     if (filters.workerId && record.workerId !== filters.workerId) return false;
     if (filters.customerId && record.customerId !== filters.customerId) return false;
+    if (filters.customerType && customerTypeOf(record) !== filters.customerType) return false;
     return true;
   });
 }
@@ -112,6 +113,11 @@ async function validateFilters(companyId, query = {}) {
     const customer = await prisma.customer.findFirst({ where: { id: String(query.customerId), companyId } });
     if (!customer) throw new AppError(404, 'Customer not found.');
     filters.customerId = customer.id;
+  }
+  if (query.customerType) {
+    const customerType = String(query.customerType).trim().toUpperCase();
+    if (!['RESIDENTIAL', 'BUSINESS'].includes(customerType)) throw new AppError(400, 'Customer segment must be residential or business.');
+    filters.customerType = customerType;
   }
   return filters;
 }
@@ -147,6 +153,17 @@ function timeline(records, dateFn, valueFn) {
     groups.set(key, (groups.get(key) || 0) + valueFn(record));
   });
   return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({ date, value }));
+}
+
+function customerTypeOf(record) {
+  return String(record && (record.customerType || record.customer && record.customer.customerType) || 'RESIDENTIAL').toUpperCase();
+}
+
+function customerDisplayName(customer) {
+  if (!customer) return 'Customer';
+  return customerTypeOf(customer) === 'BUSINESS'
+    ? customer.companyName || customer.name || customer.email || customer.id
+    : customer.name || customer.email || customer.id;
 }
 
 function nameMap(records) {
@@ -197,7 +214,7 @@ async function reportData(companyId, query = {}) {
   const filters = await validateFilters(companyId, query);
   const range = filters.range;
   const now = new Date();
-  const [customers, services, workers, jobsRaw, invoicesRaw, paymentsRaw, refundsRaw, unappliedCreditsRaw, quotesRaw, bookingsRaw] = await Promise.all([
+  const [customers, services, workers, jobsRaw, invoicesRaw, paymentsRaw, refundsRaw, unappliedCreditsRaw, quotesRaw, bookingsRaw, leadsRaw] = await Promise.all([
     prisma.customer.findMany({ where: { companyId }, orderBy: { createdAt: 'desc' } }),
     prisma.service.findMany({ where: { companyId }, orderBy: { name: 'asc' } }),
     prisma.workerProfile.findMany({ where: { companyId }, include: { user: { select: { id: true, name: true, email: true, role: true } } }, orderBy: { createdAt: 'desc' } }),
@@ -207,10 +224,13 @@ async function reportData(companyId, query = {}) {
     prisma.paymentRefund.findMany({ where: { companyId, status: 'REFUNDED' }, orderBy: { createdAt: 'desc' }, take: 3000 }),
     prisma.unappliedCustomerCredit ? prisma.unappliedCustomerCredit.findMany({ where: { companyId, status: { in: ['OPEN', 'LOCKED'] } }, orderBy: { createdAt: 'desc' }, take: 3000 }) : Promise.resolve([]),
     prisma.quote.findMany({ where: { companyId, deletedAt: null }, include: { customer: true, service: true }, orderBy: { createdAt: 'desc' }, take: 1000 }),
-    prisma.bookingRequest.findMany({ where: { companyId }, include: { service: true, customer: true }, orderBy: { createdAt: 'desc' }, take: 1000 })
+    prisma.bookingRequest.findMany({ where: { companyId }, include: { service: true, customer: true }, orderBy: { createdAt: 'desc' }, take: 1000 }),
+    prisma.lead.findMany({ where: { companyId }, include: { customer: true, service: true }, orderBy: { createdAt: 'desc' }, take: 1000 })
   ]);
 
-  const customerNames = nameMap(customers);
+  const segmentScopedCustomers = filters.customerType ? customers.filter((customer) => customerTypeOf(customer) === filters.customerType) : customers;
+  const scopedCustomers = filters.customerId ? segmentScopedCustomers.filter((customer) => customer.id === filters.customerId) : segmentScopedCustomers;
+  const customerNames = new Map(customers.map((customer) => [customer.id, customerDisplayName(customer)]));
   const serviceNames = nameMap(services);
   const workerNames = new Map(workers.map((worker) => [worker.id, workerName(worker)]));
   const jobs = applyOptionalFilters(jobsRaw, filters);
@@ -222,6 +242,7 @@ async function reportData(companyId, query = {}) {
   });
   const quotes = applyOptionalFilters(quotesRaw, filters);
   const bookings = applyOptionalFilters(bookingsRaw, filters);
+  const leads = applyOptionalFilters(leadsRaw, filters);
 
   const completedRefundsByPayment = refundsRaw.reduce((map, refund) => {
     map.set(refund.paymentId, (map.get(refund.paymentId) || 0) + number(refund.amount));
@@ -246,6 +267,7 @@ async function reportData(companyId, query = {}) {
   const scheduledJobs = jobs.filter((job) => job.scheduledStart && inRange(job.scheduledStart, range));
   const periodQuotes = quotes.filter((quote) => inRange(quoteDate(quote), range));
   const periodBookings = bookings.filter((booking) => inRange(booking.createdAt, range));
+  const periodLeads = leads.filter((lead) => inRange(lead.createdAt, range));
 
   const paidRevenue = paidPayments.reduce((sum, payment) => sum + netPaymentAmount(payment), MONEY_ZERO);
   const paidInvoiceTotal = periodInvoices.filter((invoice) => invoice.status === 'PAID').reduce((sum, invoice) => sum + number(invoice.total || invoice.amount), MONEY_ZERO);
@@ -346,7 +368,7 @@ async function reportData(companyId, query = {}) {
     };
   }).sort((a, b) => b.revenue - a.revenue || b.jobs - a.jobs || b.bookingRequests - a.bookingRequests).slice(0, TOP_LIMIT);
 
-  const customerHistory = customers.map((customer) => {
+  const customerHistory = scopedCustomers.map((customer) => {
     const customerInvoices = invoices.filter((invoice) => invoice.customerId === customer.id);
     const customerPayments = paidPayments.filter((payment) => customerInvoices.some((invoice) => invoice.id === payment.invoiceId));
     const customerJobs = jobs.filter((job) => job.customerId === customer.id);
@@ -354,7 +376,9 @@ async function reportData(companyId, query = {}) {
     const customerBookings = bookings.filter((booking) => booking.customerId === customer.id || booking.customerEmail === customer.email || booking.customerPhone === customer.phone);
     return {
       id: customer.id,
-      name: customer.name,
+      name: customerDisplayName(customer),
+      contactName: customer.name,
+      customerType: customerTypeOf(customer),
       revenue: customerPayments.reduce((sum, payment) => sum + netPaymentAmount(payment), 0),
       unpaidTotal: customerInvoices.filter(isUnpaid).reduce((sum, invoice) => sum + invoiceBalance(invoice), 0),
       invoices: customerInvoices.length,
@@ -369,6 +393,32 @@ async function reportData(companyId, query = {}) {
 
   const topCustomers = customerHistory.slice(0, TOP_LIMIT);
   const customersWithUnpaidInvoices = customerHistory.filter((customer) => customer.unpaidTotal > 0).slice(0, TOP_LIMIT);
+  const segmentTypes = filters.customerType ? [filters.customerType] : ['RESIDENTIAL', 'BUSINESS'];
+  const customerSegments = segmentTypes.map((customerType) => {
+    const segmentCustomers = scopedCustomers.filter((customer) => customerTypeOf(customer) === customerType);
+    const customerIds = new Set(segmentCustomers.map((customer) => customer.id));
+    const segmentInvoices = invoices.filter((invoice) => customerIds.has(invoice.customerId));
+    const segmentPayments = paidPayments.filter((payment) => segmentInvoices.some((invoice) => invoice.id === payment.invoiceId));
+    const segmentJobs = periodJobs.filter((job) => customerIds.has(job.customerId));
+    const segmentQuotes = periodQuotes.filter((quote) => customerIds.has(quote.customerId) || customerTypeOf(quote) === customerType);
+    const segmentBookings = periodBookings.filter((booking) => customerIds.has(booking.customerId) || customerTypeOf(booking) === customerType);
+    const segmentLeads = periodLeads.filter((lead) => customerIds.has(lead.customerId) || customerTypeOf(lead) === customerType);
+    return {
+      customerType,
+      label: customerType === 'BUSINESS' ? 'Business' : 'Residential',
+      leads: segmentLeads.length,
+      bookings: segmentBookings.length,
+      customers: segmentCustomers.length,
+      newCustomers: segmentCustomers.filter((customer) => inRange(customer.createdAt, range)).length,
+      repeatCustomers: segmentCustomers.filter((customer) => jobs.filter((job) => job.customerId === customer.id).length > 1).length,
+      quotes: segmentQuotes.length,
+      acceptedQuotes: segmentQuotes.filter((quote) => quote.status === 'ACCEPTED').length,
+      jobs: segmentJobs.length,
+      completedJobs: segmentJobs.filter((job) => job.status === 'COMPLETED').length,
+      revenue: segmentPayments.reduce((sum, payment) => sum + netPaymentAmount(payment), 0),
+      unpaidTotal: segmentInvoices.filter(isUnpaid).reduce((sum, invoice) => sum + invoiceBalance(invoice), 0)
+    };
+  });
 
   const ageBuckets = [
     { name: 'Current', count: 0, total: 0 },
@@ -386,7 +436,7 @@ async function reportData(companyId, query = {}) {
   const recentCompletedJobs = completedJobs.slice().sort((a, b) => new Date(b.completedAt || b.updatedAt || b.createdAt) - new Date(a.completedAt || a.updatedAt || a.createdAt)).slice(0, TOP_LIMIT).map((job) => ({
     id: job.id,
     title: job.title,
-    customerName: job.customer && job.customer.name || customerNames.get(job.customerId) || 'Customer',
+    customerName: job.customer ? customerDisplayName(job.customer) : customerNames.get(job.customerId) || 'Customer',
     serviceName: job.service && job.service.name || serviceNames.get(job.serviceId) || 'Service',
     workerName: job.worker && workerName(job.worker) || workerNames.get(job.workerId) || 'Unassigned',
     completedAt: job.completedAt || job.updatedAt || job.createdAt,
@@ -394,11 +444,11 @@ async function reportData(companyId, query = {}) {
   }));
 
   return {
-    filters: { period: range.label, startDate: range.start, endDate: range.end, serviceId: filters.serviceId || null, workerId: filters.workerId || null, customerId: filters.customerId || null },
+    filters: { period: range.label, startDate: range.start, endDate: range.end, serviceId: filters.serviceId || null, workerId: filters.workerId || null, customerId: filters.customerId || null, customerType: filters.customerType || null },
     options: {
       services: services.map((service) => ({ id: service.id, name: service.name })),
       workers: workers.map((worker) => ({ id: worker.id, name: workerName(worker) })),
-      customers: customers.map((customer) => ({ id: customer.id, name: customer.name }))
+      customers: segmentScopedCustomers.map((customer) => ({ id: customer.id, name: customerDisplayName(customer), customerType: customerTypeOf(customer) }))
     },
     overview: {
       totalRevenue: paidRevenue,
@@ -407,8 +457,8 @@ async function reportData(companyId, query = {}) {
       completedJobs: completedJobs.length,
       scheduledJobs: scheduledJobs.length,
       quoteAcceptanceRate: pct(acceptedQuotes.length, sentQuotes.length),
-      newCustomers: customers.filter((customer) => inRange(customer.createdAt, range)).length,
-      repeatCustomers: customers.filter((customer) => jobs.filter((job) => job.customerId === customer.id).length > 1).length,
+      newCustomers: scopedCustomers.filter((customer) => inRange(customer.createdAt, range)).length,
+      repeatCustomers: scopedCustomers.filter((customer) => jobs.filter((job) => job.customerId === customer.id).length > 1).length,
       topService: serviceReport[0] || null,
       urgentItems: {
         overdueUnpaidInvoices: overdueInvoices.length,
@@ -441,7 +491,7 @@ async function reportData(companyId, query = {}) {
       details: unpaidInvoices.slice().sort((a, b) => daysOverdue(b) - daysOverdue(a)).slice(0, 50).map((invoice) => ({
         id: invoice.id,
         number: invoice.number,
-        customerName: invoice.customer && invoice.customer.name || customerNames.get(invoice.customerId) || 'Customer',
+        customerName: invoice.customer ? customerDisplayName(invoice.customer) : customerNames.get(invoice.customerId) || 'Customer',
         status: invoice.status,
         total: invoiceTotal(invoice),
         balanceDue: invoiceBalance(invoice),
@@ -488,9 +538,10 @@ async function reportData(companyId, query = {}) {
       ]
     },
     customers: {
-      totalCustomers: customers.length,
-      newCustomers: customers.filter((customer) => inRange(customer.createdAt, range)).length,
-      repeatCustomers: customers.filter((customer) => jobs.filter((job) => job.customerId === customer.id).length > 1).length,
+      totalCustomers: scopedCustomers.length,
+      newCustomers: scopedCustomers.filter((customer) => inRange(customer.createdAt, range)).length,
+      repeatCustomers: scopedCustomers.filter((customer) => jobs.filter((job) => job.customerId === customer.id).length > 1).length,
+      segments: customerSegments,
       topCustomers,
       customersWithUnpaidInvoices,
       customerHistory

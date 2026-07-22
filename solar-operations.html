@@ -15,7 +15,7 @@
         <div class="hero-copy">
           <span class="eyebrow">Solar O&amp;M control centre</span>
           <h2>Solar Operations</h2>
-          <p>See site health, generation readings, equipment condition, faults, and upcoming maintenance in one place.</p>
+          <p>See company-wide site health, generation readings, equipment condition, faults, and upcoming maintenance in one place.</p>
         </div>
         <div class="hero-actions solar-actions">
           <button class="secondary-button" type="button" data-solar-action="reading">Record Reading</button>
@@ -26,16 +26,16 @@
 
       <section class="stats solar-stats">
         <article class="card stat-card"><div class="stat-label">Solar Sites</div><div class="stat-value" data-solar-stat="sites">0</div><div class="trend" data-solar-trend="sites">No sites configured</div></article>
-        <article class="card stat-card"><div class="stat-label">Installed Capacity</div><div class="stat-value" data-solar-stat="capacity">0 kWp</div><div class="trend">Across all managed sites</div></article>
-        <article class="card stat-card"><div class="stat-label">Energy Today</div><div class="stat-value" data-solar-stat="energy">0 kWh</div><div class="trend">Latest reading from each site</div></article>
+        <article class="card stat-card"><div class="stat-label">Installed Capacity</div><div class="stat-value" data-solar-stat="capacity">0 kWp</div><div class="trend">Total across all managed sites</div></article>
+        <article class="card stat-card"><div class="stat-label">Energy Today</div><div class="stat-value" data-solar-stat="energy">0 kWh</div><div class="trend">Total from each site's latest reading today</div></article>
         <article class="card stat-card"><div class="stat-label">Open Faults</div><div class="stat-value" data-solar-stat="faults">0</div><div class="trend" data-solar-trend="faults">No active faults</div></article>
       </section>
 
       <section class="solar-health-strip">
-        <article class="panel solar-health-card"><span>Average performance ratio</span><strong data-solar-stat="performance">—</strong><small>Latest site readings</small></article>
-        <article class="panel solar-health-card"><span>Average availability</span><strong data-solar-stat="availability">—</strong><small>Latest site readings</small></article>
-        <article class="panel solar-health-card"><span>Solar equipment</span><strong data-solar-stat="equipment">0</strong><small>Active equipment records</small></article>
-        <article class="panel solar-health-card"><span>Operational sites</span><strong data-solar-stat="operational">0</strong><small>Marked operational</small></article>
+        <article class="panel solar-health-card"><span>Capacity-weighted performance ratio</span><strong data-solar-stat="performance">—</strong><small>Larger solar sites contribute more, using each site's installed kWp</small></article>
+        <article class="panel solar-health-card"><span>Capacity-weighted availability</span><strong data-solar-stat="availability">—</strong><small>Larger solar sites contribute more, using each site's installed kWp</small></article>
+        <article class="panel solar-health-card"><span>Total solar equipment</span><strong data-solar-stat="equipment">0</strong><small>Active equipment across all managed sites</small></article>
+        <article class="panel solar-health-card"><span>Operational sites</span><strong data-solar-stat="operational">0</strong><small>Sites currently marked operational</small></article>
       </section>
 
       <section class="solar-layout">

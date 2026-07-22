@@ -106,11 +106,14 @@
     const config = modalConfig(type);
     const modal = document.createElement('div');
     modal.className = 'fc-modal';
-    modal.innerHTML = `<div class="fc-dialog solar-dialog"><form><div class="panel-head"><h3>${escapeHtml(config.title)}</h3><button class="icon-button" type="button" data-close>&times;</button></div><div class="form-grid">${config.fields}</div><div class="fc-form-actions"><button class="secondary-button" type="button" data-close>Cancel</button><button class="primary-button" type="submit">Save</button></div><p class="fc-form-error" hidden></p></form></div>`;
+    modal.innerHTML = `<div class="fc-dialog solar-dialog"><form novalidate><div class="panel-head"><h3>${escapeHtml(config.title)}</h3><button class="icon-button" type="button" data-close>&times;</button></div><div class="form-grid">${config.fields}</div><div class="fc-form-actions"><button class="secondary-button" type="button" data-close>Cancel</button><button class="primary-button" type="submit">Save</button></div><p class="fc-form-error" hidden></p></form></div>`;
     const close = () => modal.remove();
+    const form = modal.querySelector('form');
+    if (window.RevEngineFormUX) window.RevEngineFormUX.refresh(form);
     modal.addEventListener('click', (event) => { if (event.target === modal || event.target.closest('[data-close]')) close(); });
-    modal.querySelector('form').addEventListener('submit', async (event) => {
+    form.addEventListener('submit', async (event) => {
       event.preventDefault();
+      if (window.RevEngineFormUX && !window.RevEngineFormUX.validateForm(event.currentTarget)) return;
       const errorNode = modal.querySelector('.fc-form-error');
       errorNode.hidden = true;
       const body = Object.fromEntries(new FormData(event.currentTarget).entries());

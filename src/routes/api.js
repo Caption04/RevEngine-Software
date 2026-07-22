@@ -93,6 +93,13 @@ const jobStatusValues = ['NEW', 'SCHEDULED', 'DISPATCHED', 'ARRIVED', 'IN_PROGRE
 const activityTypeValues = ['ASSIGNED','ARRIVED','STARTED','PAUSED','RESUMED','COMPLETED','ADMIN_NOTE','STATUS_CHANGED','PROOF_PHOTO_ADDED','PROOF_PHOTO_REMOVED','SIGNATURE_ADDED','SIGNATURE_REMOVED','COMPLETION_LOCATION_CAPTURED'];
 const proofCategoryValues = ['BEFORE', 'AFTER', 'GENERAL', 'DAMAGE', 'ISSUE', 'EXTRA_WORK', 'CUSTOMER_APPROVAL'];
 const bookingRequestStatusValues = ['NEW', 'REVIEWED', 'CONVERTED', 'DECLINED', 'CANCELLED'];
+const customerTypeValues = ['RESIDENTIAL', 'BUSINESS'];
+function customerTypeFromQuery(value) {
+  if (!value || String(value).toUpperCase() === 'ALL') return null;
+  const normalized = String(value).trim().toUpperCase();
+  if (!customerTypeValues.includes(normalized)) throw new AppError(400, 'Customer segment must be residential or business.');
+  return normalized;
+}
 const leadStatusValues = ['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTED', 'WON', 'LOST'];
 const leadActivityTypeValues = ['NOTE', 'FOLLOW_UP', 'STATUS_CHANGE'];
 const integrationProviderValues = ['BREVO', 'META_WHATSAPP_CLOUD', 'CLICKATELL', 'AFRICAS_TALKING', 'CLOUDFLARE_R2'];
@@ -104,6 +111,7 @@ const solarFaultStatusValues = ['OPEN', 'ACKNOWLEDGED', 'IN_PROGRESS', 'RESOLVED
 const solarReadingConditionValues = ['NORMAL', 'WARNING', 'CRITICAL'];
 const solarAssetTypeValues = ['SOLAR_PLANT', 'PV_ARRAY', 'PV_MODULE', 'INVERTER', 'MPPT', 'STRING', 'COMBINER_BOX', 'DC_ISOLATOR', 'AC_DISTRIBUTION', 'BATTERY_BANK', 'BATTERY_MODULE', 'BMS', 'CHARGE_CONTROLLER', 'GENERATOR', 'MONITORING_GATEWAY', 'WEATHER_STATION', 'METER', 'TRANSFORMER', 'OTHER'];
 const solarDefaultServices = [
+  { name: 'Solar System Installation', description: 'New residential or commercial solar system installation, testing, commissioning, and customer handover.' },
   { name: 'Solar Site Assessment', description: 'Site survey, system inventory, capacity capture, safety review, and baseline condition report.' },
   { name: 'Solar Preventive Maintenance', description: 'Planned mechanical and electrical inspection of the complete solar plant.' },
   { name: 'Inverter Diagnostics', description: 'Alarm review, electrical measurements, firmware checks, and inverter fault diagnosis.' },
@@ -112,6 +120,21 @@ const solarDefaultServices = [
   { name: 'Solar Fault Callout', description: 'Reactive investigation and corrective work for an underperforming or offline solar site.' }
 ];
 const solarChecklistDefinitions = [
+  {
+    serviceName: 'Solar System Installation',
+    name: 'Solar Installation and Commissioning',
+    description: 'Required safety, testing, commissioning, and handover checks for a new solar system.',
+    items: [
+      ['Confirm installed panels, inverter, batteries, and protection equipment match the approved job', 'PASS_FAIL', true, true],
+      ['Inspect mounting, roof penetrations, cable routes, labels, and earthing', 'PASS_FAIL', true, true],
+      ['Record DC voltage and polarity checks', 'TEXT', true, false],
+      ['Record AC voltage and protection checks', 'TEXT', true, false],
+      ['Configure inverter, battery, and monitoring settings', 'PASS_FAIL', true, false],
+      ['Run commissioning test and record system output', 'TEXT', true, false],
+      ['Capture equipment serial numbers and completed installation photos', 'PHOTO', true, true],
+      ['Complete customer handover and explain safe system operation', 'YES_NO', true, false]
+    ]
+  },
   {
     serviceName: 'Solar Preventive Maintenance',
     name: 'Solar Plant Preventive Maintenance',
@@ -2625,10 +2648,68 @@ async function recordSecurityEvent(companyId, eventType, options = {}) {
   });
 }
 
-async function createAuthSession(req, user, settings) {
+const DEVICE_COOKIE_NAME = process.env.DEVICE_COOKIE_NAME || 'revengine_device';
+const DEVICE_COOKIE_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 365;
+
+function trustedDeviceKey(req, res, userId) {
+  let raw = String(req.cookies && req.cookies[DEVICE_COOKIE_NAME] || '').trim();
+  if (!/^[0-9a-f-]{36}$/i.test(raw)) raw = crypto.randomUUID();
+  res.cookie(DEVICE_COOKIE_NAME, raw, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: DEVICE_COOKIE_MAX_AGE_MS
+  });
+  return crypto.createHash('sha256').update(`${userId}:${raw}`).digest('hex');
+}
+
+async function createAuthSession(req, res, user, settings) {
   const expiresAt = new Date(Date.now() + Number(settings.sessionLengthHours || 8) * 60 * 60 * 1000);
   if (!prisma.userSession) return { id: null, expiresAt };
-  return prisma.userSession.create({ data: { companyId: user.companyId, userId: user.id, ipAddress: req.ip, userAgent: req.get('user-agent'), expiresAt, lastSeenAt: new Date() } });
+  const deviceKey = trustedDeviceKey(req, res, user.id);
+  const data = {
+    companyId: user.companyId,
+    ipAddress: req.ip,
+    userAgent: req.get('user-agent'),
+    deviceKey,
+    expiresAt,
+    lastSeenAt: new Date(),
+    revokedAt: null,
+    revokedById: null
+  };
+  return prisma.userSession.upsert({
+    where: { deviceKey },
+    update: data,
+    create: { ...data, userId: user.id }
+  });
+}
+
+function sessionDeviceGroupKey(session) {
+  if (session.deviceKey) return `device:${session.deviceKey}`;
+  const legacy = `${session.userAgent || ''}|${session.ipAddress || ''}`;
+  return `legacy:${crypto.createHash('sha256').update(legacy).digest('hex')}`;
+}
+
+function groupedActiveSessions(rows, currentSessionId) {
+  const groups = new Map();
+  const keyedUserAgents = new Set((rows || []).filter((session) => session.deviceKey && session.userAgent).map((session) => session.userAgent));
+  for (const session of rows || []) {
+    if (session.revokedAt) continue;
+    // Old builds created one row per login. Once a browser has a real device key,
+    // hide its ambiguous legacy rows instead of showing the same browser twice.
+    if (!session.deviceKey && session.userAgent && keyedUserAgents.has(session.userAgent)) continue;
+    const key = sessionDeviceGroupKey(session);
+    const existing = groups.get(key);
+    const sessionTime = new Date(session.lastSeenAt || session.createdAt || 0).getTime();
+    const existingTime = existing ? new Date(existing.lastSeenAt || existing.createdAt || 0).getTime() : -1;
+    if (!existing || session.id === currentSessionId || existing.id !== currentSessionId && sessionTime > existingTime) {
+      groups.set(key, { ...session, current: session.id === currentSessionId, deviceGroupKey: key });
+    } else if (session.id === currentSessionId) {
+      groups.set(key, { ...session, current: true, deviceGroupKey: key });
+    }
+  }
+  return Array.from(groups.values()).sort((a, b) => new Date(b.lastSeenAt || b.createdAt || 0) - new Date(a.lastSeenAt || a.createdAt || 0));
 }
 
 async function requireCurrentUserRecord(req) {
@@ -2705,8 +2786,10 @@ router.post('/auth/register', validate(registerSchema), asyncHandler(async (req,
     if (tx.branch) await tx.branch.create({ data: { companyId: company.id, name: req.body.branchName || 'Main Branch', code: 'MAIN', country: regional.code, city: req.body.branchCity, timezone: regional.timezone, active: true } });
     return created;
   });
+  const settings = await getCompanySecuritySettings(user.companyId);
+  const session = await createAuthSession(req, res, user, settings);
   clearClientAuthCookie(res);
-  setAuthCookie(res, user);
+  setAuthCookie(res, { ...user, currentSessionId: session.id }, { sessionId: session.id, expiresInHours: settings.sessionLengthHours });
   await audit({ companyId: user.companyId, user }, 'REGISTER', 'User', user.id, { companyName: user.company && user.company.name });
   sendData(res, await publicStaffUser(user), 201);
 }));
@@ -2749,7 +2832,7 @@ router.post('/auth/login', validate(loginSchema), asyncHandler(async (req, res) 
     }
   }
   await prisma.user.update({ where: { id: user.id }, data: { failedLoginCount: 0, lockedUntil: null } });
-  const session = await createAuthSession(req, authUser, settings);
+  const session = await createAuthSession(req, res, authUser, settings);
   clearClientAuthCookie(res);
   setAuthCookie(res, { ...authUser, currentSessionId: session.id }, { sessionId: session.id, expiresInHours: settings.sessionLengthHours });
   await audit({ companyId: authUser.companyId, user: authUser, ip: req.ip, get: req.get.bind(req) }, 'LOGIN', 'User', user.id, { sessionId: session.id });
@@ -2831,25 +2914,40 @@ router.post('/auth/2fa/recovery-codes', requireAuth, requireRole(...adminRoles),
 }));
 
 router.get('/auth/sessions', requireAuth, asyncHandler(async (req, res) => {
-  const rows = prisma.userSession ? await prisma.userSession.findMany({ where: { companyId: req.companyId, userId: req.user.id }, orderBy: { createdAt: 'desc' } }) : [];
-  sendData(res, normalize(rows.map((session) => ({ id: session.id, current: session.id === req.authSessionId, ipAddress: session.ipAddress, userAgent: session.userAgent, expiresAt: session.expiresAt, lastSeenAt: session.lastSeenAt, revokedAt: session.revokedAt, createdAt: session.createdAt }))));
+  const rows = prisma.userSession ? await prisma.userSession.findMany({ where: { userId: req.user.id, revokedAt: null }, orderBy: { lastSeenAt: 'desc' } }) : [];
+  const sessions = groupedActiveSessions(rows, req.authSessionId).map((session) => ({
+    id: session.id,
+    current: session.current,
+    ipAddress: session.ipAddress,
+    userAgent: session.userAgent,
+    expiresAt: session.expiresAt,
+    lastSeenAt: session.lastSeenAt,
+    createdAt: session.createdAt
+  }));
+  sendData(res, normalize(sessions));
 }));
 
 router.post('/auth/sessions/revoke-all', requireAuth, asyncHandler(async (req, res) => {
   const now = new Date();
-  const result = prisma.userSession ? await prisma.userSession.updateMany({ where: { companyId: req.companyId, userId: req.user.id, revokedAt: null }, data: { revokedAt: now, revokedById: req.user.id } }) : { count: 0 };
+  const result = prisma.userSession ? await prisma.userSession.updateMany({ where: { userId: req.user.id, revokedAt: null }, data: { revokedAt: now, revokedById: req.user.id } }) : { count: 0 };
   clearAuthCookie(res);
   await recordSecurityEvent(req.companyId, 'ALL_SESSIONS_REVOKED', { userId: req.user.id, severity: 'WARN', req, metadata: { count: result.count } });
   sendData(res, { revoked: result.count });
 }));
 
 router.post('/auth/sessions/:id/revoke', requireAuth, validate(idParam, 'params'), asyncHandler(async (req, res) => {
-  const session = prisma.userSession ? await prisma.userSession.findFirst({ where: { id: req.params.id, companyId: req.companyId, userId: req.user.id } }) : null;
-  if (!session) throw notFound('Session not found');
-  const updated = await prisma.userSession.update({ where: { id: session.id }, data: { revokedAt: new Date(), revokedById: req.user.id } });
-  if (session.id === req.authSessionId) clearAuthCookie(res);
-  await recordSecurityEvent(req.companyId, 'SESSION_REVOKED', { userId: req.user.id, severity: 'WARN', req, metadata: { sessionId: session.id, self: session.id === req.authSessionId } });
-  sendData(res, normalize({ revoked: true, session: updated }));
+  const session = prisma.userSession ? await prisma.userSession.findFirst({ where: { id: req.params.id, userId: req.user.id } }) : null;
+  if (!session) throw notFound('Signed-in device not found');
+  const groupWhere = session.deviceKey
+    ? { userId: req.user.id, deviceKey: session.deviceKey, revokedAt: null }
+    : { userId: req.user.id, userAgent: session.userAgent, ipAddress: session.ipAddress, revokedAt: null };
+  const related = await prisma.userSession.findMany({ where: groupWhere });
+  const current = related.some((item) => item.id === req.authSessionId);
+  const now = new Date();
+  const result = await prisma.userSession.updateMany({ where: groupWhere, data: { revokedAt: now, revokedById: req.user.id } });
+  if (current) clearAuthCookie(res);
+  await recordSecurityEvent(req.companyId, 'SESSION_REVOKED', { userId: req.user.id, severity: 'WARN', req, metadata: { sessionId: session.id, self: current, sessionsRevoked: result.count } });
+  sendData(res, normalize({ revoked: true, sessionsRevoked: result.count }));
 }));
 
 router.get('/security/events', requireAuth, asyncHandler(async (req, res) => {
@@ -2943,7 +3041,9 @@ router.get('/ops/status', requireAuth, requireRole(...adminRoles), asyncHandler(
 const bookingRequestInclude = { customer: true, service: true, convertedJob: true, photos: true, clientAccount: { select: { id: true, name: true, email: true, phone: true, status: true } } };
 const publicTimeWindow = z.enum(['MORNING', 'AFTERNOON', 'EVENING', 'ANY_TIME']).optional().or(z.literal('')).transform((value) => value || undefined);
 const publicBookingRequestSchema = z.object({
+  customerType: z.enum(customerTypeValues).default('RESIDENTIAL'),
   customerName: z.string().trim().min(2).max(160),
+  companyName: optionalText(200),
   customerEmail: optionalEmail,
   customerPhone: optionalText(60),
   address: z.string().trim().min(3).max(300),
@@ -2965,7 +3065,8 @@ const publicBookingRequestSchema = z.object({
   })).max(5).optional(),
   source: optionalText(80)
 }).refine((data) => data.customerEmail || data.customerPhone, { message: 'Email or phone is required', path: ['customerEmail'] })
-  .refine((data) => data.serviceId || data.serviceName, { message: 'Service is required', path: ['serviceId'] });
+  .refine((data) => data.serviceId || data.serviceName, { message: 'Service is required', path: ['serviceId'] })
+  .refine((data) => data.customerType !== 'BUSINESS' || Boolean(data.companyName), { message: 'Business name is required', path: ['companyName'] });
 const publicTrackSchema = z.object({ reference: z.string().trim().min(4).max(40), contact: z.string().trim().min(3).max(160) });
 const bookingRequestMessageSchema = z.object({ customerFacingMessage: optionalText(1000) });
 
@@ -3074,7 +3175,7 @@ router.post('/public/booking-requests', bookingPhotoUploadMiddleware, validate(p
     if (!service) throw notFound('Service not found');
   }
   const publicReference = await createPublicReference(prisma, company.id);
-  const created = await prisma.bookingRequest.create({ data: { companyId: company.id, publicReference, status: 'NEW', customerName: req.body.customerName, customerEmail: req.body.customerEmail, customerPhone: req.body.customerPhone, address: req.body.address, city: req.body.city, propertyType: req.body.propertyType, accessNotes: req.body.accessNotes, serviceId: service && service.id, serviceName: service ? service.name : req.body.serviceName, preferredDate: req.body.preferredDate, preferredTimeWindow: req.body.preferredTimeWindow, notes: req.body.notes, source: req.body.source || 'public_booking' } });
+  const created = await prisma.bookingRequest.create({ data: { companyId: company.id, publicReference, status: 'NEW', customerType: req.body.customerType, customerName: req.body.customerName, companyName: req.body.companyName, customerEmail: req.body.customerEmail, customerPhone: req.body.customerPhone, address: req.body.address, city: req.body.city, propertyType: req.body.propertyType, accessNotes: req.body.accessNotes, serviceId: service && service.id, serviceName: service ? service.name : req.body.serviceName, preferredDate: req.body.preferredDate, preferredTimeWindow: req.body.preferredTimeWindow, notes: req.body.notes, source: req.body.source || 'public_booking' } });
   const uploaded = [];
   for (const file of (req.files || [])) uploaded.push(await bookingPhotoData(company.id, created.id, file));
   const provided = (req.body.photos || []).map((photo) => ({ companyId: company.id, bookingRequestId: created.id, url: photo.url, filename: photo.filename || path.basename(photo.url), originalName: photo.originalName, mimeType: photo.mimeType, sizeBytes: photo.sizeBytes, caption: photo.caption }));
@@ -3262,7 +3363,7 @@ router.post("/client/booking-requests", requireClientAuth, bookingPhotoUploadMid
     if (!service) throw notFound("Service not found");
   }
   const publicReference = await createPublicReference(prisma, req.clientAccount.companyId);
-  const created = await prisma.bookingRequest.create({ data: { companyId: req.clientAccount.companyId, publicReference, customerId: req.clientAccount.customerId, clientAccountId: req.clientAccount.id, status: "NEW", customerName: req.body.customerName, customerEmail: req.body.customerEmail || req.clientAccount.email, customerPhone: req.body.customerPhone || req.clientAccount.phone, address: req.body.address, city: req.body.city, propertyType: req.body.propertyType, accessNotes: req.body.accessNotes, serviceId: service && service.id, serviceName: service ? service.name : req.body.serviceName, preferredDate: req.body.preferredDate, preferredTimeWindow: req.body.preferredTimeWindow, notes: req.body.notes, source: "client_portal" } });
+  const created = await prisma.bookingRequest.create({ data: { companyId: req.clientAccount.companyId, publicReference, customerId: req.clientAccount.customerId, clientAccountId: req.clientAccount.id, status: "NEW", customerType: req.body.customerType, customerName: req.body.customerName, companyName: req.body.companyName, customerEmail: req.body.customerEmail || req.clientAccount.email, customerPhone: req.body.customerPhone || req.clientAccount.phone, address: req.body.address, city: req.body.city, propertyType: req.body.propertyType, accessNotes: req.body.accessNotes, serviceId: service && service.id, serviceName: service ? service.name : req.body.serviceName, preferredDate: req.body.preferredDate, preferredTimeWindow: req.body.preferredTimeWindow, notes: req.body.notes, source: "client_portal" } });
   const uploaded = [];
   for (const file of (req.files || [])) uploaded.push(await bookingPhotoData(req.clientAccount.companyId, created.id, file, { customerId: req.clientAccount.customerId }));
   const provided = (req.body.photos || []).map((photo) => ({ companyId: req.clientAccount.companyId, bookingRequestId: created.id, url: photo.url, filename: photo.filename || path.basename(photo.url), originalName: photo.originalName, mimeType: photo.mimeType, sizeBytes: photo.sizeBytes, caption: photo.caption }));
@@ -3826,7 +3927,7 @@ router.post('/public/member-invitations/accept', validate(invitationAcceptSchema
     return created;
   });
   const settings = await getCompanySecuritySettings(invitation.companyId);
-  const session = await createAuthSession(req, user, settings);
+  const session = await createAuthSession(req, res, user, settings);
   setAuthCookie(res, { ...user, currentSessionId: session.id }, { sessionId: session.id, expiresInHours: settings.sessionLengthHours });
   sendData(res, await publicStaffUser(user), 201);
 }));
@@ -5539,6 +5640,7 @@ function allowedReportPayload(data, areas, stock) {
         totalCustomers: data.customers.totalCustomers,
         newCustomers: data.customers.newCustomers,
         repeatCustomers: data.customers.repeatCustomers,
+        segments: (data.customers.segments || []).map((row) => withoutMoneyFields(row, ['revenue', 'unpaidTotal'])),
         topCustomers: (data.customers.topCustomers || []).map((row) => withoutMoneyFields(row, ['revenue', 'unpaidTotal'])),
         customerHistory: (data.customers.customerHistory || []).map((row) => withoutMoneyFields(row, ['revenue', 'unpaidTotal']))
       };
@@ -5819,7 +5921,7 @@ router.post('/analytics/report-schedules', requireRole(...adminRoles), asyncHand
 const onboardingImportTypes = ['customers', 'properties', 'workers', 'assets', 'inventory-items', 'suppliers', 'stock-levels', 'service-contracts', 'contract-assets'];
 const onboardingVerticals = ['solar-om'];
 const onboardingTemplateColumns = {
-  customers: ['name', 'email', 'phone', 'address', 'branchCode', 'notes'],
+  customers: ['name', 'email', 'phone', 'customerType', 'companyName', 'address', 'branchCode', 'notes'],
   properties: ['customerEmail', 'customerName', 'label', 'address', 'city', 'branchCode', 'notes', 'isDefault'],
   workers: ['name', 'email', 'phone', 'title', 'branchCode', 'active'],
   assets: ['customerEmail', 'propertyAddress', 'name', 'assetType', 'assetTag', 'serialNumber', 'manufacturer', 'modelNumber', 'locationLabel', 'branchCode', 'status', 'notes'],
@@ -5976,6 +6078,9 @@ async function validateImportRow(req, type, row) {
   const requireValue = (field) => { if (!row[field]) errors.push({ field, message: field + ' is required' }); };
   if (type === 'customers') {
     requireValue('name');
+    const customerType = String(row.customerType || 'RESIDENTIAL').trim().toUpperCase();
+    if (!customerTypeValues.includes(customerType)) errors.push({ field: 'customerType', message: 'Customer type must be RESIDENTIAL or BUSINESS' });
+    if (customerType === 'BUSINESS' && !row.companyName) errors.push({ field: 'companyName', message: 'Business name is required for a business customer' });
     if (row.email && !/^\S+@\S+\.\S+$/.test(row.email)) errors.push({ field: 'email', message: 'Email is invalid' });
     if (row.email && await prisma.customer.findFirst({ where: { companyId: req.companyId, email: row.email } })) errors.push({ field: 'email', message: 'Duplicate customer email' });
   } else if (type === 'properties') {
@@ -6012,7 +6117,7 @@ async function validateImportRow(req, type, row) {
 async function importOneRow(req, type, row) {
   if (type === 'customers') {
     const branchId = await branchIdForImport(req, row.branchCode);
-    return prisma.customer.create({ data: { companyId: req.companyId, branchId, name: row.name, email: row.email || undefined, phone: row.phone || undefined, address: row.address || undefined, notes: row.notes || undefined } });
+    return prisma.customer.create({ data: { companyId: req.companyId, branchId, customerType: String(row.customerType || 'RESIDENTIAL').toUpperCase() === 'BUSINESS' ? 'BUSINESS' : 'RESIDENTIAL', name: row.name, companyName: row.companyName || undefined, email: row.email || undefined, phone: row.phone || undefined, address: row.address || undefined, notes: row.notes || undefined } });
   }
   if (type === 'properties') {
     const customer = await customerForImport(req, row);
@@ -6281,20 +6386,30 @@ router.post('/onboarding/demo-data/:vertical', requireRole('OWNER'), asyncHandle
 
 const customerSchema = z.object({
   branchId: z.string().min(1).optional(),
-  name: z.string().min(2),
+  customerType: z.enum(customerTypeValues).default('RESIDENTIAL'),
+  name: z.string().trim().min(2).max(200),
+  companyName: optionalText(200),
   email: z.string().email().optional().or(z.literal('')).transform((v) => v || undefined),
   phone: z.string().optional(),
   address: z.string().optional(),
   notes: z.string().optional()
 });
 
+function requireBusinessName(body, existing = {}) {
+  const customerType = body.customerType || existing.customerType || 'RESIDENTIAL';
+  const companyName = body.companyName !== undefined ? body.companyName : existing.companyName;
+  if (customerType === 'BUSINESS' && !String(companyName || '').trim()) throw new AppError(400, 'Enter the business name.');
+}
+
 router.get('/customers', asyncHandler(async (req, res) => {
   if (req.query.branchId) await requireBranch(req, String(req.query.branchId));
-  const result = await paged(prisma.customer, req, { where: { companyId: req.companyId, ...customerScopeWhere(req), ...branchFilterFromQuery(req) }, orderBy: { createdAt: 'desc' }, include: { jobs: true, invoices: true } });
+  const customerType = customerTypeFromQuery(req.query.customerType);
+  const result = await paged(prisma.customer, req, { where: { companyId: req.companyId, ...customerScopeWhere(req), ...branchFilterFromQuery(req), ...(customerType ? { customerType } : {}) }, orderBy: { createdAt: 'desc' }, include: { jobs: true, invoices: true } });
   sendData(res, normalize(result.data), 200, result.meta);
 }));
 
 router.post('/customers', validate(customerSchema), asyncHandler(async (req, res) => {
+  requireBusinessName(req.body);
   if (req.body.branchId) await requireBranch(req, req.body.branchId);
   const data = await prisma.customer.create({ data: { ...req.body, companyId: req.companyId } });
   await audit(req, 'CREATE', 'Customer', data.id);
@@ -6306,7 +6421,8 @@ router.get('/customers/:id', validate(idParam, 'params'), asyncHandler(async (re
 }));
 
 router.patch('/customers/:id', validate(idParam, 'params'), validate(customerSchema.partial()), asyncHandler(async (req, res) => {
-  await requireCustomer(req, req.params.id);
+  const existing = await requireCustomer(req, req.params.id);
+  requireBusinessName(req.body, existing);
   if (req.body.branchId) await requireBranch(req, req.body.branchId);
   const data = await prisma.customer.update({ where: { id: req.params.id }, data: req.body });
   await audit(req, 'UPDATE', 'Customer', data.id);
@@ -6326,6 +6442,7 @@ const leadSchema = z.object({
   customerId: optionalText(160),
   serviceId: optionalText(160),
   assignedToId: optionalText(160),
+  customerType: z.enum(customerTypeValues).default('RESIDENTIAL'),
   name: z.string().trim().min(2).max(200),
   companyName: optionalText(200),
   email: optionalEmail,
@@ -6376,7 +6493,9 @@ async function customerForLead(tx, req, lead) {
     data: {
       companyId: req.companyId,
       branchId: lead.branchId || undefined,
+      customerType: lead.customerType || 'RESIDENTIAL',
       name: lead.name,
+      companyName: lead.companyName || undefined,
       email: lead.email || undefined,
       phone: lead.phone || undefined,
       address: lead.address || undefined,
@@ -6389,12 +6508,14 @@ router.get('/leads', asyncHandler(async (req, res) => {
   if (req.query.branchId) await requireBranch(req, String(req.query.branchId));
   const status = req.query.status && String(req.query.status).toUpperCase();
   if (status && status !== 'ALL' && !leadStatusValues.includes(status)) throw new AppError(400, 'Invalid lead status');
+  const customerType = customerTypeFromQuery(req.query.customerType);
   const query = String(req.query.q || '').trim();
   const where = {
     companyId: req.companyId,
     ...leadScopeWhere(req),
     ...branchFilterFromQuery(req),
     ...(status && status !== 'ALL' ? { status } : {}),
+    ...(customerType ? { customerType } : {}),
     ...(query ? {
       OR: [
         { name: { contains: query, mode: 'insensitive' } },
@@ -6410,6 +6531,7 @@ router.get('/leads', asyncHandler(async (req, res) => {
 }));
 
 router.post('/leads', validate(leadSchema), asyncHandler(async (req, res) => {
+  requireBusinessName(req.body);
   await validateLeadRelations(req, req.body);
   const data = await prisma.$transaction(async (tx) => {
     const lead = await tx.lead.create({
@@ -6435,6 +6557,7 @@ router.get('/leads/:id', validate(idParam, 'params'), asyncHandler(async (req, r
 
 router.patch('/leads/:id', validate(idParam, 'params'), validate(leadSchema.partial()), asyncHandler(async (req, res) => {
   const existing = await requireLead(req, req.params.id);
+  requireBusinessName(req.body, existing);
   await validateLeadRelations(req, req.body);
   if (req.body.status === 'LOST' && !(req.body.lostReason || existing.lostReason)) throw new AppError(400, 'Add a short reason before marking this lead as lost.');
   const changedStatus = req.body.status && req.body.status !== existing.status;
@@ -6994,10 +7117,20 @@ async function buildSolarOverview(companyId) {
     latestReading: latestBySite.get(profile.propertyId) || null
   }));
   const latest = Array.from(latestBySite.values());
-  const performanceValues = latest.map((item) => Number(item.performanceRatioPct)).filter(Number.isFinite);
-  const availabilityValues = latest.map((item) => Number(item.availabilityPct)).filter(Number.isFinite);
+  const profileByProperty = new Map(profiles.map((profile) => [profile.propertyId, profile]));
+  const capacityWeightedAverage = (key) => {
+    const weighted = latest.map((reading) => ({
+      value: Number(reading[key]),
+      capacity: Number(profileByProperty.get(reading.propertyId) && profileByProperty.get(reading.propertyId).installedCapacityKwp)
+    })).filter((item) => Number.isFinite(item.value) && Number.isFinite(item.capacity) && item.capacity > 0);
+    if (weighted.length) {
+      const totalCapacity = weighted.reduce((sum, item) => sum + item.capacity, 0);
+      return weighted.reduce((sum, item) => sum + item.value * item.capacity, 0) / totalCapacity;
+    }
+    const values = latest.map((item) => Number(item[key])).filter(Number.isFinite);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+  };
   const todayLatest = latest.filter((item) => item.recordedAt && new Date(item.recordedAt) >= dayStart);
-  const average = (values) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
   return {
     totals: {
       sites: profiles.length,
@@ -7007,8 +7140,9 @@ async function buildSolarOverview(companyId) {
       energyTodayKwh: todayLatest.reduce((sum, item) => sum + Number(item.energyTodayKwh || 0), 0),
       openFaults: faults.length,
       criticalFaults: faults.filter((item) => item.severity === 'CRITICAL').length,
-      averagePerformanceRatioPct: average(performanceValues),
-      averageAvailabilityPct: average(availabilityValues)
+      averagePerformanceRatioPct: capacityWeightedAverage('performanceRatioPct'),
+      averageAvailabilityPct: capacityWeightedAverage('availabilityPct'),
+      performanceCalculation: 'CAPACITY_WEIGHTED'
     },
     sites,
     faults,
@@ -7527,12 +7661,12 @@ async function findOrCreateBookingCustomer(db, req, request) {
   if (request.customerEmail) existing = await db.customer.findFirst({ where: { companyId: req.companyId, email: request.customerEmail } });
   if (!existing && request.customerPhone) existing = await db.customer.findFirst({ where: { companyId: req.companyId, phone: request.customerPhone } });
   if (existing) return existing;
-  return db.customer.create({ data: { companyId: req.companyId, name: request.customerName, email: request.customerEmail, phone: request.customerPhone, address: request.address, notes: request.notes } });
+  return db.customer.create({ data: { companyId: req.companyId, customerType: request.customerType || 'RESIDENTIAL', name: request.customerName, companyName: request.companyName || undefined, email: request.customerEmail, phone: request.customerPhone, address: request.address, notes: request.notes } });
 }
 
 function bookingJobTitle(request) {
   const serviceName = request.service && request.service.name || request.serviceName || 'Service Request';
-  return serviceName + ' - ' + request.customerName;
+  return serviceName + ' - ' + (request.customerType === 'BUSINESS' ? request.companyName || request.customerName : request.customerName);
 }
 
 function bookingJobDescription(request) {

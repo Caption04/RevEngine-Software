@@ -46,7 +46,8 @@ test('solar-only navigation and core operating screens are present', () => {
 test('solar API exposes sites, readings, faults, overview, and default checklists', () => {
   const api = read('src/routes/api.js');
   for (const route of ['/solar/overview', '/solar/sites', '/solar/readings', '/solar/faults', '/solar/bootstrap']) assert.match(api, new RegExp(route.replaceAll('/', '\\/')));
-  for (const service of ['Solar Site Assessment', 'Solar Preventive Maintenance', 'Inverter Diagnostics', 'PV Module Cleaning', 'Battery Health Assessment', 'Solar Fault Callout']) assert.match(api, new RegExp(service));
+  for (const service of ['Solar System Installation', 'Solar Site Assessment', 'Solar Preventive Maintenance', 'Inverter Diagnostics', 'PV Module Cleaning', 'Battery Health Assessment', 'Solar Fault Callout']) assert.match(api, new RegExp(service));
+  assert.match(api, /Solar Installation and Commissioning/);
   assert.match(api, /Solar Plant Preventive Maintenance/);
   assert.match(api, /battery state of health percentage/i);
 });

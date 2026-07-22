@@ -279,13 +279,13 @@
       const sessions = asArray(await api('/auth/sessions')).filter((session) => !session.revokedAt);
       node.innerHTML = sessions.length ? sessions.map((session) => `<div class="security-session-row">
         <div class="security-session-copy">
-          <strong>${escapeHtml(deviceLabel(session.userAgent))}${session.current ? ' <span class="security-current-label">Current</span>' : ''}</strong>
+          <strong>${escapeHtml(deviceLabel(session.userAgent))}${session.current ? ' <span class="security-current-label">This device</span>' : ''}</strong>
           <span>${session.lastSeenAt ? `Last active ${formatDate(session.lastSeenAt)}` : `Signed in ${formatDate(session.createdAt)}`}</span>
         </div>
         ${session.current ? '' : `<button class="secondary-button compact" type="button" data-revoke-session="${escapeHtml(session.id)}">Sign out</button>`}
-      </div>`).join('') : '<div class="security-empty-state"><strong>No signed-in devices to review</strong><span>New device sessions will appear here.</span></div>';
+      </div>`).join('') : '<div class="security-empty-state"><strong>No trusted devices to review</strong><span>Devices will appear here after a successful sign-in.</span></div>';
     } catch (error) {
-      node.innerHTML = '<div class="security-empty-state"><strong>Could not load signed-in devices</strong><span>Try again in a moment.</span></div>';
+      node.innerHTML = '<div class="security-empty-state"><strong>Could not load trusted devices</strong><span>Try again in a moment.</span></div>';
     }
   }
 

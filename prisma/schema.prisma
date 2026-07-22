@@ -239,6 +239,11 @@ enum BookingRequestStatus {
   CANCELLED
 }
 
+enum CustomerType {
+  RESIDENTIAL
+  BUSINESS
+}
+
 enum LeadStatus {
   NEW
   CONTACTED
@@ -1091,7 +1096,9 @@ model Customer {
   id                String                    @id @default(cuid())
   companyId         String
   branchId          String?
+  customerType      CustomerType              @default(RESIDENTIAL)
   name              String
+  companyName       String?
   email             String?
   phone             String?
   address           String?
@@ -2820,6 +2827,7 @@ model Lead {
   customerId          String?
   serviceId           String?
   assignedToId        String?
+  customerType        CustomerType  @default(RESIDENTIAL)
   name                String
   companyName         String?
   email               String?
@@ -2876,7 +2884,9 @@ model BookingRequest {
   serviceId             String?
   status                BookingRequestStatus  @default(NEW)
   publicReference       String?               @unique
+  customerType          CustomerType          @default(RESIDENTIAL)
   customerName          String
+  companyName           String?
   customerEmail         String?
   customerPhone         String?
   address               String?
@@ -3408,6 +3418,7 @@ model UserSession {
   ipAddress   String?
   userAgent   String?
   deviceLabel String?
+  deviceKey   String?   @unique
   expiresAt   DateTime
   lastSeenAt  DateTime?
   revokedAt   DateTime?
@@ -3417,6 +3428,7 @@ model UserSession {
   company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, deviceKey])
   @@index([companyId, userId])
   @@index([companyId, revokedAt])
   @@index([expiresAt])

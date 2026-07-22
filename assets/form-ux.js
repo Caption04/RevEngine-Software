@@ -177,7 +177,7 @@
       if (!validateInput(input, true) && !firstInvalid) firstInvalid = input;
     });
     if (firstInvalid) {
-      firstInvalid.focus();
+      try { firstInvalid.focus({ preventScroll: true }); } catch (error) { firstInvalid.focus(); }
       firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return false;
     }
@@ -188,6 +188,15 @@
 
   function start() {
     refresh(document);
+    document.addEventListener('submit', function (event) {
+      const form = event.target;
+      if (!(form instanceof HTMLFormElement) || form.dataset.skipRevengineValidation === 'true') return;
+      form.noValidate = true;
+      if (!validateForm(form)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    }, true);
     const observer = new MutationObserver(function (mutations) {
       mutations.forEach(function (mutation) {
         mutation.addedNodes.forEach(function (node) {

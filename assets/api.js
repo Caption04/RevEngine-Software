@@ -2,7 +2,7 @@
   const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3000/api' : '/api';
   const page = document.body.dataset.page || 'dashboard';
   const REV_ENGINE_LOGO = 'assets/rev-engine-mark.png';
-  const state = { user: null, profile: null, branding: null, leads: [], dispatchBoard: null, selectedDispatchJobId: null, customers: [], services: [], workers: [], roles: [], jobs: [], assets: [], solarSites: [], serviceContracts: [], invoices: [], schedule: [], scheduleSettings: null, scheduleView: 'week', scheduleDate: new Date(), scheduleFilters: { workerId: '', status: '' }, listFilters: {}, availability: {}, notificationLogs: [], integrations: [], messageLogs: [], storageUsage: null, billing: null, financeSettings: null, financeIntegrations: [], financeExportLogs: [], reports: null, activeReportTab: 'overview' };
+  const state = { user: null, profile: null, branding: null, leads: [], dispatchBoard: null, selectedDispatchJobId: null, customers: [], services: [], workers: [], roles: [], jobs: [], assets: [], solarSites: [], serviceContracts: [], invoices: [], schedule: [], scheduleSettings: null, scheduleView: 'week', scheduleDate: new Date(), scheduleFilters: { workerId: '', status: '' }, listFilters: {}, customerTypeFilters: {}, availability: {}, notificationLogs: [], integrations: [], messageLogs: [], storageUsage: null, billing: null, financeSettings: null, financeIntegrations: [], financeExportLogs: [], reports: null, activeReportTab: 'overview' };
 
   const MARKET_DEFAULTS = {
     ZW: { country: 'ZW', timezone: 'Africa/Harare', defaultCurrency: 'USD', numberFormat: 'en-ZW', taxName: 'VAT', allowedCurrencies: ['USD'], paymentMethods: ['CASH', 'BANK_TRANSFER', 'EXTERNAL_PAYMENT_LINK', 'CUSTOM_MANUAL', 'PAYNOW'] },
@@ -64,11 +64,12 @@
 
   const tableConfigs = {
     leads: {
-      columns: ['Lead', 'Need', 'Source', 'Follow-up', 'Status', 'Owner', 'Actions'],
+      columns: ['Lead', 'Customer Type', 'Need', 'Source', 'Follow-up', 'Status', 'Owner', 'Actions'],
       emptyTitle: 'No leads yet',
       emptyText: 'Add an enquiry when someone calls, messages, or asks for a quote.',
       row: (item) => [
-        [item.name, item.companyName].filter(Boolean).join(' - '),
+        item.customerType === 'BUSINESS' ? [item.companyName, item.name].filter(Boolean).join(' - ') : item.name,
+        item.customerType === 'BUSINESS' ? 'Business' : 'Residential',
         item.service && item.service.name || item.serviceNeed || '-',
         item.source || '-',
         formatDateTime(item.nextFollowUpAt),
@@ -78,10 +79,10 @@
       ]
     },
     customers: {
-      columns: ['Client', 'Contact', 'Address', 'Work Orders', 'Balance'],
+      columns: ['Client', 'Customer Type', 'Contact', 'Address', 'Work Orders', 'Balance'],
       emptyTitle: 'No solar clients yet',
       emptyText: 'Create your first solar client to start managing their sites, equipment, and work.',
-      row: (item) => [item.name, [item.email, item.phone].filter(Boolean).join(' / ') || '-', item.address || '-', (item.jobs || []).length, money.format((item.invoices || []).filter((i) => i.status !== 'PAID').reduce((sum, i) => sum + Number(i.amount || 0), 0))]
+      row: (item) => [item.customerType === 'BUSINESS' ? item.companyName || item.name : item.name, item.customerType === 'BUSINESS' ? 'Business' : 'Residential', [item.customerType === 'BUSINESS' ? item.name : null, item.email, item.phone].filter(Boolean).join(' / ') || '-', item.address || '-', (item.jobs || []).length, money.format((item.invoices || []).filter((i) => i.status !== 'PAID').reduce((sum, i) => sum + Number(i.amount || 0), 0))]
     },
     workers: {
       columns: ['Worker', 'Contact', 'Title', 'Status', 'Joined'],
@@ -123,7 +124,7 @@
       columns: ['Solar Client', 'Contact', 'Solar Service', 'Preferred', 'Status', 'Created', 'Actions'],
       emptyTitle: 'No solar service requests yet',
       emptyText: 'Public solar service requests will appear here.',
-      row: (item) => [item.customerName, [item.customerEmail, item.customerPhone].filter(Boolean).join(' / ') || '-', item.service && item.service.name || item.serviceName || '-', [formatDate(item.preferredDate), item.preferredTimeWindow && String(item.preferredTimeWindow).replace(/_/g, ' ')].filter(Boolean).join(' / ') || '-', badge(item.status), formatDate(item.createdAt), rowActions('booking-requests', item)]
+      row: (item) => [item.customerType === 'BUSINESS' ? item.companyName || item.customerName : item.customerName, [item.customerType === 'BUSINESS' ? item.customerName : null, item.customerEmail, item.customerPhone].filter(Boolean).join(' / ') || '-', item.service && item.service.name || item.serviceName || '-', [formatDate(item.preferredDate), item.preferredTimeWindow && String(item.preferredTimeWindow).replace(/_/g, ' ')].filter(Boolean).join(' / ') || '-', badge(item.status), formatDate(item.createdAt), rowActions('booking-requests', item)]
     },
     schedule: {
       columns: ['Solar Work Order', 'Client', 'Solar Technician', 'Status', 'Start', 'End', 'Conflict'],
@@ -507,7 +508,7 @@
     if (resource === 'jobs') return item.title || 'Job';
     if (resource === 'quotes') return item.title || 'Quote';
     if (resource === 'invoices') return item.number || 'Invoice';
-    if (resource === 'booking-requests') return item.customerName || item.publicReference || 'Booking request';
+    if (resource === 'booking-requests') return item.customerType === 'BUSINESS' ? item.companyName || item.customerName || item.publicReference || 'Booking request' : item.customerName || item.publicReference || 'Booking request';
     return 'Select an action';
   }
 
@@ -783,8 +784,20 @@
     return String(item.status || '').toUpperCase() === filter;
   }
 
+  function itemMatchesCustomerType(item, filter) {
+    if (!filter || filter === 'all') return true;
+    return String(item.customerType || item.customer && item.customer.customerType || 'RESIDENTIAL').toUpperCase() === String(filter).toUpperCase();
+  }
+
   function filteredListData(resource, data) {
-    return (data || []).filter((item) => itemMatchesListFilter(resource, item, state.listFilters[resource]));
+    return (data || []).filter((item) => itemMatchesListFilter(resource, item, state.listFilters[resource]))
+      .filter((item) => itemMatchesCustomerType(item, state.customerTypeFilters[resource]));
+  }
+
+  function rerenderFilteredList(resource, data) {
+    const filtered = filteredListData(resource, data);
+    renderTable(resource, filtered);
+    updateListStats(resource, filtered);
   }
 
   function setupStatusTabs(resource, data) {
@@ -792,10 +805,20 @@
       tab.classList.toggle('active', (state.listFilters[resource] || 'all') === tab.dataset.statusFilter);
       tab.onclick = () => {
         state.listFilters[resource] = tab.dataset.statusFilter || 'all';
-        renderTable(resource, filteredListData(resource, data));
+        rerenderFilteredList(resource, data);
         setupStatusTabs(resource, data);
       };
     });
+  }
+
+  function setupCustomerTypeFilter(resource, data) {
+    const select = document.querySelector('[data-customer-type-filter]');
+    if (!select) return;
+    select.value = state.customerTypeFilters[resource] || 'all';
+    select.onchange = () => {
+      state.customerTypeFilters[resource] = select.value || 'all';
+      rerenderFilteredList(resource, data);
+    };
   }
 
 
@@ -935,7 +958,7 @@
     const form = document.querySelector('[data-report-filters]');
     const params = new URLSearchParams();
     if (!form) return params;
-    ['period', 'startDate', 'endDate', 'serviceId', 'workerId', 'customerId'].forEach((name) => {
+    ['period', 'startDate', 'endDate', 'serviceId', 'workerId', 'customerId', 'customerType'].forEach((name) => {
       const field = form.elements[name];
       if (field && field.value) params.set(name, field.value);
     });
@@ -1028,7 +1051,7 @@
 
   function reportExportHref(section, filters) {
     const params = new URLSearchParams();
-    ['period', 'startDate', 'endDate', 'serviceId', 'workerId', 'customerId'].forEach((name) => {
+    ['period', 'startDate', 'endDate', 'serviceId', 'workerId', 'customerId', 'customerType'].forEach((name) => {
       const value = filters && filters[name];
       if (value) params.set(name, String(value).slice(0, name.endsWith('Date') ? 10 : undefined));
     });
@@ -1061,7 +1084,8 @@
     const fields = [
       '<div class="field"><label for="reportPeriod">Time period</label><select id="reportPeriod" name="period"><option value="last30days">Last 30 days</option><option value="today">Today</option><option value="thisWeek">This week</option><option value="thisMonth">This month</option><option value="lastMonth">Last month</option><option value="thisYear">This year</option><option value="custom">Choose dates</option></select></div>',
       '<div class="field"><label for="reportStart">Start date</label><input id="reportStart" name="startDate" type="date"></div>',
-      '<div class="field"><label for="reportEnd">End date</label><input id="reportEnd" name="endDate" type="date"></div>'
+      '<div class="field"><label for="reportEnd">End date</label><input id="reportEnd" name="endDate" type="date"></div>',
+      '<div class="field"><label for="reportCustomerType">Customer segment</label><select id="reportCustomerType" name="customerType"><option value="">All customers</option><option value="RESIDENTIAL"' + (filters.customerType === 'RESIDENTIAL' ? ' selected' : '') + '>Residential</option><option value="BUSINESS"' + (filters.customerType === 'BUSINESS' ? ' selected' : '') + '>Business</option></select></div>'
     ];
     if ((allowed.has('money') || allowed.has('work') || allowed.has('sales')) && (options.services || []).length) {
       fields.push('<div class="field"><label for="reportService">Service</label><select id="reportService" name="serviceId">' + reportOptionList(options.services, 'All services', filters.serviceId) + '</select></div>');
@@ -1242,14 +1266,16 @@
   function renderCustomerAnalyticsReport(data) {
     const customers = data.customers || {};
     const canSeeMoney = (data.allowedReports || []).includes('money');
+    const segmentName = (data.filters && data.filters.customerType) === 'BUSINESS' ? 'Business' : (data.filters && data.filters.customerType) === 'RESIDENTIAL' ? 'Residential' : 'All customers';
     const cards = [
-      reportMetricCard('Customers', customers.totalCustomers || 0, 'All customers'),
+      reportMetricCard('Customers', customers.totalCustomers || 0, segmentName),
       reportMetricCard('New customers', customers.newCustomers || 0, 'In this time period'),
       reportMetricCard('Repeat customers', customers.repeatCustomers || 0, 'More than one job')
     ];
     if (canSeeMoney) cards.push(reportMetricCard('Customers who owe money', (customers.customersWithUnpaidInvoices || []).length, 'Need follow-up'));
     const columns = [
       { label: 'Customer', value: (row) => row.name },
+      { label: 'Segment', value: (row) => row.customerType === 'BUSINESS' ? 'Business' : 'Residential' },
       { label: 'Invoices', value: (row) => row.invoices },
       { label: 'Jobs', value: (row) => row.jobs },
       { label: 'Completed jobs', value: (row) => row.completedJobs },
@@ -1259,13 +1285,30 @@
       { label: 'Last payment', value: (row) => formatDate(row.lastPaymentDate) }
     ];
     if (canSeeMoney) {
-      columns.splice(1, 0, { label: 'Money received', value: (row) => money.format(row.revenue || 0) });
-      columns.splice(2, 0, { label: 'Money owed', value: (row) => money.format(row.unpaidTotal || 0) });
+      columns.splice(2, 0, { label: 'Money received', value: (row) => money.format(row.revenue || 0) });
+      columns.splice(3, 0, { label: 'Money owed', value: (row) => money.format(row.unpaidTotal || 0) });
+    }
+    const segmentColumns = [
+      { label: 'Segment', value: (row) => row.label },
+      { label: 'Leads', value: (row) => row.leads },
+      { label: 'Service requests', value: (row) => row.bookings },
+      { label: 'Customers', value: (row) => row.customers },
+      { label: 'New customers', value: (row) => row.newCustomers },
+      { label: 'Quotes', value: (row) => row.quotes },
+      { label: 'Accepted quotes', value: (row) => row.acceptedQuotes },
+      { label: 'Jobs', value: (row) => row.jobs },
+      { label: 'Completed jobs', value: (row) => row.completedJobs }
+    ];
+    if (canSeeMoney) {
+      segmentColumns.push({ label: 'Money received', value: (row) => money.format(row.revenue || 0) });
+      segmentColumns.push({ label: 'Money owed', value: (row) => money.format(row.unpaidTotal || 0) });
     }
     const extra = canSeeMoney
-      ? '<div class="report-grid two">' + reportBarChart('Top customers by money received', customers.topCustomers || [], 'name', 'revenue', (value) => money.format(value || 0)) + reportPanel('Customers who owe money', reportTable([{ label: 'Customer', value: (row) => row.name }, { label: 'Money owed', value: (row) => money.format(row.unpaidTotal || 0) }, { label: 'Invoices', value: (row) => row.invoices }], customers.customersWithUnpaidInvoices || [], 'No customers owe money.')) + '</div>'
+      ? '<div class="report-grid two">' + reportBarChart('Top customers by money received', customers.topCustomers || [], 'name', 'revenue', (value) => money.format(value || 0)) + reportPanel('Customers who owe money', reportTable([{ label: 'Customer', value: (row) => row.name }, { label: 'Segment', value: (row) => row.customerType === 'BUSINESS' ? 'Business' : 'Residential' }, { label: 'Money owed', value: (row) => money.format(row.unpaidTotal || 0) }, { label: 'Invoices', value: (row) => row.invoices }], customers.customersWithUnpaidInvoices || [], 'No customers owe money.')) + '</div>'
       : '';
-    return '<section class="report-section"><div class="report-kpi-row">' + cards.join('') + '</div>' + extra + reportPanel('Customer activity', reportTable(columns, customers.customerHistory || customers.topCustomers || [], 'No customer activity yet.')) + '</section>';
+    return '<section class="report-section"><div class="report-kpi-row">' + cards.join('') + '</div>' +
+      reportPanel('Residential and business results', reportTable(segmentColumns, customers.segments || [], 'No customer segment activity yet.')) +
+      extra + reportPanel('Customer activity', reportTable(columns, customers.customerHistory || customers.topCustomers || [], 'No customer activity yet.')) + '</section>';
   }
 
   function renderStockValueReport(data) {
@@ -1316,6 +1359,7 @@
     if (form.elements.period) form.elements.period.value = filters.period || 'last30days';
     if (form.elements.startDate) form.elements.startDate.value = String(filters.startDate || '').slice(0, 10);
     if (form.elements.endDate) form.elements.endDate.value = String(filters.endDate || '').slice(0, 10);
+    if (form.elements.customerType) form.elements.customerType.value = filters.customerType || '';
     if (form.elements.period) form.elements.period.addEventListener('change', () => {
       if (form.elements.period.value === 'custom') return;
       if (form.elements.startDate) form.elements.startDate.value = '';
@@ -1567,34 +1611,64 @@
     return `<div class="field"><label for="fc-${name}">${label}</label><input id="fc-${name}" name="${name}" type="${type || 'text'}" ${attrs || ''}></div>`;
   }
 
-  function checkboxField(name, label, checked) {
-    const q = String.fromCharCode(34);
-    return "<div class=" + q + "field checkbox-field" + q + "><label for=" + q + "fc-" + name + q + "><input id=" + q + "fc-" + name + q + " name=" + q + name + q + " type=" + q + "checkbox" + q + (checked ? " checked" : "") + "> " + escapeHtml(label) + "</label></div>";
+  function requirementOption(name, title, help, checked) {
+    return `<label class="completion-option" for="fc-${name}"><input id="fc-${name}" name="${name}" type="checkbox" ${checked ? 'checked' : ''}><span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(help)}</small></span></label>`;
   }
 
-  function formSection(title) {
-    const q = String.fromCharCode(34);
-    return "<div class=" + q + "field span-2 form-section-title" + q + "><strong>" + escapeHtml(title) + "</strong></div>";
+  function completionRequirements(settings) {
+    return `<fieldset class="completion-requirements span-2"><legend>Completion Requirements</legend><p>Choose what the technician must submit before closing this work order.</p><div class="completion-requirements-grid">
+      ${requirementOption('requiresProofPhotos', 'Work photo', 'At least one photo showing the completed work.', settings.requireProofPhotos !== false)}
+      ${requirementOption('requiresBeforePhotos', 'Before photo', 'A clear photo before work starts.', Boolean(settings.requireBeforePhotos))}
+      ${requirementOption('requiresAfterPhotos', 'After photo', 'A clear photo after the work is complete.', Boolean(settings.requireAfterPhotos))}
+      ${requirementOption('requiresSignature', 'Customer signature', 'The customer signs before the job is closed.', false)}
+      ${requirementOption('requiresLocation', 'Completion location', 'Capture where the technician completed the job.', Boolean(settings.requireLocation))}
+    </div></fieldset>`;
   }
 
-  function select(name, label, options, required) {
-    return `<div class="field"><label for="fc-${name}">${label}</label><select id="fc-${name}" name="${name}" ${required ? 'required' : ''}>${options}</select></div>`;
+  function select(name, label, options, required, attrs) {
+    return `<div class="field"><label for="fc-${name}">${label}</label><select id="fc-${name}" name="${name}" ${required ? 'required' : ''} ${attrs || ''}>${options}</select></div>`;
+  }
+
+  function customerTypeField() {
+    return select('customerType', 'Customer Type', '<option value="">Choose residential or business</option><option value="RESIDENTIAL">Residential customer</option><option value="BUSINESS">Business customer</option>', true, 'data-customer-type');
+  }
+
+  function businessNameField() {
+    return '<div class="field" data-business-name-field hidden><label for="fc-companyName">Business Name</label><input id="fc-companyName" name="companyName" maxlength="200" disabled></div>';
+  }
+
+  function bindCustomerType(form) {
+    const type = form.querySelector('[data-customer-type]');
+    const field = form.querySelector('[data-business-name-field]');
+    const input = field && field.querySelector('input');
+    if (!type || !field || !input) return;
+    const update = () => {
+      const business = type.value === 'BUSINESS';
+      field.hidden = !business;
+      input.disabled = !business;
+      input.required = business;
+      if (!business) input.value = '';
+      if (window.RevEngineFormUX) window.RevEngineFormUX.refresh(field);
+    };
+    type.addEventListener('change', update);
+    update();
   }
 
   function formFor(resource) {
     if (resource === 'leads') return {
       title: 'New Lead',
       action: '/leads',
-      fields: field('name', 'Contact Name', 'text', 'required') +
-        field('companyName', 'Company') +
+      fields: customerTypeField() +
+        field('name', 'Contact Name', 'text', 'required maxlength="200"') +
+        businessNameField() +
         field('email', 'Email', 'email') +
         field('phone', 'Phone') +
-        select('serviceId', 'Service', optionList(state.services, 'No service selected'), false) +
+        select('serviceId', 'Service Needed', optionList(state.services, 'Choose a service later'), false) +
         field('source', 'How They Found You') +
         '<div class="field span-2"><label for="fc-serviceNeed">What do they need?</label><textarea id="fc-serviceNeed" name="serviceNeed" maxlength="1000"></textarea></div>' +
         field('nextFollowUpAt', 'Next Follow-up', 'datetime-local')
     };
-    if (resource === 'customers') return { title: 'New Customer', action: '/customers', fields: field('name', 'Name', 'text', 'required') + field('email', 'Email', 'email') + field('phone', 'Phone') + field('address', 'Address') };
+    if (resource === 'customers') return { title: 'New Customer', action: '/customers', fields: customerTypeField() + field('name', 'Contact Name', 'text', 'required maxlength="200"') + businessNameField() + field('email', 'Email', 'email') + field('phone', 'Phone') + field('address', 'Address') };
     if (resource === 'workers') return { title: 'New Worker', action: '/workers', fields: field('name', 'Name', 'text', 'required') + field('email', 'Email', 'email', 'required') + field('password', 'Temporary Password', 'password', 'required minlength="12"') + field('title', 'Title') + field('phone', 'Phone') };
     if (resource === 'jobs') {
       const settings = state.scheduleSettings || {};
@@ -1613,12 +1687,7 @@
     field('scheduledStart', 'Scheduled Start', 'datetime-local') +
     field('durationMinutes', 'Duration Minutes', 'number', 'min="1" value="' + escapeHtml(duration) + '"') +
     field('travelBufferMinutes', 'Travel Buffer Minutes', 'number', 'min="0" value="' + escapeHtml(buffer) + '"') +
-    formSection('Completion Requirements') +
-    checkboxField('requiresProofPhotos', 'Require proof of work photo', settings.requireProofPhotos !== false) +
-    checkboxField('requiresBeforePhotos', 'Require before photo', Boolean(settings.requireBeforePhotos)) +
-    checkboxField('requiresAfterPhotos', 'Require after photo', Boolean(settings.requireAfterPhotos)) +
-    checkboxField('requiresSignature', 'Require customer signature') +
-    checkboxField('requiresLocation', 'Require completion location', Boolean(settings.requireLocation))
+    completionRequirements(settings)
       };
     }
     if (resource === 'assets') return {
@@ -1660,10 +1729,14 @@
     closeModal();
     const modal = document.createElement('div');
     modal.className = 'fc-modal';
-    modal.innerHTML = `<div class="fc-dialog"><form><div class="panel-head"><h3>${escapeHtml(config.title)}</h3><button class="icon-button" type="button" data-close>&times;</button></div><div class="form-grid">${config.fields}</div><div class="fc-form-actions"><button class="secondary-button" type="button" data-close>Cancel</button><button class="primary-button" type="submit">Save</button></div><p class="fc-form-error" hidden></p></form></div>`;
+    modal.innerHTML = `<div class="fc-dialog"><form novalidate><div class="panel-head"><h3>${escapeHtml(config.title)}</h3><button class="icon-button" type="button" data-close>&times;</button></div><div class="form-grid">${config.fields}</div><div class="fc-form-actions"><button class="secondary-button" type="button" data-close>Cancel</button><button class="primary-button" type="submit">Save</button></div><p class="fc-form-error" hidden></p></form></div>`;
+    const form = modal.querySelector('form');
+    bindCustomerType(form);
+    if (window.RevEngineFormUX) window.RevEngineFormUX.refresh(form);
     modal.addEventListener('click', (event) => { if (event.target === modal || event.target.closest('[data-close]')) closeModal(); });
-    if (config.action) modal.querySelector('form').addEventListener('submit', async (event) => {
+    if (config.action) form.addEventListener('submit', async (event) => {
       event.preventDefault();
+      if (window.RevEngineFormUX && !window.RevEngineFormUX.validateForm(event.currentTarget)) return;
       const error = modal.querySelector('.fc-form-error');
       error.hidden = true;
       const body = Object.fromEntries(new FormData(event.currentTarget).entries());
@@ -1981,6 +2054,8 @@
       create.dataset.createResource = resource;
       create.hidden = !hasPermission(resource === 'workers' ? 'workers.manage' : 'customers.create');
     }
+    const segmentFilter = document.querySelector('[data-customer-type-filter-wrap]');
+    if (segmentFilter) segmentFilter.hidden = resource === 'workers';
   }
 
   async function loadPeopleResource(resource) {
@@ -1990,7 +2065,8 @@
     state[resource] = data;
     renderTable(resource, filteredListData(resource, data));
     setupStatusTabs(resource, data);
-    updateListStats(resource, data);
+    setupCustomerTypeFilter(resource, data);
+    updateListStats(resource, filteredListData(resource, data));
   }
 
   function setupPeopleTabs() {
@@ -2548,7 +2624,7 @@
     const contact = [item.customerEmail, item.customerPhone].filter(Boolean).join(' / ') || '-';
     const preferred = [formatDate(item.preferredDate), item.preferredTimeWindow && String(item.preferredTimeWindow).replace(/_/g, ' ')].filter(Boolean).join(' / ') || '-';
     const photos = (item.photos || []).map((photo) => '<a class=' + q + 'secondary-button compact' + q + ' href=' + q + escapeHtml(photo.url) + q + ' target=' + q + '_blank' + q + ' rel=' + q + 'noreferrer' + q + '>' + escapeHtml(photo.originalName || photo.filename || 'Photo') + '</a>').join('');
-    modal.innerHTML = '<div class=' + q + 'fc-dialog job-detail-dialog booking-detail-dialog' + q + '><div class=' + q + 'panel-head' + q + '><div><h3>Booking Request</h3><p class=' + q + 'modal-copy' + q + '>' + escapeHtml(item.customerName || 'Customer') + '</p></div><button class=' + q + 'icon-button' + q + ' type=' + q + 'button' + q + ' data-close>&times;</button></div><div class=' + q + 'booking-detail-list' + q + '>' + bookingDetail('Reference', item.publicReference) + bookingDetail('Source', item.source) + bookingDetail('Customer', item.customerName) + bookingDetail('Contact', contact) + bookingDetail('Service', service) + bookingDetail('Preferred', preferred) + bookingDetail('Address', item.address) + bookingDetail('City/Suburb', item.city) + bookingDetail('Property Type', item.propertyType) + bookingDetail('Status', String(item.status || '-').replace(/_/g, ' ')) + bookingDetail('Created', formatDateTime(item.createdAt)) + bookingDetail('Converted Job', item.convertedJob && item.convertedJob.title) + (item.accessNotes ? bookingDetail('Access Notes', item.accessNotes) : '') + (item.notes ? bookingDetail('Notes', item.notes) : '') + (item.customerFacingMessage ? bookingDetail('Customer Message', item.customerFacingMessage) : '') + (photos ? '<div class=' + q + 'booking-detail-row booking-detail-photos' + q + '><span>Photos</span><div class=' + q + 'row-actions' + q + '>' + photos + '</div></div>' : '') + '</div><div class=' + q + 'fc-form-actions' + q + '><button class=' + q + 'secondary-button' + q + ' type=' + q + 'button' + q + ' data-close>Close</button></div></div>';
+    modal.innerHTML = '<div class=' + q + 'fc-dialog job-detail-dialog booking-detail-dialog' + q + '><div class=' + q + 'panel-head' + q + '><div><h3>Booking Request</h3><p class=' + q + 'modal-copy' + q + '>' + escapeHtml(item.customerName || 'Customer') + '</p></div><button class=' + q + 'icon-button' + q + ' type=' + q + 'button' + q + ' data-close>&times;</button></div><div class=' + q + 'booking-detail-list' + q + '>' + bookingDetail('Reference', item.publicReference) + bookingDetail('Source', item.source) + bookingDetail('Customer type', item.customerType === 'BUSINESS' ? 'Business' : 'Residential') + (item.customerType === 'BUSINESS' ? bookingDetail('Business', item.companyName) : '') + bookingDetail('Contact name', item.customerName) + bookingDetail('Contact', contact) + bookingDetail('Service', service) + bookingDetail('Preferred', preferred) + bookingDetail('Address', item.address) + bookingDetail('City/Suburb', item.city) + bookingDetail('Property Type', item.propertyType) + bookingDetail('Status', String(item.status || '-').replace(/_/g, ' ')) + bookingDetail('Created', formatDateTime(item.createdAt)) + bookingDetail('Converted Job', item.convertedJob && item.convertedJob.title) + (item.accessNotes ? bookingDetail('Access Notes', item.accessNotes) : '') + (item.notes ? bookingDetail('Notes', item.notes) : '') + (item.customerFacingMessage ? bookingDetail('Customer Message', item.customerFacingMessage) : '') + (photos ? '<div class=' + q + 'booking-detail-row booking-detail-photos' + q + '><span>Photos</span><div class=' + q + 'row-actions' + q + '>' + photos + '</div></div>' : '') + '</div><div class=' + q + 'fc-form-actions' + q + '><button class=' + q + 'secondary-button' + q + ' type=' + q + 'button' + q + ' data-close>Close</button></div></div>';
     modal.addEventListener('click', (event) => { if (event.target === modal || event.target.closest('[data-close]')) modal.remove(); });
     document.body.appendChild(modal);
   }
@@ -2565,7 +2641,8 @@
     closeModal();
     const modal = document.createElement('div');
     modal.className = 'fc-modal';
-    modal.innerHTML = '<div class="fc-dialog lead-detail-dialog"><div class="panel-head"><div><h3>' + escapeHtml(item.name || 'Lead') + '</h3><p class="modal-copy">' + escapeHtml(item.companyName || item.serviceNeed || 'Lead details') + '</p></div><button class="icon-button" type="button" data-close>&times;</button></div><div class="booking-detail-list">' +
+    modal.innerHTML = '<div class="fc-dialog lead-detail-dialog"><div class="panel-head"><div><h3>' + escapeHtml(item.customerType === 'BUSINESS' ? item.companyName || item.name || 'Lead' : item.name || 'Lead') + '</h3><p class="modal-copy">' + escapeHtml(item.customerType === 'BUSINESS' ? item.name || 'Business contact' : item.serviceNeed || 'Residential lead') + '</p></div><button class="icon-button" type="button" data-close>&times;</button></div><div class="booking-detail-list">' +
+      bookingDetail('Customer type', item.customerType === 'BUSINESS' ? 'Business' : 'Residential') +
       bookingDetail('Status', String(item.status || '-').replace(/_/g, ' ')) +
       bookingDetail('Contact', [item.email, item.phone].filter(Boolean).join(' / ')) +
       bookingDetail('Service', item.service && item.service.name || item.serviceNeed) +
@@ -3916,7 +3993,8 @@
         if (page === 'assets') setupAssetCustomerFilter(data);
         renderTable(page, page === 'assets' ? assetsForSelectedCustomer(filteredListData(page, data)) : filteredListData(page, data));
         setupStatusTabs(page, data);
-        updateListStats(page, data);
+        setupCustomerTypeFilter(page, data);
+        updateListStats(page, filteredListData(page, data));
       }
       setStatus(`Connected as ${state.user.name}`, true);
     } catch (error) {

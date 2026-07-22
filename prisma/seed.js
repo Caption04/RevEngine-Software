@@ -7,6 +7,7 @@ const legacyEnvName = (suffix) => 'FIELD' + 'CORE_' + suffix;
 
 
 const solarDefaultServices = [
+  { key: 'system-installation', name: 'Solar System Installation', description: 'New residential or commercial solar system installation, testing, commissioning, and customer handover.' },
   { key: 'site-assessment', name: 'Solar Site Assessment', description: 'Site survey, system inventory, capacity capture, safety review, and baseline condition report.' },
   { key: 'preventive-maintenance', name: 'Solar Preventive Maintenance', description: 'Planned mechanical and electrical inspection of the complete solar plant.' },
   { key: 'inverter-diagnostics', name: 'Inverter Diagnostics', description: 'Alarm review, electrical measurements, firmware checks, and inverter fault diagnosis.' },
@@ -16,6 +17,21 @@ const solarDefaultServices = [
 ];
 
 const solarChecklistDefinitions = [
+  {
+    serviceName: 'Solar System Installation',
+    name: 'Solar Installation and Commissioning',
+    description: 'Required safety, testing, commissioning, and handover checks for a new solar system.',
+    items: [
+      ['Confirm installed panels, inverter, batteries, and protection equipment match the approved job', 'PASS_FAIL', true, true],
+      ['Inspect mounting, roof penetrations, cable routes, labels, and earthing', 'PASS_FAIL', true, true],
+      ['Record DC voltage and polarity checks', 'TEXT', true, false],
+      ['Record AC voltage and protection checks', 'TEXT', true, false],
+      ['Configure inverter, battery, and monitoring settings', 'PASS_FAIL', true, false],
+      ['Run commissioning test and record system output', 'TEXT', true, false],
+      ['Capture equipment serial numbers and completed installation photos', 'PHOTO', true, true],
+      ['Complete customer handover and explain safe system operation', 'YES_NO', true, false]
+    ]
+  },
   {
     serviceName: 'Solar Preventive Maintenance',
     name: 'Solar Plant Preventive Maintenance',

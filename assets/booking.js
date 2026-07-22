@@ -11,6 +11,9 @@
   const photoInput = document.querySelector('#photos');
   const photoName = document.querySelector('[data-booking-photo-name]');
   const photoPreview = document.querySelector('[data-booking-photo-preview]');
+  const customerType = document.querySelector('[data-booking-customer-type]');
+  const businessNameField = document.querySelector('[data-booking-business-name-field]');
+  const businessNameInput = businessNameField && businessNameField.querySelector('input');
   const MAX_PHOTOS = 5;
   const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
   const PHOTO_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
@@ -39,6 +42,15 @@
     } catch (error) {
       clientSession = null;
     }
+  }
+  function updateCustomerType(){
+    if (!customerType || !businessNameField || !businessNameInput) return;
+    const business = customerType.value === 'BUSINESS';
+    businessNameField.hidden = !business;
+    businessNameInput.disabled = !business;
+    businessNameInput.required = business;
+    if (!business) businessNameInput.value = '';
+    if (window.RevEngineFormUX) window.RevEngineFormUX.refresh(businessNameField);
   }
   function prefillClient(){
     if (!clientSession || !form) return;
@@ -183,6 +195,7 @@
   }
   if (form) form.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (window.RevEngineFormUX && !window.RevEngineFormUX.validateForm(form)) return;
     if (message) { message.hidden = true; message.classList.remove('green'); }
     const photoError = validatePhotoFiles(Array.from(photoInput && photoInput.files || []));
     if (photoError) {
@@ -197,6 +210,7 @@
       const path = clientSession ? '/client/booking-requests' : '/public/booking-requests';
       const data = await publicApi(path, { method: 'POST', credentials: 'include', body });
       form.reset();
+      updateCustomerType();
       updatePhotoPreview();
       if (clientSession) {
         window.location.href = 'client-portal.html';
@@ -210,6 +224,7 @@
   });
   if (trackingForm) trackingForm.addEventListener('submit', async (event) => {
     event.preventDefault();
+    if (window.RevEngineFormUX && !window.RevEngineFormUX.validateForm(trackingForm)) return;
     if (trackingMessage) { trackingMessage.hidden = true; trackingMessage.classList.remove('green'); }
     if (trackingResult) trackingResult.hidden = true;
     const body = Object.fromEntries(new FormData(trackingForm).entries());
@@ -221,6 +236,8 @@
       setTrackingMessage(error.message, false);
     }
   });
+  if (customerType) customerType.addEventListener('change', updateCustomerType);
+  updateCustomerType();
   if (photoInput) photoInput.addEventListener('change', updatePhotoPreview);
   if (photoPreview) photoPreview.addEventListener('click', (event) => {
     const button = event.target.closest('[data-remove-photo-index]');
