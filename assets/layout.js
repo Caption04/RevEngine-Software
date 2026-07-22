@@ -8,6 +8,8 @@
   }
 
   const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3000/api' : '/api';
+  const SIDEBAR_STORAGE_KEY = 'revengine.sidebarCollapsed';
+  const DESKTOP_SIDEBAR_QUERY = '(min-width: 981px)';
   let currentPermissionSet = new Set();
 
   const adminPages = [
@@ -67,6 +69,7 @@
 
   function activePage() {
     const key = document.body.dataset.page;
+    if (key === 'customer-profile') return 'customers';
     if (key) return key;
 
     const file = window.location.pathname.split('/').pop() || 'index.html';
@@ -413,6 +416,11 @@
     const mount = shell.querySelector('.page-mount');
     if (!search || !mount) return;
 
+    if (document.body.dataset.pageSearch === 'off') {
+      search.remove();
+      return;
+    }
+
     const toolbar = mount.querySelector('.toolbar');
     if (toolbar) {
       const row = document.createElement('div');
@@ -496,13 +504,32 @@
     });
   }
 
+  function readSidebarPreference() {
+    try {
+      return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true';
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function saveSidebarPreference(collapsed) {
+    try {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(collapsed));
+    } catch (error) {}
+  }
+
   function init() {
     const current = activePage();
     const content = Array.from(document.body.children);
     const shell = document.createElement('section');
+    const desktopSidebar = window.matchMedia(DESKTOP_SIDEBAR_QUERY);
+
+    if (desktopSidebar.matches && readSidebarPreference()) {
+      document.body.classList.add('sidebar-collapsed');
+    }
 
     shell.className = 'app-shell';
-    shell.innerHTML = `<aside class="sidebar" aria-label="Primary navigation">
+    shell.innerHTML = `<aside class="sidebar" id="primary-sidebar" aria-label="Primary navigation">
       <a class="brand" href="index.html">
         <span class="brand-mark"><img src="assets/rev-engine-mark.png" alt="Rev Engine logo"></span>
         <span class="brand-name">Rev Engine</span>
@@ -512,7 +539,13 @@
       ${quickCard()}
     </aside>
     <main class="content">
-      <div class="content-account-bar"><button class="menu-toggle" type="button">Menu</button>${accountMenu()}</div>
+      <div class="content-account-bar">
+        <button class="menu-toggle" type="button" aria-controls="primary-sidebar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          <span data-menu-toggle-label>Menu</span>
+        </button>
+        ${accountMenu()}
+      </div>
       ${pageSearchBox()}
       <div class="page-mount"></div>
     </main>`;
@@ -523,10 +556,67 @@
 
     document.body.appendChild(shell);
 
-    shell.querySelector('.menu-toggle').addEventListener('click', () => {
-      document.body.classList.toggle('nav-open');
+    const sidebar = shell.querySelector('.sidebar');
+    const menuToggle = shell.querySelector('.menu-toggle');
+    const menuToggleLabel = menuToggle.querySelector('[data-menu-toggle-label]');
+
+    function syncSidebarState() {
+      const isDesktop = desktopSidebar.matches;
+      const isCollapsed = isDesktop && document.body.classList.contains('sidebar-collapsed');
+      const isMobileOpen = !isDesktop && document.body.classList.contains('nav-open');
+      const isExpanded = isDesktop ? !isCollapsed : isMobileOpen;
+
+      menuToggle.setAttribute('aria-expanded', String(isExpanded));
+      menuToggleLabel.textContent = 'Menu';
+      const menuAction = isExpanded ? 'Hide menu' : 'Show menu';
+      menuToggle.setAttribute('aria-label', menuAction);
+      menuToggle.title = menuAction;
+      sidebar.setAttribute('aria-hidden', String(!isExpanded));
+      sidebar.inert = !isExpanded;
+    }
+
+    function applySidebarMode() {
+      document.body.classList.remove('nav-open');
+      if (desktopSidebar.matches) {
+        document.body.classList.toggle('sidebar-collapsed', readSidebarPreference());
+      } else {
+        document.body.classList.remove('sidebar-collapsed');
+      }
+      syncSidebarState();
+    }
+
+    menuToggle.addEventListener('click', () => {
+      if (desktopSidebar.matches) {
+        const collapsed = document.body.classList.toggle('sidebar-collapsed');
+        saveSidebarPreference(collapsed);
+      } else {
+        document.body.classList.toggle('nav-open');
+      }
+      syncSidebarState();
     });
 
+    sidebar.addEventListener('click', (event) => {
+      if (!desktopSidebar.matches && event.target.closest('a')) {
+        document.body.classList.remove('nav-open');
+        syncSidebarState();
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !desktopSidebar.matches && document.body.classList.contains('nav-open')) {
+        document.body.classList.remove('nav-open');
+        menuToggle.focus();
+        syncSidebarState();
+      }
+    });
+
+    if (typeof desktopSidebar.addEventListener === 'function') {
+      desktopSidebar.addEventListener('change', applySidebarMode);
+    } else if (typeof desktopSidebar.addListener === 'function') {
+      desktopSidebar.addListener(applySidebarMode);
+    }
+
+    syncSidebarState();
     setupGlobalSearch();
     setupPageSearch();
     setupAccountMenu();

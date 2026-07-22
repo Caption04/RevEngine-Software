@@ -741,6 +741,16 @@ Use the shared Rev Engine feedback system instead:
 
 Every user-triggered action must give clear feedback. Do not leave the user wondering whether an action worked.
 
+### Form Alignment Law
+
+Inline validation must never move neighbouring fields or make a form row jump.
+
+* Form grids must align fields from the top, not the bottom.
+* Create validation slots for eligible fields when the form is rendered, not only after an error occurs.
+* Hide an empty inline error with `visibility: hidden` while keeping its space reserved.
+* Do not toggle inline field errors between `display: none` and `display: block` inside multi-column forms.
+* Dynamic forms and modals must use the same shared validation behaviour.
+
 Before completing frontend work, run:
 
 ```bash

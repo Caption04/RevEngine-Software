@@ -4,6 +4,7 @@
   const NEW_PASSWORD_MIN_LENGTH = 12;
   const processedPasswordInputs = new WeakSet();
   const fieldErrors = new WeakMap();
+  const ERROR_SLOT_TYPES = new Set(['email', 'url', 'number', 'date', 'datetime-local', 'time', 'month', 'week', 'password']);
 
   function fieldLabel(input) {
     const explicit = input.id ? document.querySelector(`label[for="${CSS.escape(input.id)}"]`) : null;
@@ -17,9 +18,22 @@
     return cleaned || 'this field';
   }
 
+  function canShowInlineError(input) {
+    if (!input || !input.form || input.disabled || input.type === 'hidden') return false;
+    if (['button', 'submit', 'reset', 'image', 'checkbox', 'radio'].includes(input.type)) return false;
+    if (input.required || /confirm/i.test(input.name || input.id || '')) return true;
+    if (input.tagName === 'SELECT') return false;
+    if (ERROR_SLOT_TYPES.has(input.type)) return true;
+    return input.minLength > 0 || input.maxLength > 0 || Boolean(input.pattern) ||
+      input.hasAttribute('min') || input.hasAttribute('max') || input.hasAttribute('step');
+  }
+
   function errorNode(input) {
     if (fieldErrors.has(input)) return fieldErrors.get(input);
-    const existing = input.parentElement && input.parentElement.querySelector(':scope > .field-error');
+    const anchor = input.closest('.password-input-shell') || input;
+    const existing = anchor.nextElementSibling && anchor.nextElementSibling.classList.contains('field-error')
+      ? anchor.nextElementSibling
+      : input.parentElement && input.parentElement.querySelector(':scope > .field-error');
     if (existing) {
       fieldErrors.set(input, existing);
       return existing;
@@ -27,10 +41,14 @@
     const node = document.createElement('small');
     node.className = 'field-error';
     node.hidden = true;
-    const anchor = input.closest('.password-input-shell') || input;
+    node.setAttribute('aria-live', 'polite');
     anchor.insertAdjacentElement('afterend', node);
     fieldErrors.set(input, node);
     return node;
+  }
+
+  function ensureErrorSlot(input) {
+    if (canShowInlineError(input)) errorNode(input);
   }
 
   function isVisible(input) {
@@ -136,6 +154,7 @@
   }
 
   function bindInput(input) {
+    ensureErrorSlot(input);
     if (input.dataset.revengineValidationBound === 'true') return;
     input.dataset.revengineValidationBound = 'true';
     input.addEventListener('blur', function () { validateInput(input, true); });

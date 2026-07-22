@@ -4139,6 +4139,12 @@ const resourcePermissionRules = [
   { method: 'POST', pattern: /^\/leads$/, permission: 'leads.create' },
   { method: 'PATCH', pattern: /^\/leads\/[^/]+$/, permission: 'leads.edit' },
   { method: 'GET', pattern: /^\/dispatch\/board$/, permission: 'schedule.view' },
+  { method: 'GET', pattern: /^\/customer-profiles\/[^/]+$/, anyPermissions: ['customers.view', 'jobs.view'] },
+  { method: 'POST', pattern: /^\/customer-profiles\/[^/]+\/contacts$/, permission: 'customers.edit' },
+  { method: 'PATCH', pattern: /^\/customer-profiles\/[^/]+\/contacts\/[^/]+$/, permission: 'customers.edit' },
+  { method: 'DELETE', pattern: /^\/customer-profiles\/[^/]+\/contacts\/[^/]+$/, permission: 'customers.edit' },
+  { method: 'POST', pattern: /^\/customer-profiles\/[^/]+\/notes$/, anyPermissions: ['customers.edit', 'jobs.view'] },
+  { method: 'DELETE', pattern: /^\/customer-profiles\/[^/]+\/notes\/[^/]+$/, permission: 'customers.edit' },
   { method: 'GET', pattern: /^\/customers(?:\/|$)/, permission: 'customers.view' },
   { method: 'POST', pattern: /^\/customers$/, permission: 'customers.create' },
   { method: 'PATCH', pattern: /^\/customers\//, permission: 'customers.edit' },
@@ -6395,6 +6401,24 @@ const customerSchema = z.object({
   notes: z.string().optional()
 });
 
+const customerContactSchema = z.object({
+  name: z.string().trim().min(2).max(200),
+  role: optionalText(120),
+  email: optionalEmail,
+  phone: optionalText(80),
+  isPrimary: z.boolean().optional(),
+  notes: optionalText(1000)
+});
+
+const customerNoteSchema = z.object({
+  note: z.string().trim().min(1).max(3000),
+  category: optionalText(80),
+  technicianVisible: z.boolean().optional()
+});
+
+const customerContactParam = z.object({ id: z.string().min(1), contactId: z.string().min(1) });
+const customerNoteParam = z.object({ id: z.string().min(1), noteId: z.string().min(1) });
+
 function requireBusinessName(body, existing = {}) {
   const customerType = body.customerType || existing.customerType || 'RESIDENTIAL';
   const companyName = body.companyName !== undefined ? body.companyName : existing.companyName;
@@ -6411,7 +6435,23 @@ router.get('/customers', asyncHandler(async (req, res) => {
 router.post('/customers', validate(customerSchema), asyncHandler(async (req, res) => {
   requireBusinessName(req.body);
   if (req.body.branchId) await requireBranch(req, req.body.branchId);
-  const data = await prisma.customer.create({ data: { ...req.body, companyId: req.companyId } });
+  const data = await prisma.$transaction(async (tx) => {
+    const customer = await tx.customer.create({ data: { ...req.body, companyId: req.companyId } });
+    if (tx.customerContact) {
+      await tx.customerContact.create({
+        data: {
+          companyId: req.companyId,
+          customerId: customer.id,
+          name: customer.name,
+          role: 'Primary contact',
+          email: customer.email,
+          phone: customer.phone,
+          isPrimary: true
+        }
+      });
+    }
+    return customer;
+  });
   await audit(req, 'CREATE', 'Customer', data.id);
   sendData(res, normalize(data), 201);
 }));
@@ -6424,9 +6464,219 @@ router.patch('/customers/:id', validate(idParam, 'params'), validate(customerSch
   const existing = await requireCustomer(req, req.params.id);
   requireBusinessName(req.body, existing);
   if (req.body.branchId) await requireBranch(req, req.body.branchId);
-  const data = await prisma.customer.update({ where: { id: req.params.id }, data: req.body });
+  const data = await prisma.$transaction(async (tx) => {
+    const customer = await tx.customer.update({ where: { id: req.params.id }, data: req.body });
+    if (tx.customerContact && (req.body.name !== undefined || req.body.email !== undefined || req.body.phone !== undefined)) {
+      const primary = await tx.customerContact.findFirst({ where: { companyId: req.companyId, customerId: customer.id, isPrimary: true } });
+      const contactData = { name: customer.name, email: customer.email, phone: customer.phone, role: primary && primary.role || 'Primary contact', isPrimary: true };
+      if (primary) await tx.customerContact.update({ where: { id: primary.id }, data: contactData });
+      else await tx.customerContact.create({ data: { ...contactData, companyId: req.companyId, customerId: customer.id } });
+    }
+    return customer;
+  });
   await audit(req, 'UPDATE', 'Customer', data.id);
   sendData(res, normalize(data));
+}));
+
+function customerProfileName(customer) {
+  return customer.customerType === 'BUSINESS' ? (customer.companyName || customer.name) : customer.name;
+}
+
+function safeCustomerDocument(item) {
+  return {
+    id: item.id,
+    jobId: item.jobId || null,
+    fileName: item.fileName || 'Document',
+    mimeType: item.mimeType || null,
+    sizeBytes: Number(item.sizeBytes || 0),
+    url: item.safeUrl || null,
+    createdAt: item.createdAt
+  };
+}
+
+function redactedContract(contract, canViewMoney, canManageContracts) {
+  return {
+    id: contract.id,
+    propertyId: contract.propertyId || null,
+    contractNumber: contract.contractNumber,
+    name: contract.name,
+    status: contract.status,
+    startDate: contract.startDate,
+    endDate: contract.endDate,
+    responseSlaHours: contract.responseSlaHours,
+    completionSlaHours: contract.completionSlaHours,
+    includedVisits: contract.includedVisits,
+    renewalDate: contract.renewalDate,
+    serviceWindowStart: contract.serviceWindowStart,
+    serviceWindowEnd: contract.serviceWindowEnd,
+    notes: canManageContracts ? contract.notes : null,
+    currency: canViewMoney ? contract.currency : null,
+    contractValue: canViewMoney ? contract.contractValue : null,
+    contractMonthlyValue: canViewMoney ? contract.contractMonthlyValue : null,
+    assets: (contract.assets || []).map((item) => item.asset).filter(Boolean),
+    serviceLines: (contract.serviceLines || []).map((item) => ({ id: item.id, serviceId: item.serviceId, service: item.service || null, frequency: item.frequency, visitsPerPeriod: item.visitsPerPeriod }))
+  };
+}
+
+async function buildCustomerProfile(req, customerId) {
+  const scopedCustomer = await requireCustomer(req, customerId);
+  const [canEditCustomer, canCreateSite, canViewQuotes, canViewInvoices, canViewPayments, canManageContracts] = await Promise.all([
+    hasPermission(req, 'customers.edit'),
+    hasPermission(req, 'contract.automation.manage'),
+    hasPermission(req, 'quotes.view'),
+    hasPermission(req, 'invoices.view'),
+    hasPermission(req, 'payments.view'),
+    hasPermission(req, 'contract.automation.manage')
+  ]);
+  const technician = req.user.role === 'WORKER';
+  const canViewMoney = canViewInvoices || canViewPayments;
+  const [customer, contacts, notes, properties, assets, readings, faults, jobs, contracts, messages, documents, quotes, invoices, finance] = await Promise.all([
+    prisma.customer.findFirst({ where: { id: scopedCustomer.id, companyId: req.companyId }, include: { branch: true } }),
+    prisma.customerContact ? prisma.customerContact.findMany({ where: { companyId: req.companyId, customerId }, orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] }) : Promise.resolve([]),
+    prisma.customerNote ? prisma.customerNote.findMany({ where: { companyId: req.companyId, customerId, ...(technician ? { technicianVisible: true } : {}) }, include: { createdBy: { select: SAFE_USER_SELECT } }, orderBy: { createdAt: 'desc' }, take: 100 }) : Promise.resolve([]),
+    prisma.customerProperty.findMany({ where: { companyId: req.companyId, customerId }, include: { branch: true, solarProfile: true }, orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }] }),
+    prisma.asset.findMany({ where: { companyId: req.companyId, customerId }, include: { service: true, parentAsset: true }, orderBy: { createdAt: 'asc' } }),
+    prisma.solarReading.findMany({ where: { companyId: req.companyId, customerId }, include: { asset: true, capturedBy: { select: SAFE_USER_SELECT } }, orderBy: { recordedAt: 'desc' }, take: 250 }),
+    prisma.solarFault.findMany({ where: { companyId: req.companyId, customerId }, include: { asset: true, job: true, reportedBy: { select: SAFE_USER_SELECT } }, orderBy: { detectedAt: 'desc' }, take: 200 }),
+    prisma.job.findMany({ where: { companyId: req.companyId, customerId }, include: { branch: true, service: true, worker: { include: SAFE_WORKER_INCLUDE }, jobAssets: { include: { asset: true } }, proofPhotos: true, signature: true, completionLocation: true, activities: { include: jobActivityInclude, orderBy: { createdAt: 'desc' }, take: 20 } }, orderBy: { createdAt: 'desc' }, take: 200 }),
+    prisma.serviceContract.findMany({ where: { companyId: req.companyId, customerId }, include: { property: true, assets: { include: { asset: true } }, serviceLines: { include: { service: true } } }, orderBy: { createdAt: 'desc' } }),
+    prisma.messageLog.findMany({ where: { companyId: req.companyId, customerId }, orderBy: { createdAt: 'desc' }, take: 100 }),
+    prisma.storageObject.findMany({ where: { companyId: req.companyId, customerId, deletedAt: null }, orderBy: { createdAt: 'desc' }, take: 200 }),
+    canViewQuotes ? prisma.quote.findMany({ where: { companyId: req.companyId, customerId }, include: { service: true, job: true }, orderBy: { createdAt: 'desc' }, take: 100 }) : Promise.resolve([]),
+    canViewMoney ? prisma.invoice.findMany({ where: { companyId: req.companyId, customerId }, include: { service: true, job: true, payments: { orderBy: { createdAt: 'desc' } } }, orderBy: { createdAt: 'desc' }, take: 100 }) : Promise.resolve([]),
+    prisma.companyFinanceSettings.findUnique({ where: { companyId: req.companyId }, select: { defaultCurrency: true, numberFormat: true } }).catch(() => null)
+  ]);
+
+  const contactRecords = contacts.length ? contacts : [{ id: 'primary', name: customer.name, role: 'Primary contact', email: customer.email, phone: customer.phone, isPrimary: true, notes: null }];
+  const jobsById = new Map(jobs.map((job) => [job.id, job]));
+  const siteProfiles = properties.map((property) => {
+    const siteAssets = assets.filter((asset) => asset.propertyId === property.id);
+    const siteAssetIds = new Set(siteAssets.map((asset) => asset.id));
+    const siteReadings = readings.filter((reading) => reading.propertyId === property.id);
+    const siteFaults = faults.filter((fault) => fault.propertyId === property.id);
+    const siteJobIds = new Set();
+    for (const job of jobs) {
+      if ((job.jobAssets || []).some((link) => link.asset && link.asset.propertyId === property.id || siteAssetIds.has(link.assetId))) siteJobIds.add(job.id);
+    }
+    for (const reading of siteReadings) if (reading.jobId) siteJobIds.add(reading.jobId);
+    for (const fault of siteFaults) if (fault.jobId) siteJobIds.add(fault.jobId);
+    const siteJobs = Array.from(siteJobIds).map((id) => jobsById.get(id)).filter(Boolean);
+    const siteContracts = contracts.filter((contract) => contract.propertyId === property.id || (contract.assets || []).some((link) => link.asset && link.asset.propertyId === property.id));
+    const siteDocuments = documents.filter((item) => item.jobId && siteJobIds.has(item.jobId)).map(safeCustomerDocument);
+    const sitePhotos = siteJobs.flatMap((job) => (job.proofPhotos || []).map((photo) => ({ ...photo, jobId: job.id, jobTitle: job.title })));
+    return {
+      id: property.id,
+      label: property.label,
+      address: property.address,
+      city: property.city,
+      notes: property.notes,
+      isDefault: property.isDefault,
+      branch: property.branch,
+      system: property.solarProfile,
+      equipment: siteAssets,
+      latestReading: siteReadings[0] || null,
+      readings: siteReadings,
+      faults: siteFaults,
+      maintenance: siteJobs,
+      contracts: siteContracts.map((contract) => redactedContract(contract, canViewMoney, canManageContracts)),
+      photos: sitePhotos,
+      documents: siteDocuments
+    };
+  });
+  const invoiceTotal = invoices.reduce((sum, invoice) => sum + Number(invoice.total || invoice.amount || 0), 0);
+  const outstanding = invoices.reduce((sum, invoice) => sum + Number(invoice.balanceDue || 0), 0);
+  const confirmedPayments = invoices.flatMap((invoice) => invoice.payments || []).filter((payment) => payment.status === 'CONFIRMED');
+  const paid = confirmedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+
+  return {
+    access: {
+      role: req.user.role,
+      technician,
+      canEditCustomer,
+      canCreateSite,
+      canAddContact: canEditCustomer,
+      canAddNote: canEditCustomer || technician,
+      canViewQuotes,
+      canViewMoney,
+      canManageContracts
+    },
+    customer: { ...customer, displayName: customerProfileName(customer) },
+    contacts: contactRecords,
+    communication: messages.map((message) => ({ id: message.id, channel: message.channel, direction: message.direction, status: message.status, recipientMasked: message.recipientMasked, senderMasked: message.senderMasked, templateName: message.templateName, sentAt: message.sentAt, deliveredAt: message.deliveredAt, readAt: message.readAt, createdAt: message.createdAt })),
+    sites: siteProfiles,
+    workHistory: jobs,
+    quotes: canViewQuotes ? quotes : [],
+    contracts: contracts.map((contract) => redactedContract(contract, canViewMoney, canManageContracts)),
+    notes,
+    documents: documents.map(safeCustomerDocument),
+    money: canViewMoney ? { currency: finance && finance.defaultCurrency || 'USD', numberFormat: finance && finance.numberFormat || 'en-US', invoiceTotal, paid, outstanding, invoices } : null,
+    summary: {
+      siteCount: properties.length,
+      equipmentCount: assets.length,
+      openFaultCount: faults.filter((fault) => !['RESOLVED', 'CLOSED'].includes(fault.status)).length,
+      activeContractCount: contracts.filter((contract) => contract.status === 'ACTIVE').length,
+      jobCount: jobs.length,
+      lastServiceAt: jobs.find((job) => job.completedAt) && jobs.find((job) => job.completedAt).completedAt || null
+    }
+  };
+}
+
+router.get('/customer-profiles/:id', validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  sendData(res, normalize(await buildCustomerProfile(req, req.params.id)));
+}));
+
+router.post('/customer-profiles/:id/contacts', validate(idParam, 'params'), validate(customerContactSchema), asyncHandler(async (req, res) => {
+  await requireCustomer(req, req.params.id);
+  if (!prisma.customerContact) throw new AppError(503, 'Customer contacts are not available until the latest database update is applied.');
+  const data = await prisma.$transaction(async (tx) => {
+    if (req.body.isPrimary) await tx.customerContact.updateMany({ where: { companyId: req.companyId, customerId: req.params.id }, data: { isPrimary: false } });
+    const contact = await tx.customerContact.create({ data: { ...req.body, companyId: req.companyId, customerId: req.params.id, isPrimary: req.body.isPrimary === true } });
+    if (contact.isPrimary) await tx.customer.update({ where: { id: req.params.id }, data: { name: contact.name, email: contact.email, phone: contact.phone } });
+    return contact;
+  });
+  await audit(req, 'CREATE', 'CustomerContact', data.id, { customerId: req.params.id, isPrimary: data.isPrimary });
+  sendData(res, normalize(data), 201);
+}));
+
+router.patch('/customer-profiles/:id/contacts/:contactId', validate(customerContactParam, 'params'), validate(customerContactSchema.partial()), asyncHandler(async (req, res) => {
+  await requireCustomer(req, req.params.id);
+  const existing = await prisma.customerContact.findFirst({ where: { id: req.params.contactId, companyId: req.companyId, customerId: req.params.id } });
+  if (!existing) throw notFound('Customer contact not found');
+  const data = await prisma.$transaction(async (tx) => {
+    if (req.body.isPrimary) await tx.customerContact.updateMany({ where: { companyId: req.companyId, customerId: req.params.id, id: { not: existing.id } }, data: { isPrimary: false } });
+    const contact = await tx.customerContact.update({ where: { id: existing.id }, data: req.body });
+    if (contact.isPrimary) await tx.customer.update({ where: { id: req.params.id }, data: { name: contact.name, email: contact.email, phone: contact.phone } });
+    return contact;
+  });
+  await audit(req, 'UPDATE', 'CustomerContact', data.id, { customerId: req.params.id, isPrimary: data.isPrimary });
+  sendData(res, normalize(data));
+}));
+
+router.delete('/customer-profiles/:id/contacts/:contactId', validate(customerContactParam, 'params'), asyncHandler(async (req, res) => {
+  await requireCustomer(req, req.params.id);
+  const existing = await prisma.customerContact.findFirst({ where: { id: req.params.contactId, companyId: req.companyId, customerId: req.params.id } });
+  if (!existing) throw notFound('Customer contact not found');
+  if (existing.isPrimary) throw new AppError(409, 'Choose another primary contact before removing this contact.');
+  await prisma.customerContact.delete({ where: { id: existing.id } });
+  await audit(req, 'DELETE', 'CustomerContact', existing.id, { customerId: req.params.id });
+  sendData(res, { deleted: true });
+}));
+
+router.post('/customer-profiles/:id/notes', validate(idParam, 'params'), validate(customerNoteSchema), asyncHandler(async (req, res) => {
+  await requireCustomer(req, req.params.id);
+  if (!prisma.customerNote) throw new AppError(503, 'Customer notes are not available until the latest database update is applied.');
+  const data = await prisma.customerNote.create({ data: { companyId: req.companyId, customerId: req.params.id, createdById: req.user.id, note: req.body.note, category: req.body.category || 'GENERAL', technicianVisible: req.user.role === 'WORKER' ? true : req.body.technicianVisible !== false }, include: { createdBy: { select: SAFE_USER_SELECT } } });
+  await audit(req, 'CREATE', 'CustomerNote', data.id, { customerId: req.params.id, category: data.category, technicianVisible: data.technicianVisible });
+  sendData(res, normalize(data), 201);
+}));
+
+router.delete('/customer-profiles/:id/notes/:noteId', validate(customerNoteParam, 'params'), asyncHandler(async (req, res) => {
+  await requireCustomer(req, req.params.id);
+  const existing = await prisma.customerNote.findFirst({ where: { id: req.params.noteId, companyId: req.companyId, customerId: req.params.id } });
+  if (!existing) throw notFound('Customer note not found');
+  await prisma.customerNote.delete({ where: { id: existing.id } });
+  await audit(req, 'DELETE', 'CustomerNote', existing.id, { customerId: req.params.id });
+  sendData(res, { deleted: true });
 }));
 
 router.delete('/customers/:id', validate(idParam, 'params'), asyncHandler(async (req, res) => {

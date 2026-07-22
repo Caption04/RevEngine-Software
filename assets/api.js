@@ -64,8 +64,8 @@
 
   const tableConfigs = {
     leads: {
-      columns: ['Lead', 'Customer Type', 'Need', 'Source', 'Follow-up', 'Status', 'Owner', 'Actions'],
-      emptyTitle: 'No leads yet',
+      columns: ['Enquiry', 'Customer Type', 'Need', 'Source', 'Follow-up', 'Status', 'Owner', 'Actions'],
+      emptyTitle: 'No sales enquiries yet',
       emptyText: 'Add an enquiry when someone calls, messages, or asks for a quote.',
       row: (item) => [
         item.customerType === 'BUSINESS' ? [item.companyName, item.name].filter(Boolean).join(' - ') : item.name,
@@ -79,10 +79,10 @@
       ]
     },
     customers: {
-      columns: ['Client', 'Customer Type', 'Contact', 'Address', 'Work Orders', 'Balance'],
-      emptyTitle: 'No solar clients yet',
+      columns: ['Customer', 'Customer Type', 'Contact', 'Address', 'Work Orders', 'Balance', 'Actions'],
+      emptyTitle: 'No customers yet',
       emptyText: 'Create your first solar client to start managing their sites, equipment, and work.',
-      row: (item) => [item.customerType === 'BUSINESS' ? item.companyName || item.name : item.name, item.customerType === 'BUSINESS' ? 'Business' : 'Residential', [item.customerType === 'BUSINESS' ? item.name : null, item.email, item.phone].filter(Boolean).join(' / ') || '-', item.address || '-', (item.jobs || []).length, money.format((item.invoices || []).filter((i) => i.status !== 'PAID').reduce((sum, i) => sum + Number(i.amount || 0), 0))]
+      row: (item) => [item.customerType === 'BUSINESS' ? item.companyName || item.name : item.name, item.customerType === 'BUSINESS' ? 'Business' : 'Residential', [item.customerType === 'BUSINESS' ? item.name : null, item.email, item.phone].filter(Boolean).join(' / ') || '-', item.address || '-', (item.jobs || []).length, money.format((item.invoices || []).filter((i) => i.status !== 'PAID').reduce((sum, i) => sum + Number(i.balanceDue != null ? i.balanceDue : i.amount || 0), 0)), rowActions('customers', item)]
     },
     workers: {
       columns: ['Worker', 'Contact', 'Title', 'Status', 'Joined'],
@@ -254,7 +254,7 @@
       node.hidden = !(hasPermission('jobs.create') && hasPermission('jobs.view'));
     });
     document.querySelectorAll('.primary-button').forEach((button) => {
-      if (button.closest('form') || !button.textContent.trim().toLowerCase().startsWith('+ new ')) return;
+      if (button.closest('form') || (!button.dataset.createResource && !button.textContent.trim().toLowerCase().startsWith('+ new '))) return;
       const resource = createResourceForButton(button);
       const permission = createPermission(resource);
       if (permission) button.hidden = !hasPermission(permission);
@@ -457,6 +457,7 @@
         add('Delete', 'quote-delete', false, 'quotes.edit');
       }
     }
+    if (resource === 'customers') add('Open profile', 'customer-profile', true, 'customers.view');
     if (resource === 'jobs') add('Details', 'job-detail', true, 'jobs.view');
     if (resource === 'jobs' && item.status !== 'COMPLETED' && item.status !== 'CANCELLED') add(item.scheduledStart ? 'Reschedule' : 'Schedule', item.scheduledStart ? 'job-reschedule' : 'job-schedule', false, 'schedule.manage');
     if (resource === 'jobs' && item.scheduledStart && item.status !== 'COMPLETED' && item.status !== 'CANCELLED') add('Unschedule', 'job-unschedule', false, 'schedule.manage');
@@ -495,7 +496,7 @@
 
   function actionMenuTitle(resource) {
     return {
-      leads: 'Lead Actions',
+      leads: 'Sales Enquiry Actions',
       jobs: 'Job Actions',
       quotes: 'Quote Actions',
       invoices: 'Invoice Actions',
@@ -504,7 +505,7 @@
   }
 
   function actionMenuSubtitle(resource, item) {
-    if (resource === 'leads') return [item.name, item.companyName].filter(Boolean).join(' - ') || 'Lead';
+    if (resource === 'leads') return [item.name, item.companyName].filter(Boolean).join(' - ') || 'Sales enquiry';
     if (resource === 'jobs') return item.title || 'Job';
     if (resource === 'quotes') return item.title || 'Quote';
     if (resource === 'invoices') return item.number || 'Invoice';
@@ -1290,7 +1291,7 @@
     }
     const segmentColumns = [
       { label: 'Segment', value: (row) => row.label },
-      { label: 'Leads', value: (row) => row.leads },
+      { label: 'Sales enquiries', value: (row) => row.leads },
       { label: 'Service requests', value: (row) => row.bookings },
       { label: 'Customers', value: (row) => row.customers },
       { label: 'New customers', value: (row) => row.newCustomers },
@@ -1501,7 +1502,7 @@
       const due = data.filter((item) => item.nextFollowUpAt && new Date(item.nextFollowUpAt) <= now && !['WON', 'LOST'].includes(String(item.status || '').toUpperCase())).length;
       const quoted = data.filter((item) => item.status === 'QUOTED' || item.convertedQuoteId).length;
       const won = data.filter((item) => item.status === 'WON').length;
-      setStats([{ label: 'Open Leads', value: open, trend: 'Still in progress' }, { label: 'Follow-ups Due', value: due, trend: 'Need attention' }, { label: 'Quotes Started', value: quoted, trend: 'Moved to quote' }, { label: 'Won', value: won, trend: 'Turned into work' }]);
+      setStats([{ label: 'Open Enquiries', value: open, trend: 'Still in progress' }, { label: 'Follow-ups Due', value: due, trend: 'Need attention' }, { label: 'Quotes Started', value: quoted, trend: 'Moved to quote' }, { label: 'Won', value: won, trend: 'Turned into work' }]);
     }
     if (resource === 'customers') {
       const balance = data.reduce((sum, c) => sum + (c.invoices || []).filter((i) => i.status !== 'PAID').reduce((inner, i) => inner + Number(i.amount || 0), 0), 0);
@@ -1656,7 +1657,7 @@
 
   function formFor(resource) {
     if (resource === 'leads') return {
-      title: 'New Lead',
+      title: 'New Sales Enquiry',
       action: '/leads',
       fields: customerTypeField() +
         field('name', 'Contact Name', 'text', 'required maxlength="200"') +
@@ -1668,7 +1669,7 @@
         '<div class="field span-2"><label for="fc-serviceNeed">What do they need?</label><textarea id="fc-serviceNeed" name="serviceNeed" maxlength="1000"></textarea></div>' +
         field('nextFollowUpAt', 'Next Follow-up', 'datetime-local')
     };
-    if (resource === 'customers') return { title: 'New Customer', action: '/customers', fields: customerTypeField() + field('name', 'Contact Name', 'text', 'required maxlength="200"') + businessNameField() + field('email', 'Email', 'email') + field('phone', 'Phone') + field('address', 'Address') };
+    if (resource === 'customers') return { title: 'Add Existing Customer', action: '/customers', fields: customerTypeField() + field('name', 'Contact Name', 'text', 'required maxlength="200"') + businessNameField() + field('email', 'Email', 'email') + field('phone', 'Phone') + field('address', 'Address') };
     if (resource === 'workers') return { title: 'New Worker', action: '/workers', fields: field('name', 'Name', 'text', 'required') + field('email', 'Email', 'email', 'required') + field('password', 'Temporary Password', 'password', 'required minlength="12"') + field('title', 'Title') + field('phone', 'Phone') };
     if (resource === 'jobs') {
       const settings = state.scheduleSettings || {};
@@ -1795,6 +1796,11 @@
               await api('/jobs/' + encodeURIComponent(saved.id) + '/assets', { method: 'POST', body: JSON.stringify({ assetId: primaryAssetId, primaryAsset: true }) });
             }
             closeModal();
+            if (config.action === '/customers' && saved && saved.id) {
+              showToast('Customer added.', true);
+              window.location.href = 'customer-profile.html?id=' + encodeURIComponent(saved.id);
+              return;
+            }
             await load();
             showToast('Saved.', true);
           } catch (err) {
@@ -2025,7 +2031,7 @@
     document.querySelectorAll('.primary-button').forEach((button) => {
       if (button.closest('form')) return;
       const text = button.textContent.trim().toLowerCase();
-      if (!text.startsWith('+ new ')) return;
+      if (!button.dataset.createResource && !text.startsWith('+ new ')) return;
       button.addEventListener('click', async () => {
         const resource = createResourceForButton(button);
         const permission = createPermission(resource);
@@ -2048,9 +2054,9 @@
     if (title) title.textContent = resource === 'workers' ? 'Workers' : 'Customers';
     if (copy) copy.textContent = resource === 'workers'
       ? 'Manage field workers, contact details, titles, and active team status.'
-      : 'Customer records, balances, and service history will appear here once created.';
+      : 'Open a customer to see their sites, equipment, work history, contracts, documents, notes, and billing.';
     if (create) {
-      create.textContent = resource === 'workers' ? '+ New Worker' : '+ New Customer';
+      create.textContent = resource === 'workers' ? '+ New Worker' : 'Add Existing Customer';
       create.dataset.createResource = resource;
       create.hidden = !hasPermission(resource === 'workers' ? 'workers.manage' : 'customers.create');
     }
@@ -2472,7 +2478,7 @@
     const noteForm = editableEvidence ? '<form class="job-note-form"><div class="field"><label for="fc-job-note">Worker Activity Note</label><textarea id="fc-job-note" name="note" maxlength="2000"></textarea></div><div class="fc-form-actions"><button class="secondary-button compact" type="submit">Add Note</button></div><p class="fc-form-error" hidden></p></form>' : '';
     const modal = document.createElement('div');
     modal.className = 'fc-modal';
-    modal.innerHTML = `<div class="fc-dialog job-detail-dialog ${editableEvidence ? 'worker-job-detail-dialog' : 'admin-job-detail-dialog'}"><div class="panel-head"><div><h3>${escapeHtml(job.title || 'Solar Work Order')}</h3><p class="modal-copy">${escapeHtml(job.customer && job.customer.name || 'No client')}</p></div><button class="icon-button" type="button" data-close>&times;</button></div><div class="job-detail-grid">${detailItem('Client', job.customer && job.customer.name)}${detailItem('Solar Technician', job.worker && job.worker.user && job.worker.user.name)}${detailItem('O&M Contract', job.contract && (job.contract.contractNumber || job.contract.name))}${detailItem('Scheduled', formatDateTime(job.scheduledStart))}${detailItem('Response Due', formatDateTime(job.responseDueAt))}${detailItem('Completion Due', formatDateTime(job.completionDueAt))}${detailItem('Completed', formatDateTime(job.completedAt))}<div class="job-detail-item"><span>Status</span>${badge(job.status)}</div><div class="job-detail-item"><span>SLA</span>${badge(job.slaStatus || 'NOT_APPLICABLE')}</div></div>${job.completionNotes ? `<div class="job-notes"><span>Completion Notes</span><p>${escapeHtml(job.completionNotes)}</p></div>` : ''}${lifecycle}${renderJobAssetSummary(job)}${renderCompletionRequirements(job)}${renderProofPhotos(job, { editable: editableEvidence })}${renderSignature(job, { editable: editableEvidence })}${renderCompletionLocation(job, { editable: editableEvidence })}${noteForm}<section class="job-activity-section"><h4>Activity Timeline</h4>${renderActivityTimeline(activity || [])}</section></div>`;
+    modal.innerHTML = `<div class="fc-dialog job-detail-dialog ${editableEvidence ? 'worker-job-detail-dialog' : 'admin-job-detail-dialog'}"><div class="panel-head"><div><h3>${escapeHtml(job.title || 'Solar Work Order')}</h3><p class="modal-copy">${escapeHtml(job.customer && job.customer.name || 'No client')}</p>${job.customer && job.customer.id ? `<a class="text-button job-customer-profile-link" href="customer-profile.html?id=${encodeURIComponent(job.customer.id)}">Open customer profile</a>` : ''}</div><button class="icon-button" type="button" data-close>&times;</button></div><div class="job-detail-grid">${detailItem('Client', job.customer && job.customer.name)}${detailItem('Solar Technician', job.worker && job.worker.user && job.worker.user.name)}${detailItem('O&M Contract', job.contract && (job.contract.contractNumber || job.contract.name))}${detailItem('Scheduled', formatDateTime(job.scheduledStart))}${detailItem('Response Due', formatDateTime(job.responseDueAt))}${detailItem('Completion Due', formatDateTime(job.completionDueAt))}${detailItem('Completed', formatDateTime(job.completedAt))}<div class="job-detail-item"><span>Status</span>${badge(job.status)}</div><div class="job-detail-item"><span>SLA</span>${badge(job.slaStatus || 'NOT_APPLICABLE')}</div></div>${job.completionNotes ? `<div class="job-notes"><span>Completion Notes</span><p>${escapeHtml(job.completionNotes)}</p></div>` : ''}${lifecycle}${renderJobAssetSummary(job)}${renderCompletionRequirements(job)}${renderProofPhotos(job, { editable: editableEvidence })}${renderSignature(job, { editable: editableEvidence })}${renderCompletionLocation(job, { editable: editableEvidence })}${noteForm}<section class="job-activity-section"><h4>Activity Timeline</h4>${renderActivityTimeline(activity || [])}</section></div>`;
     modal.addEventListener('click', async (event) => {
       if (event.target === modal || event.target.closest('[data-close]')) return closeModal();
       const proofDelete = event.target.closest('[data-proof-delete]');
@@ -2641,7 +2647,7 @@
     closeModal();
     const modal = document.createElement('div');
     modal.className = 'fc-modal';
-    modal.innerHTML = '<div class="fc-dialog lead-detail-dialog"><div class="panel-head"><div><h3>' + escapeHtml(item.customerType === 'BUSINESS' ? item.companyName || item.name || 'Lead' : item.name || 'Lead') + '</h3><p class="modal-copy">' + escapeHtml(item.customerType === 'BUSINESS' ? item.name || 'Business contact' : item.serviceNeed || 'Residential lead') + '</p></div><button class="icon-button" type="button" data-close>&times;</button></div><div class="booking-detail-list">' +
+    modal.innerHTML = '<div class="fc-dialog lead-detail-dialog"><div class="panel-head"><div><h3>' + escapeHtml(item.customerType === 'BUSINESS' ? item.companyName || item.name || 'Sales enquiry' : item.name || 'Sales enquiry') + '</h3><p class="modal-copy">' + escapeHtml(item.customerType === 'BUSINESS' ? item.name || 'Business contact' : item.serviceNeed || 'Residential lead') + '</p></div><button class="icon-button" type="button" data-close>&times;</button></div><div class="booking-detail-list">' +
       bookingDetail('Customer type', item.customerType === 'BUSINESS' ? 'Business' : 'Residential') +
       bookingDetail('Status', String(item.status || '-').replace(/_/g, ' ')) +
       bookingDetail('Contact', [item.email, item.phone].filter(Boolean).join(' / ')) +
@@ -2685,7 +2691,7 @@
   function openLeadStageModal(id, currentStatus) {
     const stages = ['NEW', 'CONTACTED', 'QUALIFIED', 'QUOTED', 'WON', 'LOST'];
     openModal({
-      title: 'Change Lead Stage',
+      title: 'Change Enquiry Stage',
       fields: select('status', 'Stage', stages.map((stage) => '<option value="' + stage + '">' + stage.replace(/_/g, ' ') + '</option>').join(''), true) + '<div class="field span-2"><label for="fc-lostReason">Reason if lost</label><textarea id="fc-lostReason" name="lostReason" maxlength="1000"></textarea></div>'
     });
     const modal = document.querySelector('.fc-modal');
@@ -2700,7 +2706,7 @@
       try {
         await api('/leads/' + id, { method: 'PATCH', body: JSON.stringify(body) });
         closeModal();
-        showToast('Lead stage updated.', true);
+        showToast('Enquiry stage updated.', true);
         await load();
       } catch (err) {
         error.textContent = err.message;
@@ -2809,6 +2815,10 @@
         await api('/quotes/' + id, { method: 'DELETE' });
       }
       if (action === 'quote-restore') await api('/quotes/' + id + '/restore', { method: 'POST', body: '{}' });
+      if (action === 'customer-profile') {
+        window.location.href = 'customer-profile.html?id=' + encodeURIComponent(id);
+        return;
+      }
       if (action === 'job-detail') {
         await openJobDetail(id);
         return;

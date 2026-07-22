@@ -641,6 +641,8 @@ model Company {
   bookingRequestPhotos              BookingRequestPhoto[]
   clientAccounts                    ClientAccount[]
   customerProperties                CustomerProperty[]
+  customerContacts                  CustomerContact[]
+  customerNotes                     CustomerNote[]
   notificationLogs                  NotificationLog[]
   integrationConnections            IntegrationConnection[]
   integrationSecrets                IntegrationSecret[]
@@ -830,6 +832,7 @@ model User {
   invitationsAccepted         MemberInvitation[]       @relation("MemberInvitationAcceptedBy")
   assignedLeads               Lead[]                   @relation("LeadAssignedTo")
   createdLeadActivities       LeadActivity[]           @relation("LeadActivityCreatedBy")
+  customerNotesCreated        CustomerNote[]            @relation("CustomerNoteCreatedBy")
   solarReadingsCaptured        SolarReading[]            @relation("SolarReadingCapturedBy")
   solarFaultsReported          SolarFault[]              @relation("SolarFaultReportedBy")
   twoFactorEnabled            Boolean                  @default(false)
@@ -1115,6 +1118,8 @@ model Customer {
   leads             Lead[]
   clientAccounts    ClientAccount[]
   properties        CustomerProperty[]
+  contacts          CustomerContact[]
+  profileNotes      CustomerNote[]
   messageLogs       MessageLog[]
   storageObjects    StorageObject[]
   assets            Asset[]
@@ -1126,6 +1131,43 @@ model Customer {
 
   @@index([companyId])
   @@index([companyId, branchId])
+}
+
+model CustomerContact {
+  id          String   @id @default(cuid())
+  companyId   String
+  customerId  String
+  name        String
+  role        String?
+  email       String?
+  phone       String?
+  isPrimary   Boolean  @default(false)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, customerId])
+  @@index([companyId, customerId, isPrimary])
+}
+
+model CustomerNote {
+  id                String   @id @default(cuid())
+  companyId         String
+  customerId        String
+  createdById       String?
+  note              String
+  category          String   @default("GENERAL")
+  technicianVisible Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer          Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdBy         User?    @relation("CustomerNoteCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, customerId, createdAt])
+  @@index([companyId, customerId, technicianVisible])
 }
 
 model ClientAccount {
