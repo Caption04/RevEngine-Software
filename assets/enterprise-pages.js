@@ -95,16 +95,233 @@
     });
   }
 
+  let branchRecords = [];
+  let editingBranchId = null;
+
   async function loadBranches() {
-    const rows = asArray(await api('/branches')).map((branch) => `<tr><td>${escapeHtml(branch.name)}</td><td>${escapeHtml(branch.code || '-')}</td><td>${escapeHtml(branch.city || '-')}</td><td>${escapeHtml(branch.countryName || branch.country || '-')}</td><td>${badge(branch.active === false ? 'INACTIVE' : 'ACTIVE')}</td></tr>`);
-    setRows('[data-branches]', rows, 5);
+    branchRecords = asArray(await api('/branches'));
+    const rows = branchRecords.map((branch) => {
+      const location = [branch.city, branch.region, branch.countryName || branch.country].filter(Boolean).join(', ') || '-';
+      const contact = [
+        branch.phone ? `<div>${escapeHtml(branch.phone)}</div>` : '',
+        branch.whatsappPhone ? `<small>WhatsApp: ${escapeHtml(branch.whatsappPhone)}</small>` : '',
+        branch.email ? `<small>${escapeHtml(branch.email)}</small>` : ''
+      ].filter(Boolean).join('');
+      return `<tr><td>${escapeHtml(branch.name)}</td><td>${escapeHtml(branch.code || '-')}</td><td>${escapeHtml(location)}</td><td>${contact || '<span class="muted">Not added</span>'}</td><td>${badge(branch.active === false ? 'INACTIVE' : 'ACTIVE')}</td><td><button type="button" class="secondary-button compact" data-edit-branch="${escapeHtml(branch.id)}">Edit</button></td></tr>`;
+    });
+    setRows('[data-branches]', rows, 6);
     setStatus(`Loaded ${rows.length} branch${rows.length === 1 ? '' : 'es'}`, true);
   }
 
-  function initBranches() {
-    bindSubmit('[data-branch-form]', async (form, body) => {
-      await api('/branches', { method: 'POST', body: JSON.stringify(body) });
-      await loadBranches();
+  function branchLocationPicker(form, payload) {
+    const shell = form.querySelector('[data-branch-city-picker]');
+    const search = form.querySelector('[data-branch-city-search]');
+    const value = form.querySelector('[data-branch-city-value]');
+    const menu = form.querySelector('[data-branch-city-options]');
+    const code = form.querySelector('[data-branch-code]');
+    const timezone = form.querySelector('[data-branch-timezone]');
+    const summary = form.querySelector('[data-branch-location-summary]');
+    const summaryLabel = form.querySelector('[data-branch-location-label]');
+    const countryHelp = form.querySelector('[data-branch-country-help]');
+    const locations = asArray(payload && payload.locations);
+    let selected = null;
+
+    if (countryHelp && payload && payload.countryName) countryHelp.textContent = `Showing cities in ${payload.countryName}.`;
+    if (!shell || !search || !value || !menu) return { reset() {}, chooseByCity() {} };
+
+    const labelFor = (item) => `${item.city} — ${item.region}`;
+    const close = () => {
+      menu.hidden = true;
+      search.setAttribute('aria-expanded', 'false');
+    };
+    const choose = (item) => {
+      selected = item;
+      search.value = item.city;
+      value.value = item.city;
+      code.value = item.code;
+      timezone.value = item.timezone;
+      if (summary && summaryLabel) {
+        summary.hidden = false;
+        summaryLabel.textContent = labelFor(item);
+      }
+      close();
+      search.classList.remove('field-input-invalid');
+      search.removeAttribute('aria-invalid');
+    };
+    const matchingLocations = () => {
+      const query = search.value.trim().toLowerCase();
+      return locations.filter((item) => !query || `${item.city} ${item.region} ${item.code}`.toLowerCase().includes(query)).slice(0, 12);
+    };
+    const render = () => {
+      const matches = matchingLocations();
+      menu.innerHTML = matches.length
+        ? matches.map((item) => `<button type="button" class="searchable-select-option" role="option" data-city="${escapeHtml(item.city)}"><span>${escapeHtml(item.city)}</span><small>${escapeHtml(item.region)} · ${escapeHtml(item.code)}</small></button>`).join('')
+        : '<div class="searchable-select-empty">No matching city.</div>';
+      menu.hidden = false;
+      search.setAttribute('aria-expanded', 'true');
+    };
+    const clearSelection = () => {
+      selected = null;
+      value.value = '';
+      code.value = '';
+      timezone.value = '';
+      if (summary) summary.hidden = true;
+    };
+    const reset = () => {
+      selected = null;
+      search.value = '';
+      value.value = '';
+      code.value = '';
+      timezone.value = '';
+      if (summary) summary.hidden = true;
+      close();
+    };
+
+    search.addEventListener('focus', render);
+    search.addEventListener('input', () => {
+      if (!selected || search.value !== selected.city) clearSelection();
+      render();
+    });
+    search.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') close();
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        if (menu.hidden) render();
+        menu.querySelector('button')?.focus();
+      }
+      if (event.key === 'Enter' && !menu.hidden) {
+        const first = matchingLocations()[0];
+        if (first) {
+          event.preventDefault();
+          choose(first);
+        }
+      }
+    });
+    menu.addEventListener('click', (event) => {
+      const option = event.target.closest('[data-city]');
+      if (!option) return;
+      const item = locations.find((candidate) => candidate.city === option.dataset.city);
+      if (item) choose(item);
+    });
+    menu.addEventListener('keydown', (event) => {
+      const current = event.target.closest('button');
+      if (!current) return;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const options = Array.from(menu.querySelectorAll('button'));
+        const index = options.indexOf(current);
+        const next = event.key === 'ArrowDown' ? options[index + 1] || options[0] : options[index - 1] || options[options.length - 1];
+        next?.focus();
+      }
+      if (event.key === 'Escape') {
+        close();
+        search.focus();
+      }
+    });
+    document.addEventListener('click', (event) => {
+      if (!shell.contains(event.target)) close();
+    });
+    search.addEventListener('blur', () => {
+      window.setTimeout(() => {
+        if (selected || menu.contains(document.activeElement)) return;
+        const exact = locations.find((item) => item.city.toLowerCase() === search.value.trim().toLowerCase());
+        if (exact) choose(exact);
+        else if (search.value.trim()) {
+          clearSelection();
+          search.value = '';
+        }
+      }, 120);
+    });
+    form.addEventListener('reset', () => window.setTimeout(reset, 0));
+    return {
+      reset,
+      chooseByCity(city) {
+        const item = locations.find((candidate) => candidate.city.toLowerCase() === String(city || '').trim().toLowerCase());
+        if (item) choose(item);
+      }
+    };
+  }
+
+  async function initBranches() {
+    const form = document.querySelector('[data-branch-form]');
+    const title = document.querySelector('[data-branch-form-title]');
+    const help = document.querySelector('[data-branch-form-help]');
+    const submitButton = document.querySelector('[data-branch-submit]');
+    const cancelButton = document.querySelector('[data-branch-cancel]');
+    let picker = null;
+
+    const setFormMode = (branch = null) => {
+      editingBranchId = branch && branch.id || null;
+      if (title) title.textContent = branch ? 'Edit branch' : 'Create branch';
+      if (help) help.textContent = branch
+        ? 'Update the branch location and contact details.'
+        : 'Choose the city. Rev Engine fills in the code and time zone for you.';
+      if (submitButton) submitButton.textContent = branch ? 'Save changes' : 'Create branch';
+      if (cancelButton) cancelButton.hidden = !branch;
+    };
+
+    const clearForm = () => {
+      if (!form) return;
+      form.reset();
+      picker?.reset();
+      setFormMode(null);
+    };
+
+    const editBranch = (branch) => {
+      if (!form || !branch) return;
+      picker?.reset();
+      setFormMode(branch);
+      form.elements.name.value = branch.name || '';
+      form.elements.address.value = branch.address || '';
+      form.elements.phone.value = branch.phone || '';
+      form.elements.whatsappPhone.value = branch.whatsappPhone || '';
+      form.elements.email.value = branch.email || '';
+      picker?.chooseByCity(branch.city);
+      form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      form.elements.name.focus({ preventScroll: true });
+    };
+
+    try {
+      const payload = await api('/branch-location-options');
+      picker = form ? branchLocationPicker(form, payload) : null;
+      if (form) {
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const body = formJson(form);
+          if (!body.city) {
+            const search = form.querySelector('[data-branch-city-search]');
+            if (search) {
+              search.value = '';
+              window.RevEngineFormUX?.validateForm(form);
+            }
+            return;
+          }
+          try {
+            const path = editingBranchId ? `/branches/${editingBranchId}` : '/branches';
+            const method = editingBranchId ? 'PATCH' : 'POST';
+            await api(path, { method, body: JSON.stringify(body) });
+            const message = editingBranchId ? 'Branch updated.' : 'Branch created.';
+            clearForm();
+            await loadBranches();
+            setStatus(message.replace('.', ''), true);
+            notifyAction(message);
+          } catch (error) {
+            setStatus(error.message || 'Could not save branch', false);
+            notifyAction(error.message || 'Could not save branch', false);
+          }
+        });
+      }
+    } catch (error) {
+      setStatus(error.message || 'Could not load branch locations', false);
+      notifyAction(error.message || 'Could not load branch locations', false);
+    }
+
+    cancelButton?.addEventListener('click', clearForm);
+    document.querySelector('[data-branches]')?.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-edit-branch]');
+      if (!button) return;
+      const branch = branchRecords.find((item) => item.id === button.dataset.editBranch);
+      editBranch(branch);
     });
     document.querySelector('[data-refresh]')?.addEventListener('click', loadBranches);
     loadBranches().catch((error) => setStatus(error.message, false));

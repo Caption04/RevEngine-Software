@@ -15,7 +15,7 @@ const { billingSummary, cancelSubscription, changePlan, createCheckout, selectMo
 const { reportCsv, reportData } = require('../services/reporting.service');
 const { analyticsCsv, buildExecutiveAnalytics } = require('../services/executiveAnalytics.service');
 const { buildDispatchBoard } = require('../services/dispatch.service');
-const { countryConfig, normalizeCountryCode, organizationContextForUser } = require('../services/organization.service');
+const { branchLocationForCountry, branchLocationsForCountry, countryConfig, normalizeCountryCode, organizationContextForUser } = require('../services/organization.service');
 const { billingCatalog, canUseFeature, getUsage, listPlans, requireFeature, requirePlanLimit } = require('../services/subscription.service');
 const { FULL_ACCESS_ONLY_PERMISSION_KEYS, PERMISSION_CATALOG, PERMISSION_DEPENDENCIES, PERMISSION_GROUPS, defaultPermissionBundles, delegatablePermissionKeys, effectiveAccessForUser, expandPermissionDependencies, hasFullBusinessAccess, isSubset, permissionKeys, scopeContains, seedSystemRoleTemplates, uniquePermissions } = require('../services/accessControl.service');
 const { getStorageObjectForCompany, readStorageObject, storeUploadedFile } = require('../services/integrations/storage.service');
@@ -94,6 +94,9 @@ const activityTypeValues = ['ASSIGNED','ARRIVED','STARTED','PAUSED','RESUMED','C
 const proofCategoryValues = ['BEFORE', 'AFTER', 'GENERAL', 'DAMAGE', 'ISSUE', 'EXTRA_WORK', 'CUSTOMER_APPROVAL'];
 const bookingRequestStatusValues = ['NEW', 'REVIEWED', 'CONVERTED', 'DECLINED', 'CANCELLED'];
 const customerTypeValues = ['RESIDENTIAL', 'BUSINESS'];
+const customerStatusValues = ['ACTIVE', 'ON_HOLD', 'INACTIVE'];
+const preferredContactMethodValues = ['PHONE', 'WHATSAPP', 'EMAIL'];
+const customerPaymentTermsValues = ['DUE_ON_RECEIPT', 'NET_7', 'NET_14', 'NET_30', 'NET_60'];
 function customerTypeFromQuery(value) {
   if (!value || String(value).toUpperCase() === 'ALL') return null;
   const normalized = String(value).trim().toUpperCase();
@@ -292,6 +295,38 @@ async function requireBranch(req, id) {
   const record = await prisma.branch.findFirst({ where: { id, companyId: req.companyId } });
   if (!record) throw notFound('Branch not found');
   return record;
+}
+
+async function customerBranchAccessContext(req) {
+  const access = req.effectiveAccess || await effectiveAccessForUser(req.user, { companyId: req.companyId });
+  const where = { companyId: req.companyId, active: true };
+  if (access.scopeType !== 'COMPANY') {
+    if (!access.branchIds || !access.branchIds.length) return { access, branches: [], selectionMode: 'NONE' };
+    where.id = { in: access.branchIds };
+  }
+  const branches = await prisma.branch.findMany({ where, orderBy: [{ name: 'asc' }, { createdAt: 'asc' }] });
+  const fixed = access.scopeType === 'BRANCH' && branches.length === 1;
+  return { access, branches, selectionMode: fixed ? 'FIXED' : branches.length ? 'CHOOSE' : 'NONE' };
+}
+
+async function resolveCustomerBranchId(req, requestedBranchId, options = {}) {
+  const context = await customerBranchAccessContext(req);
+  const requested = String(requestedBranchId || '').trim();
+
+  if (requested) {
+    const branch = context.branches.find((item) => item.id === requested);
+    if (!branch) throw new AppError(403, 'Choose a branch within your access.');
+    return branch.id;
+  }
+
+  if (context.selectionMode === 'FIXED') return context.branches[0].id;
+  if (context.selectionMode === 'CHOOSE' && options.requireSelection !== false) {
+    throw new AppError(400, 'Choose the customer branch.');
+  }
+  if (context.access.scopeType !== 'COMPANY' && context.selectionMode === 'NONE') {
+    throw new AppError(403, 'Your account is not assigned to a branch.');
+  }
+  return undefined;
 }
 
 async function requireApprovalPolicy(req, id) {
@@ -1534,10 +1569,11 @@ const checklistTemplateSchema = z.object({ serviceId: optionalText(160), contrac
 
 const branchSchema = z.object({
   name: z.string().trim().min(1).max(160),
-  code: optionalText(40),
-  city: optionalText(120),
+  city: z.string().trim().min(1).max(120),
   address: optionalText(500),
-  timezone: optionalText(80),
+  phone: optionalText(40),
+  whatsappPhone: optionalText(40),
+  email: optionalEmail,
   active: z.boolean().optional()
 });
 const approvalPolicySchema = z.object({
@@ -4855,6 +4891,35 @@ router.post(
 );
 
 
+async function nextBranchCode(companyId, baseCode, excludeBranchId = null) {
+  const records = await prisma.branch.findMany({ where: { companyId }, select: { id: true, code: true } });
+  const used = new Set(records
+    .filter((item) => !excludeBranchId || item.id !== excludeBranchId)
+    .map((item) => String(item.code || '').toUpperCase()));
+  if (!used.has(baseCode)) return baseCode;
+  let sequence = 2;
+  while (used.has(`${baseCode}-${sequence}`)) sequence += 1;
+  return `${baseCode}-${sequence}`;
+}
+
+async function branchRegionForCompany(companyId) {
+  const finance = await prisma.companyFinanceSettings.findUnique({ where: { companyId } });
+  const company = await prisma.company.findUnique({ where: { id: companyId }, select: { market: true } });
+  const regional = countryConfig(finance && finance.country || company && company.market);
+  if (!regional) throw new AppError(409, 'Set the company country before creating a branch.');
+  return regional;
+}
+
+router.get('/branch-location-options', requireRole(...adminRoles), asyncHandler(async (req, res) => {
+  await requirePermission(req, 'branch.view');
+  const regional = await branchRegionForCompany(req.companyId);
+  sendData(res, {
+    country: regional.code,
+    countryName: regional.name,
+    locations: branchLocationsForCountry(regional.code)
+  });
+}));
+
 router.get('/branches', requireRole(...adminRoles), asyncHandler(async (req, res) => {
   const access = req.effectiveAccess || await effectiveAccessForUser(req.user, { companyId: req.companyId });
   const scopeWhere = access.scopeType === 'COMPANY'
@@ -4871,25 +4936,55 @@ router.get('/branches', requireRole(...adminRoles), asyncHandler(async (req, res
 
 router.post('/branches', requireRole(...adminRoles), validate(branchSchema), asyncHandler(async (req, res) => {
   await requirePermission(req, 'branch.manage');
-  if (!req.effectiveAccess || req.effectiveAccess.scopeType !== 'COMPANY') throw new AppError(403, 'Only a workspace-wide manager can create branches.');
-  const finance = await prisma.companyFinanceSettings.findUnique({ where: { companyId: req.companyId } });
-  const company = await prisma.company.findUnique({ where: { id: req.companyId }, select: { market: true } });
-  const regional = countryConfig(finance && finance.country || company && company.market);
-  if (!regional) throw new AppError(409, 'Set the workspace country before creating a branch.');
-  const data = await prisma.branch.create({ data: { ...req.body, companyId: req.companyId, country: regional.code, timezone: req.body.timezone || regional.timezone, active: req.body.active !== false } });
+  if (!req.effectiveAccess || req.effectiveAccess.scopeType !== 'COMPANY') throw new AppError(403, 'Only an all-company manager can create branches.');
+  const regional = await branchRegionForCompany(req.companyId);
+  const location = branchLocationForCountry(regional.code, req.body.city);
+  if (!location) throw new AppError(400, 'Choose a city from the available list.');
+  const code = await nextBranchCode(req.companyId, location.code);
+  const data = await prisma.branch.create({
+    data: {
+      companyId: req.companyId,
+      name: req.body.name,
+      code,
+      country: regional.code,
+      region: location.region,
+      city: location.city,
+      address: req.body.address,
+      timezone: location.timezone,
+      phone: req.body.phone,
+      whatsappPhone: req.body.whatsappPhone,
+      email: req.body.email,
+      active: req.body.active !== false
+    }
+  });
   await audit(req, 'CREATE', 'Branch', data.id);
   sendData(res, normalize({ ...data, countryName: regional.name }), 201);
 }));
 
 router.patch('/branches/:id', requireRole(...adminRoles), validate(idParam, 'params'), validate(branchSchema.partial()), asyncHandler(async (req, res) => {
   await requirePermission(req, 'branch.manage', { branchId: req.params.id });
-  await requireBranch(req, req.params.id);
-  const finance = await prisma.companyFinanceSettings.findUnique({ where: { companyId: req.companyId } });
-  const company = await prisma.company.findUnique({ where: { id: req.companyId }, select: { market: true } });
-  const regional = countryConfig(finance && finance.country || company && company.market);
-  const data = await prisma.branch.update({ where: { id: req.params.id }, data: { ...req.body, country: regional && regional.code } });
+  const existing = await requireBranch(req, req.params.id);
+  const regional = await branchRegionForCompany(req.companyId);
+  const update = {
+    name: req.body.name,
+    address: req.body.address,
+    phone: req.body.phone,
+    whatsappPhone: req.body.whatsappPhone,
+    email: req.body.email,
+    active: req.body.active,
+    country: regional.code
+  };
+  if (req.body.city) {
+    const location = branchLocationForCountry(regional.code, req.body.city);
+    if (!location) throw new AppError(400, 'Choose a city from the available list.');
+    update.city = location.city;
+    update.region = location.region;
+    update.timezone = location.timezone;
+    if (location.city !== existing.city) update.code = await nextBranchCode(req.companyId, location.code, existing.id);
+  }
+  const data = await prisma.branch.update({ where: { id: req.params.id }, data: update });
   await audit(req, 'UPDATE', 'Branch', data.id);
-  sendData(res, normalize({ ...data, countryName: regional ? regional.name : data.country }));
+  sendData(res, normalize({ ...data, countryName: regional.name }));
 }));
 
 router.get('/approval-policies', requireRole(...adminRoles), asyncHandler(async (req, res) => {
@@ -6183,7 +6278,7 @@ async function validateImportRow(req, type, row) {
 async function importOneRow(req, type, row) {
   if (type === 'customers') {
     const branchId = await branchIdForImport(req, row.branchCode);
-    return prisma.customer.create({ data: { companyId: req.companyId, branchId, customerType: String(row.customerType || 'RESIDENTIAL').toUpperCase() === 'BUSINESS' ? 'BUSINESS' : 'RESIDENTIAL', name: row.name, companyName: row.companyName || undefined, email: row.email || undefined, phone: row.phone || undefined, address: row.address || undefined, notes: row.notes || undefined } });
+    return prisma.customer.create({ data: { companyId: req.companyId, branchId, customerReference: newCustomerReference(), customerType: String(row.customerType || 'RESIDENTIAL').toUpperCase() === 'BUSINESS' ? 'BUSINESS' : 'RESIDENTIAL', name: row.name, companyName: row.companyName || undefined, email: row.email || undefined, phone: row.phone || undefined, address: row.address || undefined, serviceNotes: row.notes || undefined, notes: row.notes || undefined } });
   }
   if (type === 'properties') {
     const customer = await customerForImport(req, row);
@@ -6362,7 +6457,7 @@ async function createVerticalDemoData(req, vertical) {
     created.services.push(service.id);
   }
   const customerName = 'Solar O&M Demo Client';
-  const customer = await prisma.customer.create({ data: { companyId: req.companyId, name: customerName, email: vertical.replace(/[^a-z0-9]/g, '-') + '@demo.revengine.local', phone: '+10000000000', notes: 'Solar O&M demo data' } });
+  const customer = await prisma.customer.create({ data: { companyId: req.companyId, customerReference: newCustomerReference(), name: customerName, email: vertical.replace(/[^a-z0-9]/g, '-') + '@demo.revengine.local', phone: '+10000000000', serviceNotes: 'Solar O&M demo data', notes: 'Solar O&M demo data' } });
   created.customers.push(customer.id);
   const inventory = await prisma.inventoryItem.create({ data: { companyId: req.companyId, sku: vertical.toUpperCase().replace(/[^A-Z0-9]/g, '-') + '-KIT', name: 'Solar Technician Service Kit', unitOfMeasure: 'kit', unitCost: 25, active: true } });
   created.inventoryItems.push(inventory.id);
@@ -6453,12 +6548,26 @@ router.post('/onboarding/demo-data/:vertical', requireRole('OWNER'), asyncHandle
 const customerSchema = z.object({
   branchId: z.string().min(1).optional(),
   customerType: z.enum(customerTypeValues).default('RESIDENTIAL'),
+  status: z.enum(customerStatusValues).optional(),
   name: z.string().trim().min(2).max(200),
   companyName: optionalText(200),
+  registeredCompanyName: optionalText(240),
+  registrationNumber: optionalText(120),
+  taxNumber: optionalText(120),
+  industry: optionalText(160),
+  primaryContactRole: optionalText(120),
   email: z.string().email().optional().or(z.literal('')).transform((v) => v || undefined),
-  phone: z.string().optional(),
-  address: z.string().optional(),
-  notes: z.string().optional()
+  phone: optionalText(80),
+  alternatePhone: optionalText(80),
+  preferredContactMethod: z.enum(preferredContactMethodValues).optional(),
+  address: optionalText(500),
+  billingEmail: optionalEmail,
+  billingContactName: optionalText(200),
+  paymentTerms: z.enum(customerPaymentTermsValues).optional(),
+  purchaseOrderRequired: z.boolean().optional(),
+  serviceNotes: optionalText(3000),
+  internalNotes: optionalText(3000),
+  notes: optionalText(3000)
 });
 
 const customerContactSchema = z.object({
@@ -6485,25 +6594,80 @@ function requireBusinessName(body, existing = {}) {
   if (customerType === 'BUSINESS' && !String(companyName || '').trim()) throw new AppError(400, 'Enter the business name.');
 }
 
+function newCustomerReference() {
+  return 'CUS-' + crypto.randomBytes(5).toString('hex').toUpperCase();
+}
+
+function canViewCustomerBilling(req) {
+  return Promise.all([
+    hasPermission(req, 'invoices.view'),
+    hasPermission(req, 'payments.view'),
+    hasPermission(req, 'invoices.edit'),
+    hasPermission(req, 'payments.manage'),
+    hasPermission(req, 'settings.finance.manage')
+  ]).then((values) => values.some(Boolean));
+}
+
+function canEditCustomerBilling(req) {
+  return Promise.all([
+    hasPermission(req, 'invoices.edit'),
+    hasPermission(req, 'payments.manage'),
+    hasPermission(req, 'settings.finance.manage')
+  ]).then((values) => values.some(Boolean));
+}
+
+function customerForViewer(customer, options = {}) {
+  if (!customer) return customer;
+  const record = { ...customer };
+  if (!options.canViewBilling) {
+    delete record.billingEmail;
+    delete record.billingContactName;
+    delete record.paymentTerms;
+    delete record.purchaseOrderRequired;
+    delete record.taxNumber;
+    delete record.invoices;
+  }
+  if (!options.canViewInternalNotes) delete record.internalNotes;
+  return record;
+}
+
 router.get('/customers', asyncHandler(async (req, res) => {
   if (req.query.branchId) await requireBranch(req, String(req.query.branchId));
   const customerType = customerTypeFromQuery(req.query.customerType);
+  const [canViewBilling, canViewInternalNotes] = await Promise.all([
+    canViewCustomerBilling(req),
+    req.user.role === 'WORKER' ? Promise.resolve(false) : hasPermission(req, 'customers.edit')
+  ]);
   const result = await paged(prisma.customer, req, { where: { companyId: req.companyId, ...customerScopeWhere(req), ...branchFilterFromQuery(req), ...(customerType ? { customerType } : {}) }, orderBy: { createdAt: 'desc' }, include: { jobs: true, invoices: true } });
-  sendData(res, normalize(result.data), 200, result.meta);
+  sendData(res, normalize(result.data.map((customer) => customerForViewer(customer, { canViewBilling, canViewInternalNotes }))), 200, result.meta);
 }));
 
 router.post('/customers', validate(customerSchema), asyncHandler(async (req, res) => {
   requireBusinessName(req.body);
-  if (req.body.branchId) await requireBranch(req, req.body.branchId);
+  const branchId = await resolveCustomerBranchId(req, req.body.branchId, { requireSelection: true });
+  const [canViewBilling, canEditBilling] = await Promise.all([canViewCustomerBilling(req), canEditCustomerBilling(req)]);
+  const canViewInternalNotes = req.user.role !== 'WORKER';
+  const { primaryContactRole, ...input } = req.body;
+  delete input.branchId;
+  if (!canViewBilling) {
+    delete input.billingEmail;
+    delete input.billingContactName;
+    delete input.taxNumber;
+  }
+  if (!canEditBilling) {
+    delete input.paymentTerms;
+    delete input.purchaseOrderRequired;
+  }
+  if (!canViewInternalNotes) delete input.internalNotes;
   const data = await prisma.$transaction(async (tx) => {
-    const customer = await tx.customer.create({ data: { ...req.body, companyId: req.companyId } });
+    const customer = await tx.customer.create({ data: { ...input, customerReference: newCustomerReference(), branchId, companyId: req.companyId } });
     if (tx.customerContact) {
       await tx.customerContact.create({
         data: {
           companyId: req.companyId,
           customerId: customer.id,
           name: customer.name,
-          role: 'Primary contact',
+          role: primaryContactRole || 'Primary contact',
           email: customer.email,
           phone: customer.phone,
           isPrimary: true
@@ -6513,29 +6677,59 @@ router.post('/customers', validate(customerSchema), asyncHandler(async (req, res
     return customer;
   });
   await audit(req, 'CREATE', 'Customer', data.id);
-  sendData(res, normalize(data), 201);
+  sendData(res, normalize(customerForViewer(data, { canViewBilling, canViewInternalNotes })), 201);
 }));
 
 router.get('/customers/:id', validate(idParam, 'params'), asyncHandler(async (req, res) => {
-  sendData(res, normalize(await requireCustomer(req, req.params.id)));
+  const [customer, canViewBilling, canViewInternalNotes] = await Promise.all([
+    requireCustomer(req, req.params.id),
+    canViewCustomerBilling(req),
+    req.user.role === 'WORKER' ? Promise.resolve(false) : hasPermission(req, 'customers.edit')
+  ]);
+  sendData(res, normalize(customerForViewer(customer, { canViewBilling, canViewInternalNotes })));
 }));
 
 router.patch('/customers/:id', validate(idParam, 'params'), validate(customerSchema.partial()), asyncHandler(async (req, res) => {
   const existing = await requireCustomer(req, req.params.id);
   requireBusinessName(req.body, existing);
-  if (req.body.branchId) await requireBranch(req, req.body.branchId);
+  const branchId = req.body.branchId === undefined
+    ? undefined
+    : await resolveCustomerBranchId(req, req.body.branchId, { requireSelection: true });
+  const [canViewBilling, canEditBilling] = await Promise.all([canViewCustomerBilling(req), canEditCustomerBilling(req)]);
+  const canViewInternalNotes = req.user.role !== 'WORKER';
+  const { primaryContactRole, ...input } = req.body;
+  delete input.branchId;
+  if (!canViewBilling) {
+    delete input.billingEmail;
+    delete input.billingContactName;
+    delete input.taxNumber;
+  }
+  if (!canEditBilling) {
+    delete input.paymentTerms;
+    delete input.purchaseOrderRequired;
+  }
+  if (!canViewInternalNotes) delete input.internalNotes;
+  const resultingType = input.customerType || existing.customerType;
+  if (resultingType !== 'BUSINESS') {
+    input.companyName = null;
+    input.registeredCompanyName = null;
+    input.registrationNumber = null;
+    input.taxNumber = null;
+    input.industry = null;
+  }
+  const updateData = { ...input, ...(branchId === undefined ? {} : { branchId }) };
   const data = await prisma.$transaction(async (tx) => {
-    const customer = await tx.customer.update({ where: { id: req.params.id }, data: req.body });
-    if (tx.customerContact && (req.body.name !== undefined || req.body.email !== undefined || req.body.phone !== undefined)) {
+    const customer = await tx.customer.update({ where: { id: req.params.id }, data: updateData });
+    if (tx.customerContact && (req.body.name !== undefined || req.body.email !== undefined || req.body.phone !== undefined || primaryContactRole !== undefined)) {
       const primary = await tx.customerContact.findFirst({ where: { companyId: req.companyId, customerId: customer.id, isPrimary: true } });
-      const contactData = { name: customer.name, email: customer.email, phone: customer.phone, role: primary && primary.role || 'Primary contact', isPrimary: true };
+      const contactData = { name: customer.name, email: customer.email, phone: customer.phone, role: primaryContactRole || primary && primary.role || 'Primary contact', isPrimary: true };
       if (primary) await tx.customerContact.update({ where: { id: primary.id }, data: contactData });
       else await tx.customerContact.create({ data: { ...contactData, companyId: req.companyId, customerId: customer.id } });
     }
     return customer;
   });
   await audit(req, 'UPDATE', 'Customer', data.id);
-  sendData(res, normalize(data));
+  sendData(res, normalize(customerForViewer(data, { canViewBilling, canViewInternalNotes })));
 }));
 
 function customerProfileName(customer) {
@@ -6580,16 +6774,19 @@ function redactedContract(contract, canViewMoney, canManageContracts) {
 
 async function buildCustomerProfile(req, customerId) {
   const scopedCustomer = await requireCustomer(req, customerId);
-  const [canEditCustomer, canCreateSite, canViewQuotes, canViewInvoices, canViewPayments, canManageContracts] = await Promise.all([
+  const [canEditCustomer, canCreateSite, canViewQuotes, canViewInvoices, canViewPayments, canManageContracts, canEditBilling] = await Promise.all([
     hasPermission(req, 'customers.edit'),
     hasPermission(req, 'contract.automation.manage'),
     hasPermission(req, 'quotes.view'),
     hasPermission(req, 'invoices.view'),
     hasPermission(req, 'payments.view'),
-    hasPermission(req, 'contract.automation.manage')
+    hasPermission(req, 'contract.automation.manage'),
+    canEditCustomerBilling(req)
   ]);
   const technician = req.user.role === 'WORKER';
   const canViewMoney = canViewInvoices || canViewPayments;
+  const canViewBilling = canViewMoney || canEditBilling;
+  const canViewInternalNotes = canEditCustomer && !technician;
   const [customer, contacts, notes, properties, assets, readings, faults, jobs, contracts, messages, documents, quotes, invoices, finance] = await Promise.all([
     prisma.customer.findFirst({ where: { id: scopedCustomer.id, companyId: req.companyId }, include: { branch: true } }),
     prisma.customerContact ? prisma.customerContact.findMany({ where: { companyId: req.companyId, customerId }, orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] }) : Promise.resolve([]),
@@ -6607,6 +6804,9 @@ async function buildCustomerProfile(req, customerId) {
     prisma.companyFinanceSettings.findUnique({ where: { companyId: req.companyId }, select: { defaultCurrency: true, numberFormat: true } }).catch(() => null)
   ]);
 
+  const branchContext = canEditCustomer
+    ? await customerBranchAccessContext(req)
+    : { branches: customer.branch ? [customer.branch] : [], selectionMode: customer.branch ? 'FIXED' : 'NONE' };
   const contactRecords = contacts.length ? contacts : [{ id: 'primary', name: customer.name, role: 'Primary contact', email: customer.email, phone: customer.phone, isPrimary: true, notes: null }];
   const jobsById = new Map(jobs.map((job) => [job.id, job]));
   const siteProfiles = properties.map((property) => {
@@ -6658,9 +6858,14 @@ async function buildCustomerProfile(req, customerId) {
       canAddNote: canEditCustomer || technician,
       canViewQuotes,
       canViewMoney,
-      canManageContracts
+      canViewBilling,
+      canEditBilling,
+      canViewInternalNotes,
+      canManageContracts,
+      branchSelectionMode: branchContext.selectionMode,
+      customerBranches: branchContext.branches.map((branch) => ({ id: branch.id, name: branch.name, city: branch.city || null }))
     },
-    customer: { ...customer, displayName: customerProfileName(customer) },
+    customer: { ...customerForViewer(customer, { canViewBilling, canViewInternalNotes }), displayName: customerProfileName(customer) },
     contacts: contactRecords,
     communication: messages.map((message) => ({ id: message.id, channel: message.channel, direction: message.direction, status: message.status, recipientMasked: message.recipientMasked, senderMasked: message.senderMasked, templateName: message.templateName, sentAt: message.sentAt, deliveredAt: message.deliveredAt, readAt: message.readAt, createdAt: message.createdAt })),
     sites: siteProfiles,
@@ -6803,12 +7008,14 @@ async function customerForLead(tx, req, lead) {
     data: {
       companyId: req.companyId,
       branchId: lead.branchId || undefined,
+      customerReference: newCustomerReference(),
       customerType: lead.customerType || 'RESIDENTIAL',
       name: lead.name,
       companyName: lead.companyName || undefined,
       email: lead.email || undefined,
       phone: lead.phone || undefined,
       address: lead.address || undefined,
+      serviceNotes: lead.notes || lead.serviceNeed || undefined,
       notes: lead.notes || lead.serviceNeed || undefined
     }
   });
@@ -7971,7 +8178,7 @@ async function findOrCreateBookingCustomer(db, req, request) {
   if (request.customerEmail) existing = await db.customer.findFirst({ where: { companyId: req.companyId, email: request.customerEmail } });
   if (!existing && request.customerPhone) existing = await db.customer.findFirst({ where: { companyId: req.companyId, phone: request.customerPhone } });
   if (existing) return existing;
-  return db.customer.create({ data: { companyId: req.companyId, customerType: request.customerType || 'RESIDENTIAL', name: request.customerName, companyName: request.companyName || undefined, email: request.customerEmail, phone: request.customerPhone, address: request.address, notes: request.notes } });
+  return db.customer.create({ data: { companyId: req.companyId, customerReference: newCustomerReference(), customerType: request.customerType || 'RESIDENTIAL', name: request.customerName, companyName: request.companyName || undefined, email: request.customerEmail, phone: request.customerPhone, address: request.address, serviceNotes: request.notes, notes: request.notes } });
 }
 
 function bookingJobTitle(request) {

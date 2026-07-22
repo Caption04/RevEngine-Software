@@ -100,7 +100,7 @@ test('branches inherit the workspace country and branch managers remain scoped',
   assert.doesNotMatch(api.match(/const branchSchema = z\.object\(\{[\s\S]*?\n\}\);/)[0], /country:/);
   assert.match(api, /country: regional\.code/);
   assert.match(api, /access\.scopeType === 'BRANCH'[\s\S]*id: \{ in: access\.branchIds/);
-  assert.match(api, /Only a workspace-wide manager can create branches/);
+  assert.match(api, /Only an all-company manager can create branches/);
   assert.match(api, /access\.scopeType === 'BRANCH' && !access\.branchIds\.includes\(options\.branchId\)/);
 });
 

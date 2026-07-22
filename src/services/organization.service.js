@@ -25,6 +25,56 @@ const COUNTRY_CONFIG = {
   }
 };
 
+const BRANCH_LOCATION_CATALOG = {
+  ZW: [
+    { city: 'Harare', region: 'Harare Province', code: 'HRE', timezone: 'Africa/Harare' },
+    { city: 'Bulawayo', region: 'Bulawayo Province', code: 'BYO', timezone: 'Africa/Harare' },
+    { city: 'Chitungwiza', region: 'Harare Province', code: 'CHI', timezone: 'Africa/Harare' },
+    { city: 'Mutare', region: 'Manicaland', code: 'UTA', timezone: 'Africa/Harare' },
+    { city: 'Gweru', region: 'Midlands', code: 'GWE', timezone: 'Africa/Harare' },
+    { city: 'Kwekwe', region: 'Midlands', code: 'KWE', timezone: 'Africa/Harare' },
+    { city: 'Masvingo', region: 'Masvingo Province', code: 'MSV', timezone: 'Africa/Harare' },
+    { city: 'Kadoma', region: 'Mashonaland West', code: 'KAD', timezone: 'Africa/Harare' },
+    { city: 'Chinhoyi', region: 'Mashonaland West', code: 'CHY', timezone: 'Africa/Harare' },
+    { city: 'Victoria Falls', region: 'Matabeleland North', code: 'VFA', timezone: 'Africa/Harare' },
+    { city: 'Hwange', region: 'Matabeleland North', code: 'HWG', timezone: 'Africa/Harare' },
+    { city: 'Marondera', region: 'Mashonaland East', code: 'MAR', timezone: 'Africa/Harare' },
+    { city: 'Bindura', region: 'Mashonaland Central', code: 'BIN', timezone: 'Africa/Harare' },
+    { city: 'Beitbridge', region: 'Matabeleland South', code: 'BBR', timezone: 'Africa/Harare' },
+    { city: 'Zvishavane', region: 'Midlands', code: 'ZVI', timezone: 'Africa/Harare' }
+  ],
+  ZA: [
+    { city: 'Johannesburg', region: 'Gauteng', code: 'JHB', timezone: 'Africa/Johannesburg' },
+    { city: 'Pretoria', region: 'Gauteng', code: 'PTA', timezone: 'Africa/Johannesburg' },
+    { city: 'Centurion', region: 'Gauteng', code: 'CEN', timezone: 'Africa/Johannesburg' },
+    { city: 'Midrand', region: 'Gauteng', code: 'MID', timezone: 'Africa/Johannesburg' },
+    { city: 'Sandton', region: 'Gauteng', code: 'SND', timezone: 'Africa/Johannesburg' },
+    { city: 'Cape Town', region: 'Western Cape', code: 'CPT', timezone: 'Africa/Johannesburg' },
+    { city: 'Stellenbosch', region: 'Western Cape', code: 'STB', timezone: 'Africa/Johannesburg' },
+    { city: 'George', region: 'Western Cape', code: 'GRJ', timezone: 'Africa/Johannesburg' },
+    { city: 'Durban', region: 'KwaZulu-Natal', code: 'DBN', timezone: 'Africa/Johannesburg' },
+    { city: 'Pietermaritzburg', region: 'KwaZulu-Natal', code: 'PZB', timezone: 'Africa/Johannesburg' },
+    { city: 'Gqeberha', region: 'Eastern Cape', code: 'GQE', timezone: 'Africa/Johannesburg' },
+    { city: 'East London', region: 'Eastern Cape', code: 'ELS', timezone: 'Africa/Johannesburg' },
+    { city: 'Bloemfontein', region: 'Free State', code: 'BFN', timezone: 'Africa/Johannesburg' },
+    { city: 'Polokwane', region: 'Limpopo', code: 'PTG', timezone: 'Africa/Johannesburg' },
+    { city: 'Mbombela', region: 'Mpumalanga', code: 'MBM', timezone: 'Africa/Johannesburg' },
+    { city: 'Rustenburg', region: 'North West', code: 'RST', timezone: 'Africa/Johannesburg' },
+    { city: 'Kimberley', region: 'Northern Cape', code: 'KIM', timezone: 'Africa/Johannesburg' }
+  ]
+};
+
+function branchLocationsForCountry(value) {
+  const code = normalizeCountryCode(value);
+  return code ? (BRANCH_LOCATION_CATALOG[code] || []).map((item) => ({ ...item })) : [];
+}
+
+function branchLocationForCountry(value, city) {
+  const normalizedCity = String(city || '').trim().toLowerCase();
+  if (!normalizedCity) return null;
+  return branchLocationsForCountry(value).find((item) => item.city.toLowerCase() === normalizedCity) || null;
+}
+
 function normalizeCountryCode(value) {
   const input = String(value || '').trim().toUpperCase().replace(/[._-]+/g, ' ').replace(/\s+/g, ' ');
   if (['ZW', 'ZIM', 'ZIMBABWE'].includes(input)) return 'ZW';
@@ -95,7 +145,10 @@ async function organizationContextForUser(user, client = prisma) {
 }
 
 module.exports = {
+  BRANCH_LOCATION_CATALOG,
   COUNTRY_CONFIG,
+  branchLocationForCountry,
+  branchLocationsForCountry,
   countryConfig,
   groupMembershipForCompany,
   normalizeCountryCode,

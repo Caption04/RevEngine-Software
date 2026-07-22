@@ -2,7 +2,7 @@
   const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3000/api' : '/api';
   const page = document.body.dataset.page || 'dashboard';
   const REV_ENGINE_LOGO = 'assets/rev-engine-mark.png';
-  const state = { user: null, profile: null, branding: null, leads: [], dispatchBoard: null, selectedDispatchJobId: null, customers: [], services: [], workers: [], roles: [], jobs: [], assets: [], solarSites: [], serviceContracts: [], invoices: [], schedule: [], scheduleSettings: null, scheduleView: 'week', scheduleDate: new Date(), scheduleFilters: { workerId: '', status: '' }, listFilters: {}, customerTypeFilters: {}, availability: {}, notificationLogs: [], integrations: [], messageLogs: [], storageUsage: null, billing: null, financeSettings: null, financeIntegrations: [], financeExportLogs: [], reports: null, activeReportTab: 'overview' };
+  const state = { user: null, profile: null, branding: null, leads: [], dispatchBoard: null, selectedDispatchJobId: null, customers: [], branches: [], services: [], workers: [], roles: [], jobs: [], assets: [], solarSites: [], serviceContracts: [], invoices: [], schedule: [], scheduleSettings: null, scheduleView: 'week', scheduleDate: new Date(), scheduleFilters: { workerId: '', status: '' }, listFilters: {}, customerTypeFilters: {}, availability: {}, notificationLogs: [], integrations: [], messageLogs: [], storageUsage: null, billing: null, financeSettings: null, financeIntegrations: [], financeExportLogs: [], reports: null, activeReportTab: 'overview' };
 
   const MARKET_DEFAULTS = {
     ZW: { country: 'ZW', timezone: 'Africa/Harare', defaultCurrency: 'USD', numberFormat: 'en-ZW', taxName: 'VAT', allowedCurrencies: ['USD'], paymentMethods: ['CASH', 'BANK_TRANSFER', 'EXTERNAL_PAYMENT_LINK', 'CUSTOM_MANUAL', 'PAYNOW'] },
@@ -1586,6 +1586,7 @@
   async function preloadLookups() {
     const requests = [];
     if (['leads', 'jobs', 'quotes', 'invoices', 'schedule', 'assets', 'service-contracts'].includes(page)) requests.push(api('/customers').then((d) => state.customers = d).catch(() => []));
+    if (page === 'customers') requests.push(api('/branches?limit=100').then((d) => state.branches = d).catch(() => { state.branches = []; }));
     if (['leads', 'jobs', 'quotes', 'invoices', 'assets', 'service-contracts'].includes(page)) requests.push(api('/services').then((d) => state.services = d).catch(() => []));
     if (['jobs', 'schedule'].includes(page)) requests.push(api('/workers').then((d) => state.workers = d).catch(() => []));
     if (page === 'jobs' && !isWorker()) {
@@ -1638,6 +1639,28 @@
     return '<div class="field" data-business-name-field hidden><label for="fc-companyName">Business Name</label><input id="fc-companyName" name="companyName" maxlength="200" disabled></div>';
   }
 
+  function activeCustomerBranches() {
+    return (state.branches || []).filter((branch) => branch && branch.active !== false);
+  }
+
+  function customerBranchField() {
+    const branches = activeCustomerBranches();
+    if (!branches.length) return '';
+
+    const scopeType = state.user && state.user.accessScope && state.user.accessScope.type;
+    if (scopeType === 'BRANCH' && branches.length === 1) {
+      const branch = branches[0];
+      return '<input type="hidden" name="branchId" value="' + escapeHtml(branch.id) + '">' +
+        '<div class="field"><label>Customer Branch</label><div class="field-readonly-value">' +
+        '<strong>' + escapeHtml(branch.name) + '</strong><small>Customers you add are assigned to your branch.</small></div></div>';
+    }
+
+    const options = '<option value="">Choose the customer branch</option>' +
+      branches.map((branch) => '<option value="' + escapeHtml(branch.id) + '">' +
+        escapeHtml([branch.name, branch.city].filter(Boolean).join(' · ')) + '</option>').join('');
+    return select('branchId', 'Customer Branch', options, true, 'data-customer-branch');
+  }
+
   function bindCustomerType(form) {
     const type = form.querySelector('[data-customer-type]');
     const field = form.querySelector('[data-business-name-field]');
@@ -1669,7 +1692,7 @@
         '<div class="field span-2"><label for="fc-serviceNeed">What do they need?</label><textarea id="fc-serviceNeed" name="serviceNeed" maxlength="1000"></textarea></div>' +
         field('nextFollowUpAt', 'Next Follow-up', 'datetime-local')
     };
-    if (resource === 'customers') return { title: 'Add Existing Customer', action: '/customers', fields: customerTypeField() + field('name', 'Contact Name', 'text', 'required maxlength="200"') + businessNameField() + field('email', 'Email', 'email') + field('phone', 'Phone') + field('address', 'Address') };
+    if (resource === 'customers') return { title: 'Add Existing Customer', action: '/customers', fields: customerBranchField() + customerTypeField() + field('name', 'Contact Name', 'text', 'required maxlength="200"') + businessNameField() + field('email', 'Email', 'email') + field('phone', 'Phone') + field('address', 'Address') };
     if (resource === 'workers') return { title: 'New Worker', action: '/workers', fields: field('name', 'Name', 'text', 'required') + field('email', 'Email', 'email', 'required') + field('password', 'Temporary Password', 'password', 'required minlength="12"') + field('title', 'Title') + field('phone', 'Phone') };
     if (resource === 'jobs') {
       const settings = state.scheduleSettings || {};

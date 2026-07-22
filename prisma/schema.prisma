@@ -244,6 +244,26 @@ enum CustomerType {
   BUSINESS
 }
 
+enum CustomerStatus {
+  ACTIVE
+  ON_HOLD
+  INACTIVE
+}
+
+enum PreferredContactMethod {
+  PHONE
+  WHATSAPP
+  EMAIL
+}
+
+enum CustomerPaymentTerms {
+  DUE_ON_RECEIPT
+  NET_7
+  NET_14
+  NET_30
+  NET_60
+}
+
 enum LeadStatus {
   NEW
   CONTACTED
@@ -860,9 +880,13 @@ model Branch {
   name                 String
   code                 String?
   country              String?
+  region               String?
   city                 String?
   address              String?
   timezone             String?
+  phone                String?
+  whatsappPhone        String?
+  email                String?
   active               Boolean               @default(true)
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
@@ -1096,16 +1120,30 @@ model MemberInvitation {
 }
 
 model Customer {
-  id                String                    @id @default(cuid())
-  companyId         String
-  branchId          String?
-  customerType      CustomerType              @default(RESIDENTIAL)
-  name              String
-  companyName       String?
-  email             String?
-  phone             String?
-  address           String?
-  notes             String?
+  id                     String                     @id @default(cuid())
+  companyId              String
+  branchId               String?
+  customerType           CustomerType               @default(RESIDENTIAL)
+  status                 CustomerStatus             @default(ACTIVE)
+  customerReference      String?
+  name                   String
+  companyName            String?
+  registeredCompanyName  String?
+  registrationNumber     String?
+  taxNumber              String?
+  industry               String?
+  email                  String?
+  phone                  String?
+  alternatePhone         String?
+  preferredContactMethod PreferredContactMethod?
+  address                String?
+  billingEmail           String?
+  billingContactName     String?
+  paymentTerms           CustomerPaymentTerms       @default(DUE_ON_RECEIPT)
+  purchaseOrderRequired  Boolean                    @default(false)
+  serviceNotes           String?
+  internalNotes          String?
+  notes                  String?
   createdAt         DateTime                  @default(now())
   updatedAt         DateTime                  @updatedAt
   company           Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -1131,6 +1169,7 @@ model Customer {
 
   @@index([companyId])
   @@index([companyId, branchId])
+  @@unique([companyId, customerReference])
 }
 
 model CustomerContact {

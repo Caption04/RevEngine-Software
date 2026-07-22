@@ -44,6 +44,18 @@
     return String(value || '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
   }
 
+
+  function paymentTermsLabel(value) {
+    const labels = {
+      DUE_ON_RECEIPT: 'Due immediately',
+      NET_7: '7 days',
+      NET_14: '14 days',
+      NET_30: '30 days',
+      NET_60: '60 days'
+    };
+    return labels[value] || 'Due immediately';
+  }
+
   function badge(value) {
     const text = label(value || 'Unknown');
     const key = String(value || '').toLowerCase().replace(/_/g, '-');
@@ -71,13 +83,19 @@
     const profile = state.profile;
     const customer = profile.customer;
     const access = profile.access;
+    const branchName = customer.branch && customer.branch.name;
     return '<div class="customer-profile-header">' +
       '<div class="customer-profile-heading">' +
         '<a class="back-link" href="customers.html"><span aria-hidden="true">‹</span> Customers</a>' +
-        '<div class="customer-profile-title-row"><div><p class="eyebrow">' + escapeHtml(customer.customerType === 'BUSINESS' ? 'Business customer' : 'Residential customer') + '</p><h2>' + escapeHtml(customerTitle()) + '</h2><p>' + escapeHtml([customer.customerType === 'BUSINESS' ? customer.name : null, customer.email, customer.phone].filter(Boolean).join(' · ') || 'No contact details recorded') + '</p></div>' +
+        '<div class="customer-profile-title-row"><div class="customer-profile-identity">' +
+          '<div class="customer-profile-labels"><span>' + escapeHtml(customer.customerType === 'BUSINESS' ? 'Business customer' : 'Residential customer') + '</span>' +
+          (branchName ? '<span class="customer-branch-label">' + escapeHtml(branchName) + '</span>' : '') +
+          '<span>' + escapeHtml(label(customer.status || 'ACTIVE')) + '</span>' +
+          (customer.customerReference ? '<span>' + escapeHtml(customer.customerReference) + '</span>' : '') + '</div>' +
+          '<h2>' + escapeHtml(customerTitle()) + '</h2><p>' + escapeHtml([customer.customerType === 'BUSINESS' ? customer.name : null, customer.email, customer.phone].filter(Boolean).join(' · ') || 'No contact details recorded') + '</p></div>' +
         '<div class="customer-profile-actions">' +
           (access.canEditCustomer ? '<button class="secondary-button" type="button" data-profile-action="edit-customer">Edit customer</button>' : '') +
-          (access.canCreateSite ? '<button class="primary-button" type="button" data-profile-action="add-site">+ Add solar site</button>' : '') +
+          (access.canCreateSite ? '<button class="primary-button" type="button" data-profile-action="add-site">Add solar site</button>' : '') +
         '</div></div>' +
       '</div>' +
       '<section class="customer-summary-grid">' +
@@ -106,17 +124,22 @@
   function renderOverview() {
     const profile = state.profile;
     const customer = profile.customer;
+    const primaryContact = profile.contacts.find((contact) => contact.isPrimary) || profile.contacts[0] || {};
     const latestJobs = profile.workHistory.slice(0, 5);
     const urgentFaults = profile.sites.flatMap((site) => site.faults.map((fault) => ({ ...fault, siteLabel: site.label }))).filter((fault) => !['RESOLVED', 'CLOSED'].includes(fault.status)).slice(0, 5);
     return '<div class="customer-profile-layout">' +
       '<section class="card customer-profile-panel"><div class="profile-panel-head"><div><h3>Customer details</h3><p>The main information staff need when working with this customer.</p></div></div><div class="customer-detail-grid">' +
+        detailRow('Customer reference', customer.customerReference) +
+        detailRow('Status', label(customer.status || 'ACTIVE')) +
         detailRow('Customer type', customer.customerType === 'BUSINESS' ? 'Business' : 'Residential') +
-        (customer.customerType === 'BUSINESS' ? detailRow('Business name', customer.companyName) : '') +
+        detailRow('Branch', customer.branch && customer.branch.name) +
+        (customer.customerType === 'BUSINESS' ? detailRow('Business name', customer.companyName) + detailRow('Registered name', customer.registeredCompanyName) + detailRow('Registration number', customer.registrationNumber) + detailRow('Industry', customer.industry) : '') +
         detailRow('Main contact', customer.name) +
+        detailRow('Contact role', primaryContact.role) +
         detailRow('Email', customer.email) +
         detailRow('Phone', customer.phone) +
-        detailRow('Billing address', customer.address) +
-        detailRow('Branch', customer.branch && customer.branch.name) +
+        detailRow('Other phone', customer.alternatePhone) +
+        detailRow('Preferred contact', label(customer.preferredContactMethod)) +
         detailRow('Customer since', formatDate(customer.createdAt)) +
       '</div></section>' +
       '<section class="card customer-profile-panel"><div class="profile-panel-head"><div><h3>Needs attention</h3><p>Open faults and customer issues that should not be missed.</p></div></div>' +
@@ -263,9 +286,16 @@
 
   function renderDocuments() {
     const profile = state.profile;
+    const customer = profile.customer;
+    const standingNotes = [
+      customer.serviceNotes ? '<article class="customer-standing-note"><span>Service notes</span><p>' + escapeHtml(customer.serviceNotes) + '</p><small>Visible to technicians when they open this customer.</small></article>' : '',
+      profile.access.canViewInternalNotes && customer.internalNotes ? '<article class="customer-standing-note internal"><span>Internal notes</span><p>' + escapeHtml(customer.internalNotes) + '</p><small>Only office staff with customer editing access can see this.</small></article>' : ''
+    ].filter(Boolean).join('');
     return '<div class="customer-profile-layout">' +
       '<section class="card customer-profile-panel"><div class="profile-panel-head"><div><h3>Documents</h3><p>Customer files, reports, and documents saved against their work.</p></div></div>' + (profile.documents.length ? '<div class="profile-list">' + profile.documents.map(renderDocument).join('') + '</div>' : emptyState('No documents yet', 'Documents connected to this customer will appear here.')) + '</section>' +
-      '<section class="card customer-profile-panel"><div class="profile-panel-head"><div><h3>Customer notes</h3><p>Useful information for future visits and customer care.</p></div>' + (profile.access.canAddNote ? '<button class="primary-button compact" type="button" data-profile-action="add-note">+ Add note</button>' : '') + '</div>' + (profile.notes.length ? '<div class="customer-note-list">' + profile.notes.map(renderNote).join('') + '</div>' : emptyState('No notes yet', 'Add access instructions, preferences, warnings, or important context.')) + '</section>' +
+      '<section class="card customer-profile-panel"><div class="profile-panel-head"><div><h3>Customer notes</h3><p>Useful information for future visits and customer care.</p></div>' + (profile.access.canAddNote ? '<button class="primary-button compact" type="button" data-profile-action="add-note">+ Add note</button>' : '') + '</div>' +
+        (standingNotes ? '<div class="customer-standing-notes">' + standingNotes + '</div>' : '') +
+        (profile.notes.length ? '<div class="customer-note-list">' + profile.notes.map(renderNote).join('') + '</div>' : (standingNotes ? '' : emptyState('No notes yet', 'Add access instructions, preferences, warnings, or important context.'))) + '</section>' +
     '</div>';
   }
 
@@ -275,8 +305,20 @@
 
   function renderMoney() {
     const profile = state.profile;
+    const customer = profile.customer;
     if (!profile.access.canViewMoney || !profile.money) return emptyState('Money is hidden', 'Your role does not include invoices, payments, or balances.');
-    return '<div class="customer-profile-stack"><section class="customer-summary-grid money-summary">' + summaryCard('Invoiced', money(profile.money.invoiceTotal), 'Total customer billing') + summaryCard('Paid', money(profile.money.paid), 'Confirmed payments') + summaryCard('Outstanding', money(profile.money.outstanding), 'Still owed') + '</section><section class="card customer-profile-panel"><div class="profile-panel-head"><div><h3>Invoices and payments</h3><p>Customer billing history. Technicians never see this section.</p></div></div>' + (profile.money.invoices.length ? '<div class="profile-list">' + profile.money.invoices.map(renderInvoiceRow).join('') + '</div>' : emptyState('No invoices yet', 'Invoices for this customer will appear here.')) + '</section></div>';
+    return '<div class="customer-profile-stack">' +
+      '<section class="card customer-profile-panel"><div class="profile-panel-head"><div><h3>Billing details</h3><p>Where invoices go and the terms agreed with this customer.</p></div></div><div class="customer-detail-grid">' +
+        detailRow('Billing contact', customer.billingContactName || customer.name) +
+        detailRow('Billing email', customer.billingEmail || customer.email) +
+        detailRow('Billing address', customer.address) +
+        detailRow('Payment terms', paymentTermsLabel(customer.paymentTerms)) +
+        detailRow('Purchase order required', customer.purchaseOrderRequired ? 'Yes' : 'No') +
+        (customer.customerType === 'BUSINESS' ? detailRow('Tax or VAT number', customer.taxNumber) : '') +
+      '</div></section>' +
+      '<section class="customer-summary-grid money-summary">' + summaryCard('Invoiced', money(profile.money.invoiceTotal), 'Total customer billing') + summaryCard('Paid', money(profile.money.paid), 'Confirmed payments') + summaryCard('Outstanding', money(profile.money.outstanding), 'Still owed') + '</section>' +
+      '<section class="card customer-profile-panel"><div class="profile-panel-head"><div><h3>Invoices and payments</h3><p>Customer billing history. Technicians never see this section.</p></div></div>' + (profile.money.invoices.length ? '<div class="profile-list">' + profile.money.invoices.map(renderInvoiceRow).join('') + '</div>' : emptyState('No invoices yet', 'Invoices for this customer will appear here.')) + '</section>' +
+    '</div>';
   }
 
   function renderActiveTab() {
@@ -289,16 +331,38 @@
     root.innerHTML = renderHeader() + renderTabs() + renderActiveTab();
   }
 
-  function field(name, text, type, value, attrs) {
-    return '<div class="field"><label for="profile-' + escapeHtml(name) + '">' + escapeHtml(text) + '</label><input id="profile-' + escapeHtml(name) + '" name="' + escapeHtml(name) + '" type="' + escapeHtml(type || 'text') + '" value="' + escapeHtml(value || '') + '" ' + (attrs || '') + '></div>';
+  function field(name, text, type, value, attrs, wrapperAttrs) {
+    return '<div class="field" ' + (wrapperAttrs || '') + '><label for="profile-' + escapeHtml(name) + '">' + escapeHtml(text) + '</label><input id="profile-' + escapeHtml(name) + '" name="' + escapeHtml(name) + '" type="' + escapeHtml(type || 'text') + '" value="' + escapeHtml(value || '') + '" ' + (attrs || '') + '></div>';
   }
 
-  function selectField(name, text, options, value, attrs) {
-    return '<div class="field"><label for="profile-' + escapeHtml(name) + '">' + escapeHtml(text) + '</label><select id="profile-' + escapeHtml(name) + '" name="' + escapeHtml(name) + '" ' + (attrs || '') + '>' + options.map(([optionValue, optionLabel]) => '<option value="' + escapeHtml(optionValue) + '"' + (optionValue === value ? ' selected' : '') + '>' + escapeHtml(optionLabel) + '</option>').join('') + '</select></div>';
+  function selectField(name, text, options, value, attrs, wrapperAttrs) {
+    return '<div class="field" ' + (wrapperAttrs || '') + '><label for="profile-' + escapeHtml(name) + '">' + escapeHtml(text) + '</label><select id="profile-' + escapeHtml(name) + '" name="' + escapeHtml(name) + '" ' + (attrs || '') + '>' + options.map(([optionValue, optionLabel]) => '<option value="' + escapeHtml(optionValue) + '"' + (optionValue === value ? ' selected' : '') + '>' + escapeHtml(optionLabel) + '</option>').join('') + '</select></div>';
   }
 
-  function textareaField(name, text, value, attrs) {
-    return '<div class="field span-2"><label for="profile-' + escapeHtml(name) + '">' + escapeHtml(text) + '</label><textarea id="profile-' + escapeHtml(name) + '" name="' + escapeHtml(name) + '" ' + (attrs || '') + '>' + escapeHtml(value || '') + '</textarea></div>';
+  function textareaField(name, text, value, attrs, wrapperAttrs) {
+    return '<div class="field span-2" ' + (wrapperAttrs || '') + '><label for="profile-' + escapeHtml(name) + '">' + escapeHtml(text) + '</label><textarea id="profile-' + escapeHtml(name) + '" name="' + escapeHtml(name) + '" ' + (attrs || '') + '>' + escapeHtml(value || '') + '</textarea></div>';
+  }
+
+  function readonlyField(text, value, help) {
+    return '<div class="field"><label>' + escapeHtml(text) + '</label><div class="field-readonly-value"><strong>' + escapeHtml(value || 'Not recorded') + '</strong>' + (help ? '<small>' + escapeHtml(help) + '</small>' : '') + '</div></div>';
+  }
+
+  function checkboxField(name, title, help, checked, attrs) {
+    return '<label class="profile-checkbox customer-form-checkbox"><input type="checkbox" name="' + escapeHtml(name) + '" value="true"' + (checked ? ' checked' : '') + ' ' + (attrs || '') + '><span><strong>' + escapeHtml(title) + '</strong><small>' + escapeHtml(help) + '</small></span></label>';
+  }
+
+  function formSection(title, copy, fields, attrs) {
+    return '<section class="customer-form-section span-2" ' + (attrs || '') + '><div class="customer-form-section-head"><h4>' + escapeHtml(title) + '</h4><p>' + escapeHtml(copy) + '</p></div><div class="customer-form-section-grid">' + fields + '</div></section>';
+  }
+
+  function customerBranchEditField(customer, access) {
+    const branches = [...(access.customerBranches || [])];
+    if (customer.branch && !branches.some((branch) => branch.id === customer.branch.id)) branches.unshift(customer.branch);
+    if (access.branchSelectionMode === 'FIXED' && branches.length === 1) {
+      return '<input type="hidden" name="branchId" value="' + escapeHtml(branches[0].id) + '">' + readonlyField('Customer Branch', branches[0].name, 'This customer stays in your branch.');
+    }
+    if (!branches.length) return readonlyField('Customer Branch', customer.branch && customer.branch.name, 'Add an active branch before moving this customer.');
+    return selectField('branchId', 'Customer Branch', [['', 'Choose the customer branch'], ...branches.map((branch) => [branch.id, [branch.name, branch.city].filter(Boolean).join(' · ')])], customer.branchId || customer.branch && customer.branch.id || '', 'required');
   }
 
   function openFormModal(config) {
@@ -330,18 +394,75 @@
     document.body.appendChild(modal);
     document.body.classList.add('modal-open');
     if (window.RevEngineFormUX) window.RevEngineFormUX.refresh(form);
-    const first = form.querySelector('input:not([type="hidden"]), select, textarea');
+    if (config.onMount) config.onMount(form);
+    const first = form.querySelector('input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])');
     if (first) first.focus();
   }
 
   function editCustomer() {
-    const customer = state.profile.customer;
+    const profile = state.profile;
+    const customer = profile.customer;
+    const access = profile.access;
+    const primaryContact = profile.contacts.find((contact) => contact.isPrimary) || profile.contacts[0] || {};
+    const businessFields =
+      field('companyName', 'Trading or Business Name', 'text', customer.companyName, 'required maxlength="200"', 'data-business-customer-field') +
+      field('registeredCompanyName', 'Registered Company Name', 'text', customer.registeredCompanyName, 'maxlength="240"', 'data-business-customer-field') +
+      field('registrationNumber', 'Registration Number', 'text', customer.registrationNumber, 'maxlength="120"', 'data-business-customer-field') +
+      field('industry', 'Industry', 'text', customer.industry, 'maxlength="160"', 'data-business-customer-field') +
+      (access.canViewBilling ? field('taxNumber', 'Tax or VAT Number', 'text', customer.taxNumber, 'maxlength="120"', 'data-business-customer-field') : '');
+    const billingFields = access.canViewBilling ?
+      field('billingContactName', 'Billing Contact', 'text', customer.billingContactName, 'maxlength="200"') +
+      field('billingEmail', 'Billing Email', 'email', customer.billingEmail) +
+      field('address', 'Billing Address', 'text', customer.address, 'maxlength="500"') +
+      (access.canEditBilling
+        ? selectField('paymentTerms', 'Payment Terms', [['DUE_ON_RECEIPT', 'Due immediately'], ['NET_7', '7 days'], ['NET_14', '14 days'], ['NET_30', '30 days'], ['NET_60', '60 days']], customer.paymentTerms || 'DUE_ON_RECEIPT') + checkboxField('purchaseOrderRequired', 'Purchase order required', 'Require a customer purchase-order number before billing.', Boolean(customer.purchaseOrderRequired))
+        : readonlyField('Payment Terms', paymentTermsLabel(customer.paymentTerms), 'Finance access is required to change this.') + readonlyField('Purchase Order Required', customer.purchaseOrderRequired ? 'Yes' : 'No', 'Finance access is required to change this.'))
+      : '';
+    const noteFields = textareaField('serviceNotes', 'Service Notes', customer.serviceNotes, 'maxlength="3000" rows="4"') +
+      (access.canViewInternalNotes ? textareaField('internalNotes', 'Internal Notes', customer.internalNotes, 'maxlength="3000" rows="4"') : '');
+
     openFormModal({
       title: 'Edit customer',
-      copy: 'Update the customer and main contact details.',
-      fields: selectField('customerType', 'Customer Type', [['RESIDENTIAL', 'Residential customer'], ['BUSINESS', 'Business customer']], customer.customerType, 'required') + field('companyName', 'Business Name', 'text', customer.companyName) + field('name', 'Contact Name', 'text', customer.name, 'required maxlength="200"') + field('email', 'Email', 'email', customer.email) + field('phone', 'Phone', 'text', customer.phone) + field('address', 'Billing Address', 'text', customer.address) + textareaField('notes', 'General Notes', customer.notes, 'maxlength="3000"'),
-      onSubmit: async (body) => {
-        if (body.customerType !== 'BUSINESS') delete body.companyName;
+      copy: 'Keep the account, contact, and billing details accurate.',
+      fields:
+        formSection('Customer account', 'How this customer is classified and where their work belongs.',
+          readonlyField('Customer Reference', customer.customerReference, 'Created automatically and cannot be changed.') +
+          selectField('customerType', 'Customer Type', [['RESIDENTIAL', 'Residential customer'], ['BUSINESS', 'Business customer']], customer.customerType, 'required data-customer-type') +
+          selectField('status', 'Customer Status', [['ACTIVE', 'Active'], ['ON_HOLD', 'On hold'], ['INACTIVE', 'Inactive']], customer.status || 'ACTIVE', 'required') +
+          customerBranchEditField(customer, access)) +
+        formSection('Business identity', 'Official company details used for records and billing.', businessFields, 'data-business-section') +
+        formSection('Primary contact', 'The first person the team should call or message.',
+          field('name', 'Contact Name', 'text', customer.name, 'required maxlength="200"') +
+          field('primaryContactRole', 'Job Title or Role', 'text', primaryContact.role, 'maxlength="120"') +
+          field('email', 'Email', 'email', customer.email) +
+          field('phone', 'Phone', 'text', customer.phone, 'maxlength="80"') +
+          field('alternatePhone', 'Other Phone', 'text', customer.alternatePhone, 'maxlength="80"') +
+          selectField('preferredContactMethod', 'Preferred Contact Method', [['', 'Not chosen'], ['PHONE', 'Phone call'], ['WHATSAPP', 'WhatsApp'], ['EMAIL', 'Email']], customer.preferredContactMethod || '')) +
+        (access.canViewBilling ? formSection('Billing', 'Where invoices go and the terms agreed with this customer.', billingFields) : '') +
+        formSection('Notes', 'Keep field guidance separate from private office notes.', noteFields),
+      onMount: (form) => {
+        const type = form.elements.customerType;
+        const section = form.querySelector('[data-business-section]');
+        const updateBusinessFields = () => {
+          const business = type.value === 'BUSINESS';
+          section.hidden = !business;
+          section.querySelectorAll('input, select, textarea').forEach((input) => { input.disabled = !business; });
+          const businessName = form.elements.companyName;
+          if (businessName) businessName.required = business;
+          if (window.RevEngineFormUX) window.RevEngineFormUX.refresh(section);
+        };
+        type.addEventListener('change', updateBusinessFields);
+        updateBusinessFields();
+      },
+      onSubmit: async (body, form) => {
+        if (body.customerType !== 'BUSINESS') {
+          delete body.companyName;
+          delete body.registeredCompanyName;
+          delete body.registrationNumber;
+          delete body.taxNumber;
+          delete body.industry;
+        }
+        if (access.canEditBilling && form.elements.purchaseOrderRequired) body.purchaseOrderRequired = Boolean(form.elements.purchaseOrderRequired.checked);
         await api('/customers/' + encodeURIComponent(customerId), { method: 'PATCH', body: JSON.stringify(body) });
         notify('Customer details updated.');
         await loadProfile();

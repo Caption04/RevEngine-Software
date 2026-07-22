@@ -25,20 +25,35 @@
         <article class="card"><h3>When to skip it</h3><p class="muted">A small business with one office can use one default branch and ignore this page.</p></article>
       </section>
       <section class="panel">
-        <div class="panel-head"><h3>Create branch</h3><span class="badge gray">Admin</span></div>
-        <form class="form-grid" data-branch-form>
-          <div class="field"><label>Name</label><input name="name" required placeholder="Harare Operations"></div>
-          <div class="field"><label>Code</label><input name="code" placeholder="HRE"></div>
-          <div class="field"><label>City</label><input name="city" placeholder="Harare"></div>
-          <div class="field"><label>Timezone</label><input name="timezone" placeholder="Africa/Harare"></div>
-          <div class="field"><label>Address</label><input name="address" placeholder="Office address"></div>
-          <div class="field span-2"><small>The country, currency, tax rules, and online payment provider come from the current workspace.</small></div>
-          <div class="form-actions span-2"><button type="submit" class="primary-button">Create branch</button></div>
+        <div class="panel-head"><div><h3 data-branch-form-title>Create branch</h3><p class="muted" data-branch-form-help>Choose the city. Rev Engine fills in the code and time zone for you.</p></div><span class="badge gray">Admin</span></div>
+        <form class="form-grid branch-form" data-branch-form>
+          <div class="field"><label for="branch-name">Name</label><input id="branch-name" name="name" required placeholder="Harare Operations"></div>
+          <div class="field">
+            <label for="branch-city-search">City</label>
+            <div class="searchable-select" data-branch-city-picker>
+              <input id="branch-city-search" type="search" required autocomplete="off" placeholder="Search for a city" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="branch-city-options" data-branch-city-search>
+              <input type="hidden" name="city" data-branch-city-value>
+              <div id="branch-city-options" class="searchable-select-menu" role="listbox" hidden data-branch-city-options></div>
+            </div>
+            <small class="field-help" data-branch-country-help>Only cities in the current company country are shown.</small>
+          </div>
+          <div class="field"><label for="branch-code">Branch code</label><input id="branch-code" data-branch-code readonly aria-readonly="true" placeholder="Set from city"></div>
+          <div class="field"><label for="branch-timezone">Time zone</label><input id="branch-timezone" data-branch-timezone readonly aria-readonly="true" placeholder="Set from city"></div>
+          <div class="field span-2"><label for="branch-address">Address</label><input id="branch-address" name="address" placeholder="Office or depot address"></div>
+          <div class="field"><label for="branch-phone">Branch phone</label><input id="branch-phone" name="phone" type="tel" autocomplete="tel" placeholder="+263 ..."></div>
+          <div class="field"><label for="branch-whatsapp">WhatsApp number</label><input id="branch-whatsapp" name="whatsappPhone" type="tel" autocomplete="tel" placeholder="+263 ..."></div>
+          <div class="field"><label for="branch-email">Branch email</label><input id="branch-email" name="email" type="email" autocomplete="email" placeholder="harare@company.com"></div>
+          <div class="field branch-location-summary" data-branch-location-summary hidden>
+            <span>Location</span>
+            <strong data-branch-location-label></strong>
+          </div>
+          <div class="field span-2"><small>The country, currency, tax rules, and online payment provider come from the current company.</small></div>
+          <div class="form-actions span-2"><button type="button" class="secondary-button" data-branch-cancel hidden>Cancel</button><button type="submit" class="primary-button" data-branch-submit>Create branch</button></div>
         </form>
       </section>
       <section class="panel">
         <div class="panel-head"><h3>Branch list</h3><button class="secondary-button compact" type="button" data-refresh>Refresh</button></div>
-        <div class="table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Code</th><th>City</th><th>Country</th><th>Status</th></tr></thead><tbody data-branches></tbody></table></div>
+        <div class="table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Code</th><th>Location</th><th>Contact</th><th>Status</th><th></th></tr></thead><tbody data-branches></tbody></table></div>
       </section>
     </section>
   </body>

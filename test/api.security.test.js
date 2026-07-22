@@ -3299,8 +3299,32 @@ test('task5 branches scope records and filter reports safely', async () => {
   const adminB = await login(app, 'admin-b@test.local');
   const worker = await login(app, 'worker-a@test.local');
 
-  const branch = await adminA.post('/api/branches').send({ name: 'Harare Branch', code: 'HRE', city: 'Harare', country: 'ZW', timezone: 'Africa/Harare' });
+  const locations = await adminA.get('/api/branch-location-options');
+  assert.equal(locations.status, 200);
+  assert.equal(locations.body.data.country, 'ZW');
+  assert.equal(locations.body.data.locations.some((item) => item.city === 'Harare' && item.code === 'HRE'), true);
+
+  const invalidCity = await adminA.post('/api/branches').send({ name: 'Unknown Branch', city: 'Atlantis' });
+  assert.equal(invalidCity.status, 400);
+
+  const branch = await adminA.post('/api/branches').send({
+    name: 'Harare Branch',
+    city: 'Harare',
+    phone: '+263242000000',
+    whatsappPhone: '+263770000000',
+    email: 'harare@company.test'
+  });
   assert.equal(branch.status, 201);
+  assert.equal(branch.body.data.code, 'HRE');
+  assert.equal(branch.body.data.region, 'Harare Province');
+  assert.equal(branch.body.data.timezone, 'Africa/Harare');
+  assert.equal(branch.body.data.phone, '+263242000000');
+  assert.equal(branch.body.data.whatsappPhone, '+263770000000');
+  assert.equal(branch.body.data.email, 'harare@company.test');
+
+  const secondHarareBranch = await adminA.post('/api/branches').send({ name: 'Harare Depot', city: 'Harare' });
+  assert.equal(secondHarareBranch.status, 201);
+  assert.equal(secondHarareBranch.body.data.code, 'HRE-2');
 
   const customer = await adminA.post('/api/customers').send({ name: 'Branch Customer', branchId: branch.body.data.id, phone: '+263770000000' });
   assert.equal(customer.status, 201);
@@ -3360,7 +3384,7 @@ test('task5 deeper reports are admin-only and branch aware', async () => {
   const admin = await login(app, 'admin-a@test.local');
   const worker = await login(app, 'worker-a@test.local');
 
-  const branch = await admin.post('/api/branches').send({ name: 'South Branch', code: 'SOUTH' });
+  const branch = await admin.post('/api/branches').send({ name: 'South Branch', city: 'Masvingo' });
   assert.equal(branch.status, 201);
   await admin.post('/api/jobs').send({ customerId: 'customer-a', serviceId: 'service-a', workerId: 'wp-a', branchId: branch.body.data.id, title: 'SLA Job', completionDueAt: '2026-01-03T00:00:00.000Z', slaStatus: 'BREACHED' });
 
@@ -3511,8 +3535,8 @@ test('task7 branch approval decisions are branch scoped and permissions are conf
   await owner.post('/api/auth/login').send({ email: 'owner-a@test.local', password: 'Password123!' });
   await admin.post('/api/auth/login').send({ email: 'admin-a@test.local', password: 'Password123!' });
 
-  const branchA = await owner.post('/api/branches').send({ name: 'North', code: 'NORTH' });
-  const branchB = await owner.post('/api/branches').send({ name: 'South', code: 'SOUTH' });
+  const branchA = await owner.post('/api/branches').send({ name: 'North', city: 'Harare' });
+  const branchB = await owner.post('/api/branches').send({ name: 'South', city: 'Bulawayo' });
   assert.equal(branchA.status, 201);
   assert.equal(branchB.status, 201);
 
