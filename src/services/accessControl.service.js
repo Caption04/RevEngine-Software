@@ -100,15 +100,15 @@ const PERMISSION_CATALOG = [
   },
   {
     key: 'Finance',
-    label: 'Money',
-    help: 'Choose what they can do with payments and money settings.',
+    label: 'Customer billing',
+    help: 'Client invoices and payment history. This does not grant access to company-wide financial reports.',
     permissions: [
       { key: 'payments.view', label: 'View payments', targets: ['collections.html', 'GET /api/payments'] },
       { key: 'payments.manage', label: 'Manage payments', targets: ['POST/PATCH /api/payments'] },
       { key: 'payment.refund', label: 'Approve refunds', targets: ['POST /api/payments/:id/refund'] },
-      { key: 'settings.finance.manage', label: 'Change money settings', targets: ['settings.html#finance', 'PATCH /api/company/finance-settings'] },
-      { key: 'finance.exports.manage', label: 'Download money files', targets: ['GET /api/finance/export/*', 'GET /api/reports/export'] },
-      { key: 'finance.integrations.manage', label: 'Manage accounting links', help: 'Connect or update the company accounting system.', targets: ['settings.html#finance', 'GET/POST/PATCH /api/finance/integrations'] }
+      { key: 'settings.finance.manage', label: 'Change finance settings', targets: ['settings.html#finance', 'PATCH /api/company/finance-settings'] },
+      { key: 'finance.exports.manage', label: 'Export financial records', help: 'Company-wide export permission; do not grant this merely to view customer payment history.', targets: ['GET /api/finance/export/*', 'GET /api/reports/export'] },
+      { key: 'finance.integrations.manage', label: 'Manage accounting connections', targets: ['settings.html#finance', 'GET/POST/PATCH /api/finance/integrations'] }
     ]
   },
   {
@@ -326,22 +326,26 @@ const defaultPermissionBundles = {
 };
 
 const SYSTEM_ROLE_TEMPLATES = [
-  { key: 'owner', name: 'Owner', description: 'Legal company owner with full access.', systemRole: 'OWNER', permissions: delegatablePermissionKeys, scope: 'COMPANY' },
-  { key: 'workspace-manager', name: 'Workspace Manager', description: 'Full control of one workspace without ownership rights.', systemRole: 'ADMIN', permissions: delegatablePermissionKeys, scope: 'COMPANY' },
-  { key: 'branch-manager', name: 'Branch Manager', description: 'Full operational control of assigned branches without workspace ownership rights.', systemRole: 'ADMIN', permissions: branchManagerPermissions, scope: 'BRANCH' },
-  { key: 'executive', name: 'Executive / COO', description: 'Senior executive access across the company without ownership powers.', systemRole: 'ADMIN', permissions: delegatablePermissionKeys, scope: 'COMPANY' },
-  { key: 'general-manager', name: 'General Manager', description: 'Broad company management excluding ownership powers.', systemRole: 'ADMIN', permissions: defaultPermissionBundles.ADMIN, scope: 'COMPANY' },
-  { key: 'operations-manager', name: 'Operations Manager', description: 'Jobs, scheduling, workers, customers, and work reports.', systemRole: 'ADMIN', permissions: operationsPermissions, scope: 'COMPANY' },
-  { key: 'finance-manager', name: 'Finance Manager', description: 'Invoices, payments, money reports, and exports.', systemRole: 'ADMIN', permissions: financePermissions.concat(['members.view']), scope: 'COMPANY' },
-  { key: 'accountant', name: 'Accountant', description: 'Invoices, payments, money reports, exports, and accounting links.', systemRole: 'ADMIN', permissions: financePermissions.filter((key) => !['payment.refund', 'invoice.void', 'invoice.discount.approve'].includes(key)), scope: 'COMPANY' },
-  { key: 'office-administrator', name: 'Office Administrator', description: 'Customers, bookings, quotes, jobs, and daily office work.', systemRole: 'ADMIN', permissions: operationsPermissions.concat(['company.settings.view', 'members.view']), scope: 'COMPANY' },
-  { key: 'dispatcher', name: 'Dispatcher / Scheduler', description: 'Schedules work, assigns workers, and follows active jobs.', systemRole: 'ADMIN', permissions: ['dashboard.operational.view', 'leads.view', 'jobs.view', 'jobs.edit', 'jobs.assign', 'schedule.view', 'schedule.manage', 'workers.view', 'workers.location.view', 'customers.view'], scope: 'COMPANY' },
-  { key: 'customer-service', name: 'Customer Service', description: 'Leads, customers, booking requests, quotes, and job updates.', systemRole: 'ADMIN', permissions: ['dashboard.operational.view', 'leads.view', 'leads.create', 'leads.edit', 'leads.convert', 'customers.view', 'customers.create', 'customers.edit', 'bookings.view', 'bookings.manage', 'quotes.view', 'quotes.create', 'jobs.view'], scope: 'COMPANY' },
-  { key: 'department-manager', name: 'Department Manager', description: 'Manages work in an assigned branch or team.', systemRole: 'ADMIN', permissions: operationsPermissions, scope: 'BRANCH' },
-  { key: 'team-supervisor', name: 'Team Supervisor', description: 'Sees workers and jobs in an assigned team.', systemRole: 'ADMIN', permissions: ['dashboard.operational.view', 'jobs.view', 'jobs.edit', 'schedule.view', 'workers.view', 'team.view'], scope: 'TEAM' },
-  { key: 'senior-field-worker', name: 'Senior Field Worker / Senior Technician', description: 'Completes field work and sees their team.', systemRole: 'WORKER', permissions: workerPermissions.concat(['team.view']), scope: 'TEAM' },
-  { key: 'field-worker', name: 'Field Worker / Technician', description: 'Sees their own jobs and schedule.', systemRole: 'WORKER', permissions: workerPermissions, scope: 'SELF' },
-  { key: 'apprentice', name: 'Apprentice / Junior Field Worker', description: 'Sees their own assigned work.', systemRole: 'WORKER', permissions: workerPermissions, scope: 'SELF' }
+  { key: 'owner', name: 'Owner', description: 'Full company control, including ownership and access settings.', systemRole: 'OWNER', permissions: delegatablePermissionKeys, scope: 'COMPANY' },
+  { key: 'workspace-manager', name: 'Workspace Manager', description: 'Full control of one company without ownership rights.', systemRole: 'ADMIN', permissions: delegatablePermissionKeys, scope: 'COMPANY' },
+  { key: 'executive', name: 'Executive / COO', description: 'Senior company oversight without ownership rights.', systemRole: 'ADMIN', permissions: delegatablePermissionKeys, scope: 'COMPANY' },
+  { key: 'service-manager', name: 'Service Manager', description: 'Runs O&M delivery, SLAs, jobs, faults, teams, contracts, and service performance.', systemRole: 'ADMIN', permissions: operationsPermissions.concat(['contract.automation.manage', 'contract.sla.override', 'reports.work.view', 'reports.workers.view', 'reports.stock.view', 'invoices.view', 'payments.view']), scope: 'COMPANY' },
+  { key: 'field-supervisor', name: 'Field Supervisor', description: 'Supervises technicians, assigns work, reviews quality, faults, readings, and close-outs.', systemRole: 'ADMIN', permissions: ['dashboard.operational.view','customers.view','jobs.view','jobs.create','jobs.edit','jobs.assign','job.reassign.after_dispatch','schedule.view','schedule.manage','workers.view','workers.location.view','inventory.view','purchaseRequest.create','reports.work.view','reports.workers.view','contract.automation.manage','approval.request.decide'], scope: 'BRANCH' },
+  { key: 'dispatcher', name: 'Scheduler / Dispatcher', description: 'Books, assigns, reschedules, and tracks field work.', systemRole: 'ADMIN', permissions: ['dashboard.operational.view','customers.view','jobs.view','jobs.create','jobs.edit','jobs.assign','job.reassign.after_dispatch','schedule.view','schedule.manage','workers.view','workers.location.view','bookings.view','bookings.manage','contract.automation.manage'], scope: 'BRANCH' },
+  { key: 'customer-service', name: 'Customer Service Representative', description: 'Handles calls, customer records, service requests, bookings, and job updates.', systemRole: 'ADMIN', permissions: ['dashboard.operational.view','customers.view','customers.create','customers.edit','leads.view','leads.create','leads.edit','bookings.view','bookings.manage','jobs.view','jobs.create','jobs.edit','invoices.view','payments.view'], scope: 'BRANCH' },
+  { key: 'site-inspector', name: 'Site Inspector', description: 'Inspects solar sites, records defects and readings, and signs off corrective work.', systemRole: 'WORKER', permissions: ['dashboard.operational.view','customers.view','jobs.view','jobs.edit','schedule.view','contract.automation.manage','reports.work.view'], scope: 'SELF' },
+  { key: 'technician', name: 'Technician', description: 'Completes assigned inspections, maintenance, repairs, readings, photos, and parts use.', systemRole: 'WORKER', permissions: ['dashboard.operational.view','customers.view','jobs.view','jobs.edit','schedule.view','inventory.view','purchaseRequest.create','contract.automation.manage'], scope: 'SELF' },
+  { key: 'installer', name: 'Installer / Commissioning Technician', description: 'Completes assigned replacement, retrofit, installation, testing, and commissioning work.', systemRole: 'WORKER', permissions: ['dashboard.operational.view','customers.view','jobs.view','jobs.edit','schedule.view','inventory.view','purchaseRequest.create','contract.automation.manage'], scope: 'SELF' },
+  { key: 'sales-representative', name: 'Sales Representative', description: 'Manages assigned enquiries, customers, quotes, renewals, and customer payment status.', systemRole: 'ADMIN', permissions: ['leads.view','leads.create','leads.edit','leads.convert','customers.view','customers.create','customers.edit','quotes.view','quotes.create','quotes.edit','quotes.send','invoices.view','payments.view','reports.sales.view','contract.automation.manage'], scope: 'BRANCH' },
+  { key: 'sales-manager', name: 'Sales Manager', description: 'Manages sales, quotes, renewals, and client payment history without company-wide finance access.', systemRole: 'ADMIN', permissions: ['leads.view','leads.create','leads.edit','leads.convert','customers.view','customers.create','customers.edit','quotes.view','quotes.create','quotes.edit','quotes.send','quote.discount.approve','invoices.view','payments.view','reports.sales.view','contract.automation.manage'], scope: 'COMPANY' },
+  { key: 'accountant', name: 'Accountant', description: 'Manages customer billing and company financial records without operational customer access.', systemRole: 'ADMIN', permissions: ['dashboard.financial.view','invoices.view','invoices.create','invoices.edit','invoices.send','payments.view','payments.manage','reports.money.view','finance.exports.manage','finance.integrations.manage','settings.finance.manage'], scope: 'COMPANY' },
+  { key: 'finance-manager', name: 'Finance Manager', description: 'Controls billing, refunds, finance settings, company reports, exports, and approvals.', systemRole: 'ADMIN', permissions: financePermissions.concat(['members.view','approval.request.decide']), scope: 'COMPANY' },
+  { key: 'procurement', name: 'Procurement / Purchasing', description: 'Manages suppliers, purchase requests, orders, parts sourcing, and spend controls.', systemRole: 'ADMIN', permissions: ['jobs.view','inventory.view','inventory.manage','purchaseRequest.create','purchaseRequest.approve','purchaseOrder.manage','purchaseOrder.send','purchaseOrder.approve','reports.stock.view','reports.money.view','contract.automation.manage'], scope: 'COMPANY' },
+  { key: 'warehouse-clerk', name: 'Warehouse / Stock Clerk', description: 'Receives, issues, counts, transfers, and kits stock for field work.', systemRole: 'ADMIN', permissions: ['jobs.view','inventory.view','inventory.manage','stock.adjust','reports.stock.view'], scope: 'BRANCH' },
+  { key: 'company-admin', name: 'Company Administrator', description: 'Manages company records, users, branches, integrations, and operational setup; finance is optional.', systemRole: 'ADMIN', permissions: defaultPermissionBundles.ADMIN, scope: 'COMPANY' },
+  { key: 'it-support', name: 'IT / System Support', description: 'Manages integrations, security, devices, audit records, and technical settings with limited business data.', systemRole: 'ADMIN', permissions: ['company.settings.view','integration.view','integration.manage','security.view','audit.view','mobile.sync.manage','members.view'], scope: 'COMPANY' },
+  { key: 'branch-manager', name: 'Branch Manager', description: 'Runs all permitted O&M work in assigned branches without ownership rights.', systemRole: 'ADMIN', permissions: branchManagerPermissions, scope: 'BRANCH' },
+  { key: 'general-manager', name: 'General Manager / COO', description: 'Broad company oversight without ownership transfer rights.', systemRole: 'ADMIN', permissions: defaultPermissionBundles.ADMIN, scope: 'COMPANY' }
 ];
 
 function uniquePermissions(values) {

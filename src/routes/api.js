@@ -1576,6 +1576,8 @@ const branchAccessSchema = z.object({
   active: z.boolean().optional()
 });
 const roleTemplateSchema = z.object({ name: z.string().trim().min(2).max(120), description: optionalText(500), key: z.string().trim().regex(/^[a-z0-9-]+$/).max(80).optional(), systemRole: z.enum(['ADMIN', 'WORKER']).default('ADMIN'), permissions: z.array(z.enum(permissionKeys)).default([]), defaultScopeType: z.enum(['COMPANY', 'BRANCH', 'TEAM', 'SELF']).default('COMPANY') });
+const roleTemplateUpdateSchema = roleTemplateSchema.partial().refine((value) => Object.keys(value).length > 0, { message: 'Provide at least one change.' });
+const roleTemplateDuplicateSchema = z.object({ name: z.string().trim().min(2).max(120), description: optionalText(500) });
 const memberAccessFields = { jobTitle: z.string().trim().min(2).max(120), roleName: optionalText(120), roleTemplateId: optionalText(160), systemRole: z.enum(['ADMIN', 'WORKER']).optional(), fullAccess: z.boolean().default(false), permissions: z.array(z.enum(permissionKeys)).default([]), scopeType: z.enum(['COMPANY', 'BRANCH', 'TEAM', 'SELF']).default('COMPANY'), branchIds: z.array(z.string().min(1)).max(50).default([]), teamIds: z.array(z.string().min(1)).max(50).default([]) };
 function validateFullWorkspaceAccess(value, ctx) {
   if (value.fullAccess && value.scopeType !== 'COMPANY') ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['fullAccess'], message: 'Full workspace access can only be used with the whole workspace.' });
@@ -5032,10 +5034,20 @@ async function resolveCompanyRole(req, body, permissions) {
 router.get('/role-templates', asyncHandler(async (req, res) => {
   await requirePermission(req, 'members.view');
   const rows = await prisma.permissionRoleTemplate.findMany({
-    where: { companyId: req.companyId, active: true, isCustom: true },
+    where: { companyId: req.companyId, isCustom: true, active: true },
     orderBy: { name: 'asc' }
   });
   sendData(res, normalize(rows));
+}));
+
+router.get('/role-template-catalog', asyncHandler(async (req, res) => {
+  await requirePermission(req, 'members.view');
+  await seedSystemRoleTemplates(prisma);
+  const rows = await prisma.permissionRoleTemplate.findMany({
+    where: { companyId: null, isSystemTemplate: true, active: true },
+    orderBy: { name: 'asc' }
+  });
+  sendData(res, normalize(rows.filter((row) => row.systemRole !== 'OWNER')));
 }));
 
 router.post('/role-templates', validate(roleTemplateSchema), asyncHandler(async (req, res) => {
@@ -5047,6 +5059,54 @@ router.post('/role-templates', validate(roleTemplateSchema), asyncHandler(async 
   const data = await prisma.permissionRoleTemplate.create({ data: { companyId: req.companyId, key, name: req.body.name, description: req.body.description, verticalKey: req.user.company && req.user.company.verticalKey || 'generic', systemRole: req.body.systemRole, isSystemTemplate: false, isCustom: true, defaultPermissions: permissions, defaultScopeType: req.body.defaultScopeType, active: true } });
   await addEnterpriseAudit(req, 'ROLE_TEMPLATE_CREATED', 'PermissionRoleTemplate', data.id, { key, permissions, defaultScopeType: req.body.defaultScopeType });
   sendData(res, normalize(data), 201);
+}));
+
+router.patch('/role-templates/:id', validate(idParam, 'params'), validate(roleTemplateUpdateSchema), asyncHandler(async (req, res) => {
+  await requirePermission(req, 'roles.manage');
+  const existing = await prisma.permissionRoleTemplate.findFirst({ where: { id: req.params.id, companyId: req.companyId, isCustom: true, active: true } });
+  if (!existing) throw notFound('Custom role not found');
+  const nextScope = req.body.defaultScopeType || existing.defaultScopeType;
+  const nextPermissions = req.body.permissions
+    ? await resolveDelegatedPermissions(req, { permissions: req.body.permissions, scopeType: nextScope, branchIds: [], teamIds: [] })
+    : existing.defaultPermissions;
+  const data = await prisma.permissionRoleTemplate.update({
+    where: { id: existing.id },
+    data: {
+      name: req.body.name,
+      description: req.body.description,
+      systemRole: req.body.systemRole,
+      defaultScopeType: req.body.defaultScopeType,
+      defaultPermissions: nextPermissions
+    }
+  });
+  await addEnterpriseAudit(req, 'ROLE_TEMPLATE_UPDATED', 'PermissionRoleTemplate', data.id, { permissions: nextPermissions, defaultScopeType: data.defaultScopeType });
+  sendData(res, normalize(data));
+}));
+
+router.post('/role-templates/:id/duplicate', validate(idParam, 'params'), validate(roleTemplateDuplicateSchema), asyncHandler(async (req, res) => {
+  await requirePermission(req, 'roles.manage');
+  const source = await prisma.permissionRoleTemplate.findFirst({ where: { id: req.params.id, active: true, OR: [{ companyId: req.companyId }, { companyId: null, isSystemTemplate: true }] } });
+  if (!source) throw notFound('Role template not found');
+  if (source.systemRole === 'OWNER') throw new AppError(403, 'The owner role cannot be copied.');
+  const key = companyRoleKey(req.body.name);
+  const verticalKey = req.user.company && req.user.company.verticalKey || 'generic';
+  const exists = await prisma.permissionRoleTemplate.findFirst({ where: { companyId: req.companyId, key, verticalKey } });
+  if (exists) throw new AppError(409, 'A saved role with this name already exists.');
+  const permissions = await resolveDelegatedPermissions(req, { permissions: source.defaultPermissions || [], scopeType: source.defaultScopeType, branchIds: [], teamIds: [] });
+  const data = await prisma.permissionRoleTemplate.create({ data: { companyId: req.companyId, key, name: req.body.name, description: req.body.description || source.description, verticalKey, systemRole: source.systemRole, isSystemTemplate: false, isCustom: true, defaultPermissions: permissions, defaultScopeType: source.defaultScopeType, active: true } });
+  await addEnterpriseAudit(req, 'ROLE_TEMPLATE_DUPLICATED', 'PermissionRoleTemplate', data.id, { sourceRoleTemplateId: source.id });
+  sendData(res, normalize(data), 201);
+}));
+
+router.delete('/role-templates/:id', validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  await requirePermission(req, 'roles.manage');
+  const existing = await prisma.permissionRoleTemplate.findFirst({ where: { id: req.params.id, companyId: req.companyId, isCustom: true, active: true } });
+  if (!existing) throw notFound('Custom role not found');
+  const inUse = await prisma.user.count({ where: { companyId: req.companyId, roleTemplateId: existing.id, disabledAt: null } });
+  if (inUse) throw new AppError(409, 'This role is assigned to active members. Reassign them before archiving it.');
+  await prisma.permissionRoleTemplate.update({ where: { id: existing.id }, data: { active: false } });
+  await addEnterpriseAudit(req, 'ROLE_TEMPLATE_ARCHIVED', 'PermissionRoleTemplate', existing.id, {});
+  sendData(res, { archived: true });
 }));
 
 function memberInvitationBaseUrl(req) {

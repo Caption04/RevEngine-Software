@@ -1,7 +1,7 @@
 (function () {
   if (document.body.dataset.page !== 'members') return;
 
-  let data = { currentUser: null, members: [], invitations: [], templates: [], permissions: { keys: [], groups: {}, catalog: [], dependencies: {} }, branches: [], teams: [] };
+  let data = { currentUser: null, members: [], invitations: [], templates: [], suggestedTemplates: [], permissions: { keys: [], groups: {}, catalog: [], dependencies: {} }, branches: [], teams: [] };
   const escapeHtml = (value) => String(value == null ? '' : value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
   const formatDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value)) : '—';
 
@@ -111,7 +111,7 @@
     Dashboard: 'Home',
     Workforce: 'Workers',
     Scheduling: 'Schedule',
-    Finance: 'Money',
+    Finance: 'Customer billing and finance controls',
     Reports: 'Reports',
     Inventory: 'Stock',
     Company: 'Company settings',
@@ -202,7 +202,21 @@
   }
 
   function savedRoleOptions(selectedId = '') {
-    return `<option value="">Create a new role</option>${data.templates.map((item) => `<option value="${escapeHtml(item.id)}"${item.id === selectedId ? ' selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}`;
+    return `<option value="">Create a custom role</option>${data.templates.map((item) => `<option value="${escapeHtml(item.id)}"${item.id === selectedId ? ' selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}`;
+  }
+  function startingRoleOptions(selectedId = '') {
+    const option = (item) => `<option value="${escapeHtml(item.id)}"${item.id === selectedId ? ' selected' : ''}>${escapeHtml(item.name)}</option>`;
+    const suggested = data.suggestedTemplates.length
+      ? `<optgroup label="Suggested solar O&amp;M roles">${data.suggestedTemplates.map(option).join('')}</optgroup>`
+      : '';
+    const saved = data.templates.length
+      ? `<optgroup label="Your saved roles">${data.templates.map(option).join('')}</optgroup>`
+      : '';
+    return `<option value="">Start from scratch</option>${suggested}${saved}`;
+  }
+
+  function findStartingRole(id) {
+    return [...data.suggestedTemplates, ...data.templates].find((item) => item.id === id);
   }
 
   function setPermissionBoxes(permissionWrap, permissions, onChange) {
@@ -342,7 +356,19 @@
 
   function renderTemplates() {
     const target = document.querySelector('[data-role-template-grid]');
-    target.innerHTML = data.templates.map((template) => `<article class="mini-card role-template-card"><div><strong>${escapeHtml(template.name)}</strong><span>${escapeHtml(template.description || 'Saved role')}</span></div><div><small>${escapeHtml(accessLabel(template.defaultScopeType))} access</small></div></article>`).join('') || '<div class="empty-state compact-empty"><strong>No saved roles yet</strong><p>Create a role here or while inviting a member.</p></div>';
+    target.innerHTML = data.templates.map((template) => `<article class="mini-card role-template-card">
+      <div><strong>${escapeHtml(template.name)}</strong><span>${escapeHtml(template.description || 'Saved role')}</span></div>
+      <div><small>${escapeHtml(accessLabel(template.defaultScopeType))} access · ${template.defaultPermissions ? template.defaultPermissions.length : 0} permissions</small></div>
+      ${can('roles.manage') ? `<div class="row-actions"><button class="secondary-button compact" type="button" data-copy-role="${escapeHtml(template.id)}">Use as starting point</button>${template.isCustom ? `<button class="secondary-button compact" type="button" data-edit-role="${escapeHtml(template.id)}">Edit</button><button class="secondary-button compact danger" type="button" data-archive-role="${escapeHtml(template.id)}">Archive</button>` : ''}</div>` : ''}
+    </article>`).join('') || '<div class="empty-state compact-empty"><strong>No roles available</strong><p>Create a custom role from scratch.</p></div>';
+    target.querySelectorAll('[data-copy-role]').forEach((button) => button.onclick = () => openRole(data.templates.find((item) => item.id === button.dataset.copyRole)));
+    target.querySelectorAll('[data-edit-role]').forEach((button) => button.onclick = () => openRole(null, data.templates.find((item) => item.id === button.dataset.editRole)));
+    target.querySelectorAll('[data-archive-role]').forEach((button) => button.onclick = async () => {
+      const role = data.templates.find((item) => item.id === button.dataset.archiveRole);
+      const confirmed = await window.RevEngineUI.confirm({ title: `Archive ${role.name}?`, message: 'The role will no longer be available for new assignments. Active members must be reassigned first.', confirmLabel: 'Archive role', danger: true });
+      if (!confirmed) return;
+      try { await api(`/role-templates/${role.id}`, { method: 'DELETE' }); await load(); notice('Role archived.'); } catch (error) { notice(error.message, false); }
+    });
   }
 
   function renderTeams() {
@@ -526,23 +552,39 @@
     }
   }
 
-  function openRole() {
-    const { modal, close } = modalShell('Create role', 'Save a role your company can use again.', `<form class="form-grid" data-role-form>
-      <div class="field span-2"><label>Role</label><input name="name" required minlength="2" placeholder="e.g. Night Shift Supervisor"></div>
-      <label class="member-choice span-2">
-        <input name="fieldWorker" type="checkbox">
-        <span class="member-choice-box" aria-hidden="true"></span>
-        <span class="member-choice-copy"><strong>Works in the field</strong><small>Turn this on if this role will use the worker app to complete jobs.</small></span>
-      </label>
-      <div class="field span-2"><label>Short note <span class="optional-label">Optional</span></label><input name="description" maxlength="500" placeholder="What this role does"></div>
-      <div class="field span-2"><label>Access area</label><select name="defaultScopeType"><option value="COMPANY">Whole company</option><option value="BRANCH">Selected branches</option><option value="TEAM">Selected teams</option><option value="SELF">Only their own work</option></select></div>
-      <div class="permission-help span-2"><strong>Choose what they can do</strong></div>
-      <div class="span-2 permission-editor" data-permission-editor>${permissionEditor([])}</div>
+  function openRole(seedTemplate = null, editTemplate = null) {
+    const editing = Boolean(editTemplate);
+    const initial = editTemplate || seedTemplate;
+    const { modal, close } = modalShell(editing ? `Edit ${editTemplate.name}` : 'Create custom role', editing ? 'Change the saved role. Existing members keep their current access until you update them.' : 'Start from a suggested O&M role or build one from scratch.', `<form class="form-grid" data-role-form>
+      ${editing ? '' : `<div class="field span-2"><label>Start from a role <span class="optional-label">Optional</span></label><select name="startingTemplateId">${startingRoleOptions(initial && initial.id || '')}</select><small>This only copies the starting permissions. You can change every permission before saving.</small></div>`}
+      <div class="field span-2"><label>Role name</label><input name="name" required minlength="2" placeholder="e.g. Accountant and Dispatcher" value="${escapeHtml(editing ? editTemplate.name : '')}"></div>
+      <label class="member-choice span-2"><input name="fieldWorker" type="checkbox"><span class="member-choice-box" aria-hidden="true"></span><span class="member-choice-copy"><strong>Uses the field worker app</strong><small>Turn this on only when the role completes field jobs.</small></span></label>
+      <div class="field span-2"><label>Short note <span class="optional-label">Optional</span></label><input name="description" maxlength="500" placeholder="What this role does" value="${escapeHtml(editing ? editTemplate.description || '' : '')}"></div>
+      <div class="field span-2"><label>Default access area</label><select name="defaultScopeType"><option value="COMPANY">Whole company</option><option value="BRANCH">Selected branches</option><option value="TEAM">Selected teams</option><option value="SELF">Only their own work</option></select></div>
+      <div class="permission-help span-2"><strong>Choose exactly what they can view and change</strong><p>Customer billing is separate from company-wide financial reports.</p></div>
+      <div class="span-2 permission-editor" data-permission-editor></div>
       <p class="fc-form-error span-2" data-form-error hidden></p>
-      <div class="fc-form-actions span-2"><button class="secondary-button" type="button" data-close>Cancel</button><button class="primary-button" type="submit">Save role</button></div>
+      <div class="fc-form-actions span-2"><button class="secondary-button" type="button" data-close>Cancel</button><button class="primary-button" type="submit">${editing ? 'Save changes' : 'Save custom role'}</button></div>
     </form>`);
-    bindCategoryButtons(modal);
     const form = modal.querySelector('form');
+    const permissionWrap = modal.querySelector('[data-permission-editor]');
+
+    function applyStartingTemplate(template) {
+      const permissions = template && template.defaultPermissions || [];
+      setPermissionBoxes(permissionWrap, permissions);
+      form.fieldWorker.checked = Boolean(template && template.systemRole === 'WORKER');
+      form.defaultScopeType.value = template && template.defaultScopeType || 'COMPANY';
+      if (!editing && template && !form.name.value.trim()) form.name.value = `${template.name} - Custom`;
+    }
+
+    applyStartingTemplate(initial);
+    if (editing) {
+      form.fieldWorker.checked = editTemplate.systemRole === 'WORKER';
+      form.defaultScopeType.value = editTemplate.defaultScopeType || 'COMPANY';
+    } else {
+      form.startingTemplateId.onchange = () => applyStartingTemplate(findStartingRole(form.startingTemplateId.value));
+    }
+
     form.onsubmit = async (event) => {
       event.preventDefault();
       const errorNode = modal.querySelector('[data-form-error]');
@@ -550,15 +592,16 @@
       if (!validateForm(form)) return;
       const body = { name: form.name.value.trim(), description: form.description.value.trim() || undefined, systemRole: form.fieldWorker.checked ? 'WORKER' : 'ADMIN', defaultScopeType: form.defaultScopeType.value, permissions: selectedPermissions(form) };
       try {
-        await api('/role-templates', { method: 'POST', body: JSON.stringify(body) });
+        await api(editing ? `/role-templates/${editTemplate.id}` : '/role-templates', { method: editing ? 'PATCH' : 'POST', body: JSON.stringify(body) });
         close();
         await load();
-        notice('Role saved.');
+        notice(editing ? 'Role updated.' : 'Custom role saved.');
       } catch (error) {
         errorNode.textContent = error.message;
         errorNode.hidden = false;
       }
     };
+    if (window.RevEngineFormUX) window.RevEngineFormUX.refresh();
   }
 
   function openTeam() {
@@ -583,8 +626,8 @@
   }
 
   async function load() {
-    [data.currentUser, data.members, data.invitations, data.templates, data.permissions, data.branches, data.teams] = await Promise.all([
-      api('/auth/session'), api('/members'), api('/member-invitations'), api('/role-templates'), api('/permissions'), api('/branches').catch(() => []), api('/teams').catch(() => [])
+    [data.currentUser, data.members, data.invitations, data.templates, data.suggestedTemplates, data.permissions, data.branches, data.teams] = await Promise.all([
+      api('/auth/session'), api('/members'), api('/member-invitations'), api('/role-templates'), api('/role-template-catalog'), api('/permissions'), api('/branches').catch(() => []), api('/teams').catch(() => [])
     ]);
     renderMembers();
     renderInvites();
