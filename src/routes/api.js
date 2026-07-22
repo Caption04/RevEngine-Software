@@ -16,6 +16,7 @@ const { reportCsv, reportData } = require('../services/reporting.service');
 const { analyticsCsv, buildExecutiveAnalytics } = require('../services/executiveAnalytics.service');
 const { buildDispatchBoard } = require('../services/dispatch.service');
 const { branchLocationForCountry, branchLocationsForCountry, countryConfig, normalizeCountryCode, organizationContextForUser } = require('../services/organization.service');
+const { normalizePhoneForCountry, phoneRulesForCountry, phoneValidationMessage } = require('../services/phoneNumber.service');
 const { billingCatalog, canUseFeature, getUsage, listPlans, requireFeature, requirePlanLimit } = require('../services/subscription.service');
 const { FULL_ACCESS_ONLY_PERMISSION_KEYS, PERMISSION_CATALOG, PERMISSION_DEPENDENCIES, PERMISSION_GROUPS, defaultPermissionBundles, delegatablePermissionKeys, effectiveAccessForUser, expandPermissionDependencies, hasFullBusinessAccess, isSubset, permissionKeys, scopeContains, seedSystemRoleTemplates, uniquePermissions } = require('../services/accessControl.service');
 const { getStorageObjectForCompany, readStorageObject, storeUploadedFile } = require('../services/integrations/storage.service');
@@ -1567,13 +1568,25 @@ const offlineActionAdminQuerySchema = z.object({ status: z.enum(offlineActionSta
 const checklistItemSchema = z.object({ label: z.string().trim().min(1).max(240), helpText: optionalText(500), answerType: z.enum(['TEXT', 'NUMBER', 'YES_NO', 'PASS_FAIL', 'PHOTO']).default('TEXT'), required: z.boolean().optional(), photoRequired: z.boolean().optional(), passFail: z.boolean().optional(), sortOrder: z.coerce.number().int().optional(), active: z.boolean().optional() });
 const checklistTemplateSchema = z.object({ serviceId: optionalText(160), contractId: optionalText(160), name: z.string().trim().min(1).max(180), description: optionalText(1000), active: z.boolean().optional(), requiredForCompletion: z.boolean().optional(), sortOrder: z.coerce.number().int().optional(), items: z.array(checklistItemSchema).optional() });
 
+const optionalBranchPhone = z.string().trim().max(40).optional().or(z.literal('')).transform((value) => value || undefined).refine((value) => {
+  if (!value) return true;
+  return /^\+?[0-9 ().-]+$/.test(value);
+}, 'Use digits, spaces, brackets, or hyphens only.');
+const optionalBranchAddress = z.string().trim().max(200).optional().or(z.literal('')).transform((value) => value || undefined).refine((value) => {
+  if (!value) return true;
+  return value.length >= 5 && /\p{L}/u.test(value) && !/[@<>]/.test(value);
+}, 'Enter a clear street address without symbols such as @.');
+const optionalBranchEmail = z.string().trim().max(254).optional().or(z.literal('')).transform((value) => value || undefined).refine((value) => {
+  if (!value) return true;
+  return /^[^\s@]+@(?:[^\s@.]+\.)+[A-Za-z]{2,24}$/.test(value);
+}, 'Enter a valid email address.');
 const branchSchema = z.object({
-  name: z.string().trim().min(1).max(160),
+  name: z.string().trim().min(2).max(160),
   city: z.string().trim().min(1).max(120),
-  address: optionalText(500),
-  phone: optionalText(40),
-  whatsappPhone: optionalText(40),
-  email: optionalEmail,
+  address: optionalBranchAddress,
+  phone: optionalBranchPhone,
+  whatsappPhone: optionalBranchPhone,
+  email: optionalBranchEmail,
   active: z.boolean().optional()
 });
 const approvalPolicySchema = z.object({
@@ -1624,21 +1637,23 @@ const memberStatusSchema = z.object({ disabled: z.boolean() });
 const invitationTokenSchema = z.object({ token: z.string().min(32).max(500) });
 const invitationAcceptSchema = invitationTokenSchema.extend({ password: z.string().min(12).max(128), name: z.string().trim().min(2).max(120) });
 const teamSchema = z.object({ name: z.string().trim().min(2).max(120), description: optionalText(500), branchId: optionalText(160), active: z.boolean().optional() });
+const countryCodeSchema = z.string().trim().min(2).max(40).transform((value, ctx) => {
+  const code = normalizeCountryCode(value);
+  if (!code) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Choose Zimbabwe or South Africa.' });
+  return code || value;
+});
+const branchLocationOptionsQuerySchema = z.object({ countryCode: countryCodeSchema });
 const workspaceCreateSchema = z.object({
   name: z.string().trim().min(2).max(160),
   legalName: optionalText(200),
-  countryCode: z.string().trim().min(2).max(40).transform((value, ctx) => {
-    const code = normalizeCountryCode(value);
-    if (!code) ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Choose Zimbabwe or South Africa.' });
-    return code || value;
-  }),
+  countryCode: countryCodeSchema,
   registrationNumber: optionalText(120),
   taxNumber: optionalText(120),
   phone: optionalText(80),
   email: optionalEmail,
   address: optionalText(500),
   mainBranchName: z.string().trim().min(2).max(160).default('Main Branch'),
-  mainBranchCity: optionalText(120)
+  mainBranchCity: z.string().trim().min(1).max(120)
 });
 const workspaceSwitchSchema = z.object({ companyId: z.string().min(1) });
 const groupManagerSchema = z.object({ email: z.string().email().transform((value) => value.toLowerCase()) });
@@ -2796,6 +2811,11 @@ router.post('/auth/register', validate(registerSchema), asyncHandler(async (req,
   const user = await prisma.$transaction(async (tx) => {
     const regional = countryConfig(req.body.market);
     if (!regional) throw new AppError(400, 'Choose a supported country.');
+    const defaultBranchLocation = branchLocationsForCountry(regional.code)[0] || null;
+    const mainBranchLocation = req.body.branchCity
+      ? branchLocationForCountry(regional.code, req.body.branchCity)
+      : defaultBranchLocation;
+    if (!mainBranchLocation) throw new AppError(400, 'Choose the main branch city from the available list.');
     const group = tx.businessGroup ? await tx.businessGroup.create({ data: { name: req.body.groupName || req.body.companyName } }) : null;
     const company = await tx.company.create({ data: { groupId: group && group.id, name: req.body.companyName, market: regional.market, verticalKey: 'solar-om', teamSizeBand: req.body.teamSizeBand, onboardingState: 'PLAN_SELECTION_REQUIRED' } });
     const trialStartedAt = new Date();
@@ -2821,7 +2841,7 @@ router.post('/auth/register', validate(registerSchema), asyncHandler(async (req,
       select: SAFE_LOGIN_USER_SELECT
     });
     if (group && tx.businessGroupMembership) await tx.businessGroupMembership.create({ data: { groupId: group.id, userId: created.id, role: 'OWNER', active: true } });
-    if (tx.branch) await tx.branch.create({ data: { companyId: company.id, name: req.body.branchName || 'Main Branch', code: 'MAIN', country: regional.code, city: req.body.branchCity, timezone: regional.timezone, active: true } });
+    if (tx.branch) await tx.branch.create({ data: { companyId: company.id, name: req.body.branchName || 'Main Branch', code: mainBranchLocation.code, country: regional.code, region: mainBranchLocation.region, city: mainBranchLocation.city, timezone: regional.timezone, active: true } });
     return created;
   });
   const settings = await getCompanySecuritySettings(user.companyId);
@@ -3970,6 +3990,17 @@ router.post('/public/member-invitations/accept', validate(invitationAcceptSchema
   sendData(res, await publicStaffUser(user), 201);
 }));
 
+router.get('/public/branch-location-options', validate(branchLocationOptionsQuerySchema, 'query'), asyncHandler(async (req, res) => {
+  const regional = countryConfig(req.query.countryCode);
+  sendData(res, {
+    country: regional.code,
+    countryName: regional.name,
+    defaultTimezone: regional.timezone,
+    phoneRules: phoneRulesForCountry(regional.code),
+    locations: branchLocationsForCountry(regional.code)
+  });
+}));
+
 router.use(requireAuth);
 
 router.use(asyncHandler(async (req, res, next) => {
@@ -4034,6 +4065,8 @@ router.post('/organization/workspaces', validate(workspaceCreateSchema), asyncHa
   const membership = await requireBusinessGroupMembership(req, ['OWNER']);
   const regional = countryConfig(req.body.countryCode);
   if (!regional) throw new AppError(400, 'Choose Zimbabwe or South Africa.');
+  const mainBranchLocation = branchLocationForCountry(regional.code, req.body.mainBranchCity);
+  if (!mainBranchLocation) throw new AppError(400, 'Choose the main branch city from the available list.');
   const sourceCompany = await prisma.company.findUnique({ where: { id: req.companyId } });
   const workspace = await prisma.$transaction(async (tx) => {
     const company = await tx.company.create({
@@ -4068,7 +4101,7 @@ router.post('/organization/workspaces', validate(workspaceCreateSchema), asyncHa
     });
     if (tx.companyFinanceSettings) await tx.companyFinanceSettings.create({ data: { companyId: company.id, country: regional.code, timezone: regional.timezone, defaultCurrency: regional.currency, allowedCurrencies: [regional.currency], taxName: regional.taxName, taxRate: regional.taxRate, numberFormat: regional.numberFormat, allowedPaymentMethods: regional.allowedPaymentMethods } });
     await ensureSolarCompanyDefaults(tx, company.id);
-    await tx.branch.create({ data: { companyId: company.id, name: req.body.mainBranchName, code: 'MAIN', country: regional.code, city: req.body.mainBranchCity, address: req.body.address, timezone: regional.timezone, active: true } });
+    await tx.branch.create({ data: { companyId: company.id, name: req.body.mainBranchName, code: mainBranchLocation.code, country: regional.code, region: mainBranchLocation.region, city: mainBranchLocation.city, address: req.body.address, timezone: regional.timezone, active: true } });
     return company;
   });
   await audit(req, 'WORKSPACE_CREATED', 'Company', workspace.id, { groupId: membership.groupId, countryCode: regional.code });
@@ -4910,12 +4943,21 @@ async function branchRegionForCompany(companyId) {
   return regional;
 }
 
+function branchPhoneForCountry(value, regional) {
+  if (value == null || String(value).trim() === '') return undefined;
+  const normalized = normalizePhoneForCountry(value, regional && regional.code);
+  if (!normalized) throw new AppError(400, phoneValidationMessage(regional && regional.code));
+  return normalized;
+}
+
 router.get('/branch-location-options', requireRole(...adminRoles), asyncHandler(async (req, res) => {
   await requirePermission(req, 'branch.view');
   const regional = await branchRegionForCompany(req.companyId);
   sendData(res, {
     country: regional.code,
     countryName: regional.name,
+    defaultTimezone: regional.timezone,
+    phoneRules: phoneRulesForCountry(regional.code),
     locations: branchLocationsForCountry(regional.code)
   });
 }));
@@ -4950,9 +4992,9 @@ router.post('/branches', requireRole(...adminRoles), validate(branchSchema), asy
       region: location.region,
       city: location.city,
       address: req.body.address,
-      timezone: location.timezone,
-      phone: req.body.phone,
-      whatsappPhone: req.body.whatsappPhone,
+      timezone: regional.timezone,
+      phone: branchPhoneForCountry(req.body.phone, regional),
+      whatsappPhone: branchPhoneForCountry(req.body.whatsappPhone, regional),
       email: req.body.email,
       active: req.body.active !== false
     }
@@ -4968,19 +5010,19 @@ router.patch('/branches/:id', requireRole(...adminRoles), validate(idParam, 'par
   const update = {
     name: req.body.name,
     address: req.body.address,
-    phone: req.body.phone,
-    whatsappPhone: req.body.whatsappPhone,
+    phone: req.body.phone === undefined ? undefined : branchPhoneForCountry(req.body.phone, regional),
+    whatsappPhone: req.body.whatsappPhone === undefined ? undefined : branchPhoneForCountry(req.body.whatsappPhone, regional),
     email: req.body.email,
     active: req.body.active,
-    country: regional.code
+    country: regional.code,
+    timezone: regional.timezone
   };
   if (req.body.city) {
     const location = branchLocationForCountry(regional.code, req.body.city);
     if (!location) throw new AppError(400, 'Choose a city from the available list.');
     update.city = location.city;
     update.region = location.region;
-    update.timezone = location.timezone;
-    if (location.city !== existing.city) update.code = await nextBranchCode(req.companyId, location.code, existing.id);
+    update.code = await nextBranchCode(req.companyId, location.code, existing.id);
   }
   const data = await prisma.branch.update({ where: { id: req.params.id }, data: update });
   await audit(req, 'UPDATE', 'Branch', data.id);

@@ -71,6 +71,29 @@
   function bindRegister() {
     const form = document.querySelector('[data-register-form]');
     if (!form) return;
+    const country = form.querySelector('[data-register-country]');
+    const branchCity = form.querySelector('[data-register-branch-city]');
+    const escapeHtml = (value) => String(value == null ? '' : value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+    const loadBranchCities = async () => {
+      if (!country || !branchCity) return;
+      const selected = branchCity.value;
+      branchCity.disabled = true;
+      branchCity.innerHTML = '<option value="">Loading cities...</option>';
+      try {
+        const payload = await api(`/public/branch-location-options?countryCode=${encodeURIComponent(country.value)}`);
+        const locations = payload && Array.isArray(payload.locations) ? payload.locations : [];
+        branchCity.innerHTML = '<option value="">Choose a city</option>' + locations.map((item) => `<option value="${escapeHtml(item.city)}">${escapeHtml(item.city)} — ${escapeHtml(item.region)}</option>`).join('');
+        if (locations.some((item) => item.city === selected)) branchCity.value = selected;
+      } catch (error) {
+        branchCity.innerHTML = '<option value="">Could not load cities</option>';
+        message(error.message || 'Could not load cities.');
+      } finally {
+        branchCity.disabled = false;
+        window.RevEngineFormUX?.refresh(branchCity);
+      }
+    };
+    country?.addEventListener('change', loadBranchCities);
+    loadBranchCities();
     const steps = Array.from(form.querySelectorAll('[data-signup-step]'));
     const showStep = (number) => {
       steps.forEach((step) => { step.hidden = step.dataset.signupStep !== String(number); });

@@ -30,17 +30,31 @@
 
       <section class="panel" data-owner-panel hidden>
         <div class="panel-head"><div><h3>Add company</h3><p class="muted">Only add another company when the business enters another country or uses a separate registered company.</p></div><span class="badge blue">Owner only</span></div>
-        <form class="form-grid" data-workspace-form>
+        <form class="form-grid workspace-create-form" data-workspace-form>
+          <div class="form-section-title span-2">
+            <strong>Company identity</strong>
+            <small>Use the registered details for this country.</small>
+          </div>
           <div class="field"><label>Company name</label><input name="name" required minlength="2" placeholder="Rev Engine South Africa"></div>
-          <div class="field"><label>Country</label><select name="countryCode" required><option value="ZW">Zimbabwe</option><option value="ZA">South Africa</option></select></div>
+          <div class="field"><label>Country</label><select name="countryCode" required data-workspace-country><option value="ZW">Zimbabwe</option><option value="ZA">South Africa</option></select></div>
           <div class="field"><label>Registered company name <span class="optional-label">Optional</span></label><input name="legalName" maxlength="200"></div>
           <div class="field"><label>Registration number <span class="optional-label">Optional</span></label><input name="registrationNumber" maxlength="120"></div>
           <div class="field"><label>Tax number <span class="optional-label">Optional</span></label><input name="taxNumber" maxlength="120"></div>
-          <div class="field"><label>Business phone <span class="optional-label">Optional</span></label><input name="phone" maxlength="80"></div>
-          <div class="field"><label>Business email <span class="optional-label">Optional</span></label><input name="email" type="email"></div>
-          <div class="field"><label>Main branch name</label><input name="mainBranchName" required value="Main Branch"></div>
-          <div class="field"><label>Main branch city <span class="optional-label">Optional</span></label><input name="mainBranchCity" maxlength="120" placeholder="Cape Town"></div>
-          <div class="field span-2"><label>Business address <span class="optional-label">Optional</span></label><input name="address" maxlength="500"></div>
+          <div class="field"><label>Business address <span class="optional-label">Optional</span></label><input name="address" maxlength="500"></div>
+
+          <div class="form-section-title span-2">
+            <strong>Company contact</strong>
+            <small>These details belong to this company, not the whole business group.</small>
+          </div>
+          <div class="field"><label>Business phone <span class="optional-label">Optional</span></label><input name="phone" maxlength="80" autocomplete="tel"></div>
+          <div class="field"><label>Business email <span class="optional-label">Optional</span></label><input name="email" type="email" autocomplete="email"></div>
+
+          <div class="form-section-title span-2">
+            <strong>Main branch</strong>
+            <small>The branch code and time zone are set automatically from the city.</small>
+          </div>
+          <div class="field"><label>Main branch name</label><input name="mainBranchName" required minlength="2" maxlength="160" value="Main Branch"></div>
+          <div class="field"><label>Main branch city</label><select name="mainBranchCity" required data-main-branch-city><option value="">Choose a city</option></select></div>
           <p class="fc-form-error span-2" data-workspace-error hidden></p>
           <div class="fc-form-actions span-2"><button class="primary-button" type="submit">Add company</button></div>
         </form>

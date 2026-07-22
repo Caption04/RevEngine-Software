@@ -1,3 +1,5 @@
+const { databaseApiFailure } = require('./services/databaseReadiness.service');
+
 class AppError extends Error {
   constructor(status, message, details) {
     super(message);
@@ -39,16 +41,29 @@ function errorHandler(error, req, res, next) {
     return res.status(404).json({ ok: false, error: { message: 'Resource not found' } });
   }
 
-  const status = error.status || 500;
-  const message = status === 500 ? 'Something went wrong.' : error.message;
-  if (status === 500) {
+  const databaseFailure = databaseApiFailure(error);
+  const status = databaseFailure ? databaseFailure.status : error.status || 500;
+  const message = databaseFailure
+    ? databaseFailure.message
+    : status === 500
+      ? 'Something went wrong.'
+      : error.message;
+
+  if (status >= 500) {
     console.error('[server-error]', {
       method: req.method,
       path: req.path,
-      message: redact(error && error.message || 'Unknown error')
+      category: databaseFailure && databaseFailure.category || 'UNEXPECTED_ERROR',
+      code: error && error.code || null,
+      message: redact(error && error.message || 'Unknown error'),
+      stack: process.env.NODE_ENV === 'production' ? undefined : redact(error && error.stack || '')
     });
   }
-  return res.status(status).json({ ok: false, error: { message, details: error.details } });
+
+  const details = databaseFailure
+    ? undefined
+    : error.details;
+  return res.status(status).json({ ok: false, error: { message, details } });
 }
 
 module.exports = { AppError, asyncHandler, errorHandler, notFound, redact, sendData };

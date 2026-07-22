@@ -4,56 +4,143 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rev Engine Branches</title>
-    <link rel="stylesheet" href="assets/app.css?v=ux-stabilization-1">
+    <link rel="stylesheet" href="assets/app.css?v=branch-premium-1">
     <script defer src="assets/ui-feedback.js"></script>
     <script defer src="assets/layout.js"></script>
-    <script defer src="assets/enterprise-pages.js?v=ux-stabilization-1"></script>
+    <script defer src="assets/enterprise-pages.js?v=branch-premium-1"></script>
   </head>
-  <body data-page="branches" data-title="Branches">
-    <section class="page">
-      <div class="hero-row">
+  <body data-page="branches" data-title="Branches" data-page-search="off">
+    <section class="page om-management-page branch-management-page">
+      <header class="om-page-hero">
         <div class="hero-copy">
-          <p class="eyebrow">Multi-location operations</p>
+          <p class="eyebrow">Company locations</p>
           <h2>Branches</h2>
-          <p>Use branches when a business has multiple offices, depots, cities, or operating units. Branches let admins filter jobs, customers, stock, workers, reports, and approvals without mixing every location into one view.</p>
+          <p>Keep customers, work orders, technicians, and stock tied to the right location.</p>
         </div>
-        <span class="api-status" data-status>Loading...</span>
-      </div>
-      <section class="grid three compact-guide-grid">
-        <article class="card"><h3>What this is for</h3><p class="muted">Harare branch, Bulawayo branch, Johannesburg branch, warehouse team, or a regional depot.</p></article>
-        <article class="card"><h3>Why it matters</h3><p class="muted">Managers can see only the jobs, inventory, customers, and reports relevant to their location.</p></article>
-        <article class="card"><h3>When to skip it</h3><p class="muted">A small business with one office can use one default branch and ignore this page.</p></article>
+        <div class="branch-hero-actions">
+          <span class="api-status" data-status>Loading branches...</span>
+          <button class="primary-button" type="button" data-open-branch-modal data-required-permission="branch.manage">Add branch</button>
+        </div>
+      </header>
+
+      <section class="branch-summary-strip" aria-label="Branch summary">
+        <article>
+          <span>Total branches</span>
+          <strong data-branch-total>0</strong>
+          <small>All company locations</small>
+        </article>
+        <article>
+          <span>Active branches</span>
+          <strong data-branch-active>0</strong>
+          <small>Open for daily work</small>
+        </article>
+        <article>
+          <span>Contact details</span>
+          <strong data-branch-contact-coverage>0%</strong>
+          <small>Branches with phone or email</small>
+        </article>
       </section>
-      <section class="panel">
-        <div class="panel-head"><div><h3 data-branch-form-title>Create branch</h3><p class="muted" data-branch-form-help>Choose the city. Rev Engine fills in the code and time zone for you.</p></div><span class="badge gray">Admin</span></div>
-        <form class="form-grid branch-form" data-branch-form>
-          <div class="field"><label for="branch-name">Name</label><input id="branch-name" name="name" required placeholder="Harare Operations"></div>
-          <div class="field">
-            <label for="branch-city-search">City</label>
-            <div class="searchable-select" data-branch-city-picker>
-              <input id="branch-city-search" type="search" required autocomplete="off" placeholder="Search for a city" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="branch-city-options" data-branch-city-search>
-              <input type="hidden" name="city" data-branch-city-value>
-              <div id="branch-city-options" class="searchable-select-menu" role="listbox" hidden data-branch-city-options></div>
+
+      <div class="fc-modal branch-form-modal" data-branch-modal hidden>
+        <div class="fc-dialog branch-dialog" role="dialog" aria-modal="true" aria-labelledby="branch-form-title">
+          <div class="panel-head branch-panel-head">
+            <div>
+              <span class="section-kicker">Branch setup</span>
+              <h3 id="branch-form-title" data-branch-form-title>Add a branch</h3>
+              <p class="muted" data-branch-form-help>Choose a city. Rev Engine fills in the branch code and time zone.</p>
             </div>
-            <small class="field-help" data-branch-country-help>Only cities in the current company country are shown.</small>
+            <button class="icon-button" type="button" data-close-branch-modal aria-label="Close branch form">×</button>
           </div>
-          <div class="field"><label for="branch-code">Branch code</label><input id="branch-code" data-branch-code readonly aria-readonly="true" placeholder="Set from city"></div>
-          <div class="field"><label for="branch-timezone">Time zone</label><input id="branch-timezone" data-branch-timezone readonly aria-readonly="true" placeholder="Set from city"></div>
-          <div class="field span-2"><label for="branch-address">Address</label><input id="branch-address" name="address" placeholder="Office or depot address"></div>
-          <div class="field"><label for="branch-phone">Branch phone</label><input id="branch-phone" name="phone" type="tel" autocomplete="tel" placeholder="+263 ..."></div>
-          <div class="field"><label for="branch-whatsapp">WhatsApp number</label><input id="branch-whatsapp" name="whatsappPhone" type="tel" autocomplete="tel" placeholder="+263 ..."></div>
-          <div class="field"><label for="branch-email">Branch email</label><input id="branch-email" name="email" type="email" autocomplete="email" placeholder="harare@company.com"></div>
-          <div class="field branch-location-summary" data-branch-location-summary hidden>
-            <span>Location</span>
-            <strong data-branch-location-label></strong>
+
+          <form class="form-grid branch-form" data-branch-form novalidate>
+            <div class="form-section-title span-2">
+              <strong>Location</strong>
+              <small>Name the branch and choose where it operates.</small>
+            </div>
+
+            <div class="field">
+              <label for="branch-name">Branch name</label>
+              <input id="branch-name" name="name" required minlength="2" maxlength="160" placeholder="Harare Operations">
+            </div>
+
+            <div class="field">
+              <label for="branch-city-search">City</label>
+              <div class="searchable-select" data-branch-city-picker>
+                <input id="branch-city-search" type="search" required autocomplete="off" placeholder="Search for a city" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="branch-city-options" data-branch-city-search>
+                <button class="searchable-select-toggle" type="button" aria-label="Show city options" aria-controls="branch-city-options" aria-expanded="false" data-branch-city-toggle></button>
+                <input type="hidden" name="city" data-branch-city-value>
+                <div id="branch-city-options" class="searchable-select-menu" role="listbox" hidden data-branch-city-options></div>
+              </div>
+              <small class="field-help" data-branch-country-help>Only cities in the current company country are shown.</small>
+            </div>
+
+            <div class="field">
+              <label for="branch-code">Branch code</label>
+              <input id="branch-code" data-branch-code readonly aria-readonly="true" placeholder="Set from city">
+              <small class="field-help">Used in records and reports.</small>
+            </div>
+
+            <div class="field">
+              <label for="branch-timezone">Time zone</label>
+              <input id="branch-timezone" data-branch-timezone readonly aria-readonly="true" placeholder="Set from company country">
+              <small class="field-help">Set automatically for this company.</small>
+            </div>
+
+            <div class="field span-2">
+              <label for="branch-address">Street address</label>
+              <input id="branch-address" name="address" minlength="5" maxlength="200" data-address-field="true" placeholder="Office, depot, or warehouse address">
+            </div>
+
+            <div class="field branch-location-summary span-2" data-branch-location-summary hidden>
+              <span>Selected location</span>
+              <strong data-branch-location-label></strong>
+            </div>
+
+            <div class="form-section-title span-2">
+              <strong>Contact details</strong>
+              <small>Use the details customers and staff should use for this branch.</small>
+            </div>
+
+            <div class="field">
+              <label for="branch-phone">Branch phone</label>
+              <input id="branch-phone" name="phone" type="tel" maxlength="40" data-phone-field="true" autocomplete="tel" placeholder="Phone number">
+              <small class="field-help" data-branch-phone-help>Use a valid local mobile or landline number.</small>
+            </div>
+
+            <div class="field">
+              <label for="branch-whatsapp">WhatsApp number</label>
+              <input id="branch-whatsapp" name="whatsappPhone" type="tel" maxlength="40" data-phone-field="true" autocomplete="tel" placeholder="WhatsApp number">
+              <small class="field-help" data-branch-whatsapp-help>Use the number customers can message.</small>
+            </div>
+
+            <div class="field span-2">
+              <label for="branch-email">Branch email</label>
+              <input id="branch-email" name="email" type="email" maxlength="254" autocomplete="email" placeholder="branch@company.com">
+            </div>
+
+            <div class="branch-inheritance-note span-2">
+              <strong>Company settings apply automatically</strong>
+              <span>Country, currency, tax rules, and online payments come from the current company.</span>
+            </div>
+
+            <div class="form-actions span-2 branch-form-actions">
+              <button type="button" class="secondary-button" data-branch-cancel>Cancel</button>
+              <button type="submit" class="primary-button" data-branch-submit>Create branch</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <section class="panel branch-directory-panel">
+        <div class="panel-head branch-directory-head">
+          <div>
+            <span class="section-kicker">Branch directory</span>
+            <h3>Your branches</h3>
+            <p class="muted">Review each location and keep its contact details up to date.</p>
           </div>
-          <div class="field span-2"><small>The country, currency, tax rules, and online payment provider come from the current company.</small></div>
-          <div class="form-actions span-2"><button type="button" class="secondary-button" data-branch-cancel hidden>Cancel</button><button type="submit" class="primary-button" data-branch-submit>Create branch</button></div>
-        </form>
-      </section>
-      <section class="panel">
-        <div class="panel-head"><h3>Branch list</h3><button class="secondary-button compact" type="button" data-refresh>Refresh</button></div>
-        <div class="table-wrap"><table class="data-table"><thead><tr><th>Name</th><th>Code</th><th>Location</th><th>Contact</th><th>Status</th><th></th></tr></thead><tbody data-branches></tbody></table></div>
+          <button class="secondary-button compact" type="button" data-refresh>Refresh</button>
+        </div>
+        <div class="branch-directory" data-branches></div>
       </section>
     </section>
   </body>

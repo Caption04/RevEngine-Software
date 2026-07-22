@@ -1,16 +1,17 @@
+const { Prisma } = require('@prisma/client');
 const { app } = require('./src/app');
 const { prisma } = require('./src/db');
 const { processPaymentNotificationOutbox } = require('./src/services/payments/paymentNotificationOutbox.service');
 const { reconcileDuePaymentLinks } = require('./src/services/payments/paymentReconciliation.service');
+const { formatDatabaseReadinessFailure, inspectDatabaseReadiness } = require('./src/services/databaseReadiness.service');
 
 const PORT = Number(process.env.PORT || 3000);
 
-const server = app.listen(PORT, () => {
-  console.log(`Rev Engine server running at http://localhost:${PORT}`);
-});
-
+let server = null;
+let paymentJobTimer = null;
 let paymentJobsRunning = false;
 const paymentJobIntervalMs = Math.max(60_000, Number(process.env.PAYMENT_RECONCILIATION_INTERVAL_MS || 60_000));
+
 async function runPaymentJobs() {
   if (paymentJobsRunning || process.env.DISABLE_PAYMENT_BACKGROUND_JOBS === 'true') return;
   paymentJobsRunning = true;
@@ -23,12 +24,36 @@ async function runPaymentJobs() {
     paymentJobsRunning = false;
   }
 }
-const paymentJobTimer = setInterval(runPaymentJobs, paymentJobIntervalMs);
-paymentJobTimer.unref();
-setTimeout(runPaymentJobs, 5_000).unref();
+
+async function start() {
+  const readiness = await inspectDatabaseReadiness(prisma, {
+    dataModel: Prisma.dmmf.datamodel.models
+  });
+
+  if (!readiness.ready) {
+    console.error(formatDatabaseReadinessFailure(readiness));
+    await prisma.$disconnect();
+    process.exitCode = 1;
+    return null;
+  }
+
+  server = app.listen(PORT, () => {
+    console.log(`Rev Engine server running at http://localhost:${PORT}`);
+  });
+
+  paymentJobTimer = setInterval(runPaymentJobs, paymentJobIntervalMs);
+  paymentJobTimer.unref();
+  setTimeout(runPaymentJobs, 5_000).unref();
+  return server;
+}
 
 async function shutdown() {
-  clearInterval(paymentJobTimer);
+  if (paymentJobTimer) clearInterval(paymentJobTimer);
+  if (!server) {
+    await prisma.$disconnect();
+    process.exit(0);
+    return;
+  }
   server.close(async () => {
     await prisma.$disconnect();
     process.exit(0);
@@ -37,3 +62,11 @@ async function shutdown() {
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+
+start().catch(async (error) => {
+  console.error('[startup-error]', String(error && error.stack || error));
+  await prisma.$disconnect().catch(() => {});
+  process.exitCode = 1;
+});
+
+module.exports = { start };

@@ -101,7 +101,7 @@ async function organizationContextForUser(user, client = prisma) {
   if (!user || !user.companyId) return null;
   const activeCompany = await client.company.findUnique({
     where: { id: user.companyId },
-    include: { group: true, financeSettings: true }
+    include: { group: true, financeSettings: true, branding: true }
   });
   if (!activeCompany) return null;
 
@@ -114,9 +114,34 @@ async function organizationContextForUser(user, client = prisma) {
     : { id: activeCompany.id };
   const workspaces = await client.company.findMany({
     where: workspaceWhere,
-    include: { financeSettings: true, _count: { select: { branches: true, users: true } } },
+    include: { financeSettings: true, branding: true, _count: { select: { branches: true, users: true } } },
     orderBy: [{ createdAt: 'asc' }, { name: 'asc' }]
   });
+
+  const mappedWorkspaces = workspaces.map((company) => {
+    const code = normalizeCountryCode(company.financeSettings && company.financeSettings.country) || normalizeCountryCode(company.market);
+    return {
+      id: company.id,
+      name: company.name,
+      legalName: company.legalName || null,
+      countryCode: code,
+      countryName: code && COUNTRY_CONFIG[code] ? COUNTRY_CONFIG[code].name : null,
+      currency: company.financeSettings && company.financeSettings.defaultCurrency || null,
+      timezone: company.financeSettings && company.financeSettings.timezone || null,
+      branding: {
+        brandName: company.branding && company.branding.brandName || null,
+        logoUrl: company.branding && company.branding.logoUrl || null,
+        primaryColor: company.branding && company.branding.primaryColor || '#2363ff',
+        secondaryColor: company.branding && company.branding.secondaryColor || '#263ff1',
+        accentColor: company.branding && company.branding.accentColor || '#12a96d'
+      },
+      onboardingState: company.onboardingState || 'COMPLETED',
+      branchCount: company._count && company._count.branches || 0,
+      memberCount: company._count && company._count.users || 0,
+      active: company.id === activeCompany.id
+    };
+  });
+  const activeWorkspace = mappedWorkspaces.find((company) => company.id === activeCompany.id) || mappedWorkspaces[0] || null;
 
   return {
     group: activeCompany.group ? {
@@ -125,22 +150,8 @@ async function organizationContextForUser(user, client = prisma) {
       role: membership ? membership.role : null
     } : null,
     activeWorkspaceId: activeCompany.id,
-    workspaces: workspaces.map((company) => {
-      const code = normalizeCountryCode(company.financeSettings && company.financeSettings.country) || normalizeCountryCode(company.market);
-      return {
-        id: company.id,
-        name: company.name,
-        legalName: company.legalName || null,
-        countryCode: code,
-        countryName: code && COUNTRY_CONFIG[code] ? COUNTRY_CONFIG[code].name : null,
-        currency: company.financeSettings && company.financeSettings.defaultCurrency || null,
-        timezone: company.financeSettings && company.financeSettings.timezone || null,
-        onboardingState: company.onboardingState || 'COMPLETED',
-        branchCount: company._count && company._count.branches || 0,
-        memberCount: company._count && company._count.users || 0,
-        active: company.id === activeCompany.id
-      };
-    })
+    activeCompany: activeWorkspace,
+    workspaces: mappedWorkspaces
   };
 }
 

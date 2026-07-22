@@ -6,6 +6,7 @@ const cors = require('cors');
 const express = require('express');
 const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
+const { Prisma } = require('@prisma/client');
 const rateLimit = require('express-rate-limit');
 const morgan = require('morgan');
 const { apiRouter } = require('./routes/api');
@@ -15,6 +16,7 @@ const { errorHandler } = require('./errors');
 const { assertValidEnv } = require('./config/env');
 const { effectiveAccessForUser, hasFullBusinessAccess } = require('./services/accessControl.service');
 const { groupMembershipForCompany } = require('./services/organization.service');
+const { inspectDatabaseReadiness } = require('./services/databaseReadiness.service');
 
 const app = express();
 const rootDir = path.resolve(__dirname, '..');
@@ -256,7 +258,25 @@ async function htmlPageAccessGuard(req, res, next) {
 app.get('/healthz', (req, res) => res.json({ ok: true, status: 'alive' }));
 app.get('/readyz', async (req, res) => {
   try {
-    if (typeof prisma.$queryRaw === 'function') await prisma.$queryRaw`SELECT 1`;
+    if (process.env.NODE_ENV === 'test') {
+      if (typeof prisma.$queryRaw === 'function') await prisma.$queryRaw`SELECT 1`;
+      return res.json({ ok: true, status: 'ready' });
+    }
+
+    const readiness = await inspectDatabaseReadiness(prisma, {
+      dataModel: Prisma.dmmf.datamodel.models
+    });
+    if (!readiness.ready) {
+      return res.status(503).json({
+        ok: false,
+        status: 'not_ready',
+        reason: readiness.reason,
+        pendingMigrations: readiness.pendingMigrations,
+        failedMigrations: readiness.failedMigrations,
+        missingTableCount: readiness.missingTables.length,
+        missingColumnCount: readiness.missingColumns.length
+      });
+    }
     return res.json({ ok: true, status: 'ready' });
   } catch (error) {
     return res.status(503).json({ ok: false, status: 'not_ready' });

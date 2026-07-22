@@ -21,6 +21,27 @@
     return body;
   }
 
+  async function fillMainBranchCities(form) {
+    const country = form && form.querySelector('[data-workspace-country]');
+    const city = form && form.querySelector('[data-main-branch-city]');
+    if (!country || !city) return;
+    const selected = city.value;
+    city.disabled = true;
+    city.innerHTML = '<option value="">Loading cities...</option>';
+    try {
+      const payload = await api(`/public/branch-location-options?countryCode=${encodeURIComponent(country.value)}`);
+      const locations = payload && Array.isArray(payload.locations) ? payload.locations : [];
+      city.innerHTML = '<option value="">Choose a city</option>' + locations.map((item) => `<option value="${escapeHtml(item.city)}">${escapeHtml(item.city)} — ${escapeHtml(item.region)}</option>`).join('');
+      if (locations.some((item) => item.city === selected)) city.value = selected;
+    } catch (error) {
+      city.innerHTML = '<option value="">Could not load cities</option>';
+      notify(error.message || 'Could not load cities.', false);
+    } finally {
+      city.disabled = false;
+      window.RevEngineFormUX?.refresh(city);
+    }
+  }
+
   function isOwner() {
     return Boolean(state && state.group && state.group.role === 'OWNER');
   }
@@ -80,6 +101,11 @@
   }
 
   const workspaceForm = document.querySelector('[data-workspace-form]');
+  if (workspaceForm) {
+    const country = workspaceForm.querySelector('[data-workspace-country]');
+    country?.addEventListener('change', () => fillMainBranchCities(workspaceForm));
+    fillMainBranchCities(workspaceForm);
+  }
   if (workspaceForm) workspaceForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const errorNode = document.querySelector('[data-workspace-error]');
@@ -91,6 +117,7 @@
       await api('/organization/workspaces', { method: 'POST', body: JSON.stringify(formBody(workspaceForm)) });
       workspaceForm.reset();
       workspaceForm.mainBranchName.value = 'Main Branch';
+      await fillMainBranchCities(workspaceForm);
       await load();
       notify('Company added.');
     } catch (error) {

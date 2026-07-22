@@ -133,7 +133,7 @@
       return `<details class="nav-group"${isOpen ? ' open' : ''}>
         <summary class="nav-group-title">
           <span class="nav-group-copy"><span>${title}</span><small>${purpose}</small></span>
-          <span class="nav-group-chevron" aria-hidden="true">⌄</span>
+          <span class="nav-group-chevron" aria-hidden="true"></span>
         </summary>
         <div class="nav-group-links">${links.map((page) => navLink(page, current)).join('')}</div>
       </details>`;
@@ -165,6 +165,51 @@
       .toUpperCase();
   }
 
+  function safeHex(value, fallback) {
+    const hex = String(value || '').trim();
+    return /^#[0-9a-f]{6}$/i.test(hex) ? hex.toLowerCase() : fallback;
+  }
+
+  function hexRgb(value) {
+    const hex = safeHex(value, '#2363ff').slice(1);
+    return {
+      r: Number.parseInt(hex.slice(0, 2), 16),
+      g: Number.parseInt(hex.slice(2, 4), 16),
+      b: Number.parseInt(hex.slice(4, 6), 16)
+    };
+  }
+
+  function blendWithWhite(value, whiteWeight) {
+    const rgb = hexRgb(value);
+    const weight = Math.max(0, Math.min(1, Number(whiteWeight)));
+    const part = (channel) => Math.round(channel * (1 - weight) + 255 * weight).toString(16).padStart(2, '0');
+    return `#${part(rgb.r)}${part(rgb.g)}${part(rgb.b)}`;
+  }
+
+  function readableInk(value) {
+    const rgb = hexRgb(value);
+    const luminance = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
+    return luminance > 0.62 ? '#101828' : '#ffffff';
+  }
+
+  function applyAccountBrand(user) {
+    const organization = user && user.organization;
+    const workspaces = organization && Array.isArray(organization.workspaces) ? organization.workspaces : [];
+    const active = organization && (organization.activeCompany || workspaces.find((company) => company.id === organization.activeWorkspaceId));
+    const branding = active && active.branding || {};
+    const primary = safeHex(branding.primaryColor, '#2363ff');
+    const secondary = safeHex(branding.secondaryColor, primary);
+    const root = document.documentElement;
+    root.style.setProperty('--account-brand-primary', primary);
+    root.style.setProperty('--account-brand-secondary', secondary);
+    root.style.setProperty('--account-brand-ink', readableInk(primary));
+    root.style.setProperty('--account-brand-surface-a', blendWithWhite(primary, 0.92));
+    root.style.setProperty('--account-brand-surface-b', blendWithWhite(secondary, 0.94));
+    root.style.setProperty('--account-brand-border', blendWithWhite(primary, 0.65));
+    const rgb = hexRgb(primary);
+    root.style.setProperty('--account-brand-shadow', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, .18)`);
+  }
+
   function renderAccountIdentity(user) {
     if (!user) return;
     document.querySelectorAll('[data-current-user-name]').forEach((node) => {
@@ -186,6 +231,7 @@
 
     currentPermissionSet = new Set(user && user.effectivePermissions || []);
     if (navNode) navNode.innerHTML = nav(current, role, user && user.effectivePermissions);
+    applyAccountBrand(user);
     renderAccountIdentity(user);
     renderCompanyMenu(user);
 
@@ -282,7 +328,7 @@
       <button class="account-trigger" type="button" data-account-trigger aria-haspopup="menu" aria-expanded="false">
         <span class="account-avatar" data-account-initials>FC</span>
         <span class="account-trigger-copy"><strong data-current-user-name>Signed in</strong><small data-current-user-role>Account</small></span>
-        <span class="account-chevron" aria-hidden="true">⌄</span>
+        <span class="account-chevron" aria-hidden="true"></span>
       </button>
       <div class="account-dropdown" role="menu" data-account-dropdown hidden>
         <div class="account-company-list" data-company-list hidden></div>

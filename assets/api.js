@@ -366,6 +366,16 @@
     if (!document.querySelector('[data-branding-form]')) return;
     const profile = state.profile || {};
     const branding = currentBranding();
+    const activeCompany = state.user && state.user.organization && (state.user.organization.activeCompany || (state.user.organization.workspaces || []).find((company) => company.id === state.user.organization.activeWorkspaceId));
+    const companyName = profile.name || activeCompany && activeCompany.name || 'Current company';
+    const companyTitle = document.querySelector('[data-company-settings-title]');
+    const companyLabel = document.querySelector('[data-settings-company-name]');
+    const companyNote = document.querySelector('[data-company-settings-note]');
+    if (companyTitle) companyTitle.textContent = `${companyName} details`;
+    if (companyLabel) companyLabel.textContent = companyName;
+    if (companyNote) companyNote.textContent = state.user && state.user.organization && (state.user.organization.workspaces || []).length > 1
+      ? 'These details apply only to the company currently open. Switch company from your account menu to edit another one.'
+      : 'These details are used for this company, its customer documents, and its branches.';
     document.querySelectorAll('[data-profile-field]').forEach((field) => { field.value = profile[field.dataset.profileField] || ''; });
     document.querySelectorAll('[data-branding-field]').forEach((field) => { field.value = branding[field.dataset.brandingField] || ''; });
     setFieldValue('[data-branding-field="primaryColor"]', branding.primaryColor || '#2363ff');
@@ -375,23 +385,37 @@
 
   function updateBrandingPreview() {
     const branding = currentBranding();
-    const nameInput = document.querySelector('[data-branding-field="brandName"]');
-    const companyInput = document.querySelector('[data-profile-field="name"]');
-    const logoInput = document.querySelector('[data-branding-field="logoUrl"]');
-    const colorInput = document.querySelector('[data-branding-field="primaryColor"]');
-    const footerInput = document.querySelector('[data-branding-field="invoiceFooter"]');
-    const name = nameInput && nameInput.value || companyInput && companyInput.value || branding.brandName || 'Rev Engine';
-    const logoUrl = logoInput && logoInput.value || branding.logoUrl;
-    const primaryColor = colorInput && colorInput.value || branding.primaryColor || '#2363ff';
-    const footer = footerInput && footerInput.value || branding.invoiceFooter || 'Invoice footer preview will appear here.';
+    const fieldValue = (selector) => {
+      const field = document.querySelector(selector);
+      return field && String(field.value || '').trim();
+    };
+    const name = fieldValue('[data-branding-field="brandName"]') || fieldValue('[data-profile-field="name"]') || branding.brandName || 'Rev Engine';
+    const logoUrl = fieldValue('[data-branding-field="logoUrl"]') || branding.logoUrl;
+    const primaryColor = fieldValue('[data-branding-field="primaryColor"]') || branding.primaryColor || '#2363ff';
+    const companyEmail = fieldValue('[data-profile-field="email"]');
+    const supportEmail = fieldValue('[data-branding-field="supportEmail"]') || branding.supportEmail;
+    const supportPhone = fieldValue('[data-branding-field="supportPhone"]') || branding.supportPhone;
+    const website = fieldValue('[data-branding-field="websiteUrl"]') || branding.websiteUrl;
+    const contactText = [companyEmail || supportEmail, supportPhone].filter(Boolean).join(' · ') || 'Company contact details';
+    const supportText = [supportEmail, supportPhone].filter(Boolean).join(' · ') || 'Support details';
+    const websiteText = website ? website.replace(/^https?:\/\//i, '').replace(/\/$/, '') : 'Website';
+    const companyDetailsTitle = document.querySelector('[data-company-settings-title]');
+    const companyDetailsLabel = document.querySelector('[data-settings-company-name]');
+    const companyProfileName = fieldValue('[data-profile-field="name"]') || state.profile && state.profile.name || name;
+    if (companyDetailsTitle) companyDetailsTitle.textContent = `${companyProfileName} details`;
+    if (companyDetailsLabel) companyDetailsLabel.textContent = companyProfileName;
     const title = document.querySelector('[data-preview-title]');
     const logo = document.querySelector('[data-preview-logo]');
     const bar = document.querySelector('[data-preview-bar]');
-    const footerText = document.querySelector('[data-preview-footer-text]');
+    const contact = document.querySelector('[data-preview-contact]');
+    const support = document.querySelector('[data-preview-support]');
+    const websiteNode = document.querySelector('[data-preview-website]');
     if (title) title.textContent = name;
     if (logo) logo.innerHTML = logoUrl ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(name)} logo">` : initials(name);
     if (bar) bar.style.background = primaryColor;
-    if (footerText) footerText.textContent = footer;
+    if (contact) contact.textContent = contactText;
+    if (support) support.textContent = supportText;
+    if (websiteNode) websiteNode.textContent = websiteText;
   }
 
   function formPayload(selector) {
@@ -3828,7 +3852,10 @@
 
         const reader = new FileReader();
         reader.addEventListener('load', () => {
-          preview.innerHTML = `<img src="${reader.result}" alt="Company logo preview">`;
+          const logoMarkup = `<img src="${reader.result}" alt="Company logo preview">`;
+          preview.innerHTML = logoMarkup;
+          const documentPreview = document.querySelector('[data-preview-logo]');
+          if (documentPreview) documentPreview.innerHTML = logoMarkup;
         });
         reader.readAsDataURL(file);
       });

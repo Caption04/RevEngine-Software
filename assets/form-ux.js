@@ -63,6 +63,31 @@
     return null;
   }
 
+  function nationalPhoneDigits(value, countryCode) {
+    const compact = String(value || '').trim().replace(/[\s().-]+/g, '');
+    if (!compact || !/^\+?\d+$/.test(compact)) return null;
+    const digits = compact.replace(/^\+/, '');
+    if (digits.startsWith(`00${countryCode}`)) return digits.slice(countryCode.length + 2);
+    if (digits.startsWith(countryCode)) return digits.slice(countryCode.length);
+    if (digits.startsWith('0')) return digits.slice(1);
+    return null;
+  }
+
+  function countryPhoneValidation(input, value) {
+    const country = String(input.dataset.phoneCountry || '').toUpperCase();
+    if (!country) return null;
+    const code = country === 'ZA' || country === 'SA' ? '27' : country === 'ZW' ? '263' : '';
+    if (!code) return null;
+    const national = nationalPhoneDigits(value, code);
+    const valid = country === 'ZW'
+      ? Boolean(national && (/^(?:71|73|77|78)\d{7}$/.test(national) || /^2\d{7,8}$/.test(national) || /^[3-6]\d{6,8}$/.test(national) || /^86\d{7}$/.test(national)))
+      : Boolean(national && /^[1-8]\d{8}$/.test(national));
+    if (valid) return '';
+    return country === 'ZW'
+      ? 'Enter a Zimbabwe mobile or landline number, for example 077 123 4567 or 0242 123 456.'
+      : 'Enter a South African mobile or landline number, for example 082 123 4567 or 011 123 4567.';
+  }
+
   function validationMessage(input) {
     if (!isVisible(input)) return '';
     const value = String(input.value || '');
@@ -72,7 +97,28 @@
       return input.tagName === 'SELECT' ? `Choose ${label}.` : `Enter ${label}.`;
     }
     if (!value) return '';
-    if (input.type === 'email' && input.validity.typeMismatch) return 'Enter a valid email address.';
+    if (input.type === 'email') {
+      const normalizedEmail = value.trim();
+      const emailPattern = /^[^\s@]+@(?:[^\s@.]+\.)+[A-Za-z]{2,24}$/;
+      if (input.validity.typeMismatch || !emailPattern.test(normalizedEmail)) return 'Enter a valid email address.';
+    }
+    if (input.dataset.phoneField === 'true') {
+      const countryMessage = countryPhoneValidation(input, value);
+      if (countryMessage !== null) {
+        if (countryMessage) return countryMessage;
+      } else {
+        const digits = value.replace(/\D/g, '');
+        if (!/^\+?[0-9 ().-]+$/.test(value.trim()) || digits.length < 7 || digits.length > 15) {
+          return 'Enter a valid phone number with 7 to 15 digits.';
+        }
+      }
+    }
+    if (input.dataset.addressField === 'true') {
+      const address = value.trim();
+      if (address.length < 5 || !/\p{L}/u.test(address) || /[@<>]/.test(address)) {
+        return 'Enter a clear street address without symbols such as @.';
+      }
+    }
     if (input.minLength > 0 && value.length < input.minLength) return `Use at least ${input.minLength} characters.`;
     if (input.maxLength > 0 && value.length > input.maxLength) return `Use no more than ${input.maxLength} characters.`;
     if (input.validity.patternMismatch) return `Check ${label} and try again.`;
@@ -95,7 +141,8 @@
     node.textContent = message;
     node.hidden = !message;
     input.classList.toggle('field-input-invalid', Boolean(message));
-    input.classList.toggle('field-input-valid', Boolean(showSuccess && !message && String(input.value || '').length));
+    const showConfirmedSuccess = input.dataset.showValid === 'true' && showSuccess && !message && String(input.value || '').length;
+    input.classList.toggle('field-input-valid', Boolean(showConfirmedSuccess));
     input.setAttribute('aria-invalid', message ? 'true' : 'false');
     return !message;
   }

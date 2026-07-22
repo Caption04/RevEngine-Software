@@ -20,7 +20,7 @@
       </div>
       <section class="settings-layout">
         <aside class="panel settings-tabs" aria-label="Settings sections">
-          <button class="settings-tab active" type="button" data-settings-target="company" data-required-any-permission="company.settings.view,company.settings.manage,company.branding.manage">Company Information</button>
+          <button class="settings-tab active" type="button" data-settings-target="company" data-required-any-permission="company.settings.view,company.settings.manage,company.branding.manage">Company Details</button>
           <button class="settings-tab" type="button" data-settings-target="jobs" data-required-permission="company.settings.manage">Solar Work Order Defaults</button>
           <button class="settings-tab" type="button" data-settings-target="scheduling" data-required-permission="company.settings.manage">Scheduling</button>
           <button class="settings-tab" type="button" data-settings-target="billing" data-required-permission="settings.finance.manage">Invoice Defaults</button>
@@ -31,9 +31,13 @@
         </aside>
         <div class="settings-panels">
           <div class="panel settings-panel active" data-settings-panel="company" data-required-any-permission="company.settings.view,company.settings.manage,company.branding.manage">
-            <div class="panel-head">
-              <h2>Company Information</h2>
-              <!-- <span class="badge blue">White-label</span> -->
+            <div class="panel-head company-settings-context">
+              <div>
+                <span class="section-kicker">Current company</span>
+                <h2 data-company-settings-title>Company details</h2>
+                <p class="muted" data-company-settings-note>These details apply only to the company currently open.</p>
+              </div>
+              <span class="current-company-pill" data-settings-company-name>Current company</span>
             </div>
             <form class="form-grid" data-branding-form>
               <div class="field span-2">
@@ -113,14 +117,44 @@
                 <input id="address" name="address" placeholder="Not set" data-profile-field="address">
               </div>
               <div class="brand-preview span-2" data-brand-preview>
-                <div class="brand-preview-head">
-                  <div class="logo-preview small" data-preview-logo><img src="assets/rev-engine-mark.png" alt="Rev Engine logo"></div>
+                <div class="brand-preview-label-row">
                   <div>
-                    <strong data-preview-title>Rev Engine</strong>
-                    <small>Brand preview</small>
+                    <strong>Customer document preview</strong>
+                    <small>See how your brand appears on quotes and invoices.</small>
+                  </div>
+                  <span>Quote preview</span>
+                </div>
+                <div class="brand-preview-document">
+                  <div class="brand-preview-head">
+                    <div class="brand-preview-identity">
+                      <div class="logo-preview small" data-preview-logo><img src="assets/rev-engine-mark.png" alt="Rev Engine logo"></div>
+                      <div>
+                        <strong data-preview-title>Rev Engine</strong>
+                        <small data-preview-contact>Company contact details</small>
+                      </div>
+                    </div>
+                    <div class="brand-preview-document-meta">
+                      <span>QUOTE</span>
+                      <strong>Q-1042</strong>
+                    </div>
+                  </div>
+                  <div class="brand-preview-bar" data-preview-bar></div>
+                  <div class="brand-preview-body">
+                    <div>
+                      <small>Prepared for</small>
+                      <strong>Sample customer</strong>
+                      <span>Solar maintenance service</span>
+                    </div>
+                    <div class="brand-preview-total">
+                      <small>Total</small>
+                      <strong>USD 1,250.00</strong>
+                    </div>
+                  </div>
+                  <div class="brand-preview-footer">
+                    <span data-preview-support>Support details</span>
+                    <span data-preview-website>Website</span>
                   </div>
                 </div>
-                <div class="brand-preview-bar" data-preview-bar></div>
               </div>
               <div class="form-actions span-2">
                 <button class="primary-button" type="submit">Save Company Details</button>

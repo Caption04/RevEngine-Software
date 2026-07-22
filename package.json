@@ -21,7 +21,8 @@
         "db:baseline:migrations": "node scripts/baseline-prisma-migrations.js",
         "payments:migration-preflight": "node scripts/preflight-regional-payment-migration.js",
         "package:safe": "node scripts/package-safe-source.js",
-        "test:payments:postgres": "node scripts/run-payment-postgres-tests.js"
+        "test:payments:postgres": "node scripts/run-payment-postgres-tests.js",
+        "db:check": "node scripts/check-database-schema.js"
     },
     "dependencies": {
         "@prisma/client": "^5.22.0",
