@@ -28,7 +28,8 @@ test('branch inputs use real validation and do not show generic green success bo
   assert.match(html, /data-phone-field="true"/);
   assert.match(html, /data-address-field="true"/);
   assert.match(formUx, /digits\.length < 7 \|\| digits\.length > 15/);
-  assert.match(formUx, /symbols such as @/);
+  assert.match(formUx, /input\.dataset\.addressField === 'true'/);
+  assert.match(formUx, /\/\[@<>\]\/\.test\(address\)/);
   assert.match(formUx, /input\.dataset\.showValid === 'true'/);
   assert.match(routes, /optionalBranchPhone/);
   assert.match(routes, /optionalBranchAddress/);
@@ -43,7 +44,10 @@ test('editing a branch reapplies the prescribed city code even for legacy record
 
 test('account control is identical across pages', () => {
   const css = read('assets/app.css');
+  const layout = read('assets/layout.js');
   assert.match(css, /\.account-trigger\s*\{[\s\S]*width:\s*272px;[\s\S]*height:\s*64px;/);
-  assert.match(css, /\.account-avatar\s*\{[\s\S]*background:\s*linear-gradient\(135deg, #315efb, #183dc8\)\s*!important;/);
+  assert.match(css, /\.account-avatar\s*\{[\s\S]*background:\s*linear-gradient\(135deg,\s*var\(--account-brand-primary\),\s*var\(--account-brand-secondary\)\)/);
+  assert.match(layout, /const primary = safeHex\(branding\.primaryColor, '#2363ff'\)/);
+  assert.match(layout, /root\.style\.setProperty\('--account-brand-primary', primary\)/);
   assert.match(css, /\.account-chevron\s*\{[\s\S]*background-position:\s*center;/);
 });

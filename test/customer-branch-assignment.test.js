@@ -18,7 +18,8 @@ test('customer creation requires a branch for broad access and defaults fixed br
   assert.match(backend, /async function resolveCustomerBranchId/);
   assert.match(backend, /selectionMode === 'FIXED'/);
   assert.match(backend, /Choose the customer branch\./);
-  assert.match(backend, /branchId = await resolveCustomerBranchId\(req, req\.body\.branchId/);
+  assert.match(backend, /const validatedBody = await validateAndNormalizeCustomerInput\(req, req\.body\)/);
+  assert.match(backend, /const branchId = await resolveCustomerBranchId\(req, validatedBody\.branchId, \{ requireSelection: true \}\)/);
 });
 
 test('customer branch choices stay inside the signed-in users access scope', () => {

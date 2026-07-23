@@ -94,6 +94,7 @@
           (customer.customerReference ? '<span>' + escapeHtml(customer.customerReference) + '</span>' : '') + '</div>' +
           '<h2>' + escapeHtml(customerTitle()) + '</h2><p>' + escapeHtml([customer.customerType === 'BUSINESS' ? customer.name : null, customer.email, customer.phone].filter(Boolean).join(' · ') || 'No contact details recorded') + '</p></div>' +
         '<div class="customer-profile-actions">' +
+          (access.canTransferCustomer ? '<button class="text-button" type="button" data-profile-action="transfer-customer">Move company</button>' : '') +
           (access.canEditCustomer ? '<button class="secondary-button" type="button" data-profile-action="edit-customer">Edit customer</button>' : '') +
           (access.canCreateSite ? '<button class="primary-button" type="button" data-profile-action="add-site">Add solar site</button>' : '') +
         '</div></div>' +
@@ -405,17 +406,17 @@
     const access = profile.access;
     const primaryContact = profile.contacts.find((contact) => contact.isPrimary) || profile.contacts[0] || {};
     const businessFields =
-      field('companyName', 'Trading or Business Name', 'text', customer.companyName, 'required maxlength="200"', 'data-business-customer-field') +
-      field('registeredCompanyName', 'Registered Company Name', 'text', customer.registeredCompanyName, 'maxlength="240"', 'data-business-customer-field') +
-      field('registrationNumber', 'Registration Number', 'text', customer.registrationNumber, 'maxlength="120"', 'data-business-customer-field') +
-      field('industry', 'Industry', 'text', customer.industry, 'maxlength="160"', 'data-business-customer-field') +
-      (access.canViewBilling ? field('taxNumber', 'Tax or VAT Number', 'text', customer.taxNumber, 'maxlength="120"', 'data-business-customer-field') : '');
+      field('companyName', 'Trading or Business Name', 'text', customer.companyName, 'required maxlength="200" data-meaningful-text="business-name"', 'data-business-customer-field') +
+      field('registeredCompanyName', 'Registered Company Name', 'text', customer.registeredCompanyName, 'maxlength="240" data-meaningful-text="business-name"', 'data-business-customer-field') +
+      field('registrationNumber', 'Registration Number', 'text', customer.registrationNumber, 'maxlength="120" data-reference-field="true"', 'data-business-customer-field') +
+      field('industry', 'Industry', 'text', customer.industry, 'maxlength="160" data-meaningful-text="short-text"', 'data-business-customer-field') +
+      (access.canViewBilling ? field('taxNumber', 'Tax or VAT Number', 'text', customer.taxNumber, 'maxlength="120" data-reference-field="true"', 'data-business-customer-field') : '');
     const billingFields = access.canViewBilling ?
-      field('billingContactName', 'Billing Contact', 'text', customer.billingContactName, 'maxlength="200"') +
+      field('billingContactName', 'Billing Contact', 'text', customer.billingContactName, 'maxlength="200" data-meaningful-text="person-name"') +
       field('billingEmail', 'Billing Email', 'email', customer.billingEmail) +
-      field('address', 'Billing Address', 'text', customer.address, 'maxlength="500"') +
+      field('address', 'Billing Address', 'text', customer.address, 'maxlength="500" data-address-field="true"') +
       (access.canEditBilling
-        ? selectField('paymentTerms', 'Payment Terms', [['DUE_ON_RECEIPT', 'Due immediately'], ['NET_7', '7 days'], ['NET_14', '14 days'], ['NET_30', '30 days'], ['NET_60', '60 days']], customer.paymentTerms || 'DUE_ON_RECEIPT') + checkboxField('purchaseOrderRequired', 'Purchase order required', 'Require a customer purchase-order number before billing.', Boolean(customer.purchaseOrderRequired))
+        ? selectField('paymentTerms', 'Payment Terms', [['DUE_ON_RECEIPT', 'Due immediately'], ['NET_7', '7 days'], ['NET_14', '14 days'], ['NET_30', '30 days'], ['NET_60', '60 days']], customer.paymentTerms || 'DUE_ON_RECEIPT') + checkboxField('purchaseOrderRequired', 'Customer requires a PO number', 'Use this for a business customer that requires its own purchase-order number on invoices. Rev Engine records that rule here.', Boolean(customer.purchaseOrderRequired))
         : readonlyField('Payment Terms', paymentTermsLabel(customer.paymentTerms), 'Finance access is required to change this.') + readonlyField('Purchase Order Required', customer.purchaseOrderRequired ? 'Yes' : 'No', 'Finance access is required to change this.'))
       : '';
     const noteFields = textareaField('serviceNotes', 'Service Notes', customer.serviceNotes, 'maxlength="3000" rows="4"') +
@@ -432,11 +433,11 @@
           customerBranchEditField(customer, access)) +
         formSection('Business identity', 'Official company details used for records and billing.', businessFields, 'data-business-section') +
         formSection('Primary contact', 'The first person the team should call or message.',
-          field('name', 'Contact Name', 'text', customer.name, 'required maxlength="200"') +
-          field('primaryContactRole', 'Job Title or Role', 'text', primaryContact.role, 'maxlength="120"') +
+          field('name', 'Contact Name', 'text', customer.name, 'required maxlength="200" data-meaningful-text="person-name"') +
+          field('primaryContactRole', 'Job Title or Role', 'text', primaryContact.role, 'maxlength="120" data-meaningful-text="short-text"') +
           field('email', 'Email', 'email', customer.email) +
-          field('phone', 'Phone', 'text', customer.phone, 'maxlength="80"') +
-          field('alternatePhone', 'Other Phone', 'text', customer.alternatePhone, 'maxlength="80"') +
+          field('phone', 'Phone or WhatsApp Number', 'text', customer.phone, 'maxlength="80" data-phone-field="true" data-phone-country="' + escapeHtml(access.companyCountryCode || '') + '" data-allow-international="true" inputmode="tel"') +
+          field('alternatePhone', 'Other Phone', 'text', customer.alternatePhone, 'maxlength="80" data-phone-field="true" data-phone-country="' + escapeHtml(access.companyCountryCode || '') + '" data-allow-international="true" inputmode="tel"') +
           selectField('preferredContactMethod', 'Preferred Contact Method', [['', 'Not chosen'], ['PHONE', 'Phone call'], ['WHATSAPP', 'WhatsApp'], ['EMAIL', 'Email']], customer.preferredContactMethod || '')) +
         (access.canViewBilling ? formSection('Billing', 'Where invoices go and the terms agreed with this customer.', billingFields) : '') +
         formSection('Notes', 'Keep field guidance separate from private office notes.', noteFields),
@@ -466,6 +467,44 @@
         await api('/customers/' + encodeURIComponent(customerId), { method: 'PATCH', body: JSON.stringify(body) });
         notify('Customer details updated.');
         await loadProfile();
+      }
+    });
+  }
+
+  function transferCustomer() {
+    const access = state.profile.access;
+    const companies = access.transferCompanies || [];
+    if (!companies.length) {
+      notify('No other company with an active branch is available.', 'error');
+      return;
+    }
+    const firstCompany = companies[0];
+    const companyOptions = companies.map((company) => [company.id, [company.name, company.countryName].filter(Boolean).join(' · ')]);
+    const branchOptions = firstCompany.branches.map((branch) => [branch.id, [branch.name, branch.city].filter(Boolean).join(' · ')]);
+    openFormModal({
+      title: 'Move customer to another company',
+      copy: 'Use this when a customer was created in the wrong company. A customer with sites, work, quotes, invoices, contracts, or payment history cannot be moved automatically.',
+      submitLabel: 'Move customer',
+      fields: formSection('Destination', 'Choose the company and branch that should own this customer.',
+        selectField('targetCompanyId', 'Company', companyOptions, firstCompany.id, 'required') +
+        selectField('targetBranchId', 'Branch', branchOptions, branchOptions[0] && branchOptions[0][0] || '', 'required')),
+      onMount: (form) => {
+        const companySelect = form.elements.targetCompanyId;
+        const branchSelect = form.elements.targetBranchId;
+        const refreshBranches = () => {
+          const company = companies.find((item) => item.id === companySelect.value);
+          branchSelect.innerHTML = (company && company.branches || []).map((branch) => '<option value="' + escapeHtml(branch.id) + '">' + escapeHtml([branch.name, branch.city].filter(Boolean).join(' · ')) + '</option>').join('');
+          branchSelect.disabled = !branchSelect.options.length;
+          if (window.RevEngineFormUX) window.RevEngineFormUX.refresh(branchSelect);
+        };
+        companySelect.addEventListener('change', refreshBranches);
+        refreshBranches();
+      },
+      onSubmit: async (body) => {
+        const result = await api('/customers/' + encodeURIComponent(customerId) + '/transfer', { method: 'POST', body: JSON.stringify(body) });
+        await api('/organization/switch-workspace', { method: 'POST', body: JSON.stringify({ companyId: result.company.id }) });
+        notify('Customer moved to ' + result.company.name + '.');
+        window.location.href = 'customer-profile.html?id=' + encodeURIComponent(result.customerId);
       }
     });
   }
@@ -565,6 +604,7 @@
     const action = event.target.closest('[data-profile-action]');
     if (!action) return;
     if (action.dataset.profileAction === 'edit-customer') editCustomer();
+    if (action.dataset.profileAction === 'transfer-customer') transferCustomer();
     if (action.dataset.profileAction === 'add-contact') addContact();
     if (action.dataset.profileAction === 'add-note') addNote();
     if (action.dataset.profileAction === 'add-site') addSite();

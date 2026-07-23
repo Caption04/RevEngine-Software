@@ -6914,7 +6914,7 @@ body.modal-open { overflow: hidden; }
   height: 44px;
   flex-basis: 44px;
   border-radius: 13px;
-  background: linear-gradient(135deg, #315efb, #183dc8) !important;
+  background: linear-gradient(135deg, var(--account-brand-primary, var(--blue)), var(--account-brand-secondary, var(--blue2)));
   font-size: 13px;
 }
 .account-trigger-copy strong { font-size: 15px; line-height: 1.2; }

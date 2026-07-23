@@ -73,9 +73,18 @@
     return null;
   }
 
+  function internationalPhone(value) {
+    let compact = String(value || '').trim().replace(/[\s().-]+/g, '');
+    if (compact.startsWith('00')) compact = '+' + compact.slice(2);
+    return /^\+[1-9]\d{7,14}$/.test(compact);
+  }
+
   function countryPhoneValidation(input, value) {
     const country = String(input.dataset.phoneCountry || '').toUpperCase();
-    if (!country) return null;
+    const allowInternational = input.dataset.allowInternational === 'true';
+    const raw = String(value || '').trim();
+    if (allowInternational && (/^\+/.test(raw) || /^00/.test(raw)) && internationalPhone(raw)) return '';
+    if (!country) return allowInternational ? (internationalPhone(raw) ? '' : 'Use a valid international number beginning with + and the country code.') : null;
     const code = country === 'ZA' || country === 'SA' ? '27' : country === 'ZW' ? '263' : '';
     if (!code) return null;
     const national = nationalPhoneDigits(value, code);
@@ -83,9 +92,35 @@
       ? Boolean(national && (/^(?:71|73|77|78)\d{7}$/.test(national) || /^2\d{7,8}$/.test(national) || /^[3-6]\d{6,8}$/.test(national) || /^86\d{7}$/.test(national)))
       : Boolean(national && /^[1-8]\d{8}$/.test(national));
     if (valid) return '';
-    return country === 'ZW'
+    const localMessage = country === 'ZW'
       ? 'Enter a Zimbabwe mobile or landline number, for example 077 123 4567 or 0242 123 456.'
       : 'Enter a South African mobile or landline number, for example 082 123 4567 or 011 123 4567.';
+    return allowInternational ? localMessage + ' For a foreign number, begin with + and the country code.' : localMessage;
+  }
+
+  function meaningfulTextValidation(input, value) {
+    const mode = input.dataset.meaningfulText;
+    if (!mode) return '';
+    const text = String(value || '').trim();
+    if (!text) return '';
+    const letters = text.match(/\p{L}/gu) || [];
+    const words = text.match(/[\p{L}\p{N}]+/gu) || [];
+    if (letters.length < 2 || words.length < 1) return 'Enter clear words, not random characters.';
+    if (/(.)\1{4,}/iu.test(text)) return 'Enter clear words, not repeated characters.';
+    const symbols = text.replace(/[\p{L}\p{N}\s&+'.,()\-\/]/gu, '');
+    if (symbols.length) return 'Remove unusual symbols and enter clear text.';
+    if (mode === 'person-name' && /\d/.test(text)) return 'Enter the person’s name without numbers.';
+    return '';
+  }
+
+  function referenceValidation(input, value) {
+    if (input.dataset.referenceField !== 'true') return '';
+    const text = String(value || '').trim();
+    if (!text) return '';
+    const useful = text.match(/[A-Za-z0-9]/g) || [];
+    if (useful.length < 2 || /(.)\1{5,}/i.test(text)) return 'Enter a valid reference number.';
+    if (!/^[A-Za-z0-9 ._\-/]+$/.test(text)) return 'Use letters, numbers, spaces, hyphens, slashes, dots, or underscores only.';
+    return '';
   }
 
   function validationMessage(input) {
@@ -93,9 +128,16 @@
     const value = String(input.value || '');
     const label = fieldLabel(input);
 
+    const preferredMethod = input.form && input.form.elements && input.form.elements.preferredContactMethod
+      ? String(input.form.elements.preferredContactMethod.value || '')
+      : '';
     if (input.required && !value.trim()) {
       return input.tagName === 'SELECT' ? `Choose ${label}.` : `Enter ${label}.`;
     }
+    if (input.name === 'phone' && ['PHONE', 'WHATSAPP'].includes(preferredMethod) && !value.trim()) {
+      return preferredMethod === 'WHATSAPP' ? 'Enter the WhatsApp number.' : 'Enter the phone number.';
+    }
+    if (input.name === 'email' && preferredMethod === 'EMAIL' && !value.trim()) return 'Enter the email address.';
     if (!value) return '';
     if (input.type === 'email') {
       const normalizedEmail = value.trim();
@@ -113,10 +155,15 @@
         }
       }
     }
+    const meaningfulMessage = meaningfulTextValidation(input, value);
+    if (meaningfulMessage) return meaningfulMessage;
+    const referenceMessage = referenceValidation(input, value);
+    if (referenceMessage) return referenceMessage;
     if (input.dataset.addressField === 'true') {
       const address = value.trim();
-      if (address.length < 5 || !/\p{L}/u.test(address) || /[@<>]/.test(address)) {
-        return 'Enter a clear street address without symbols such as @.';
+      const letters = address.match(/\p{L}/gu) || [];
+      if (address.length < 5 || letters.length < 2 || /[@<>]/.test(address) || /(.)\1{5,}/iu.test(address)) {
+        return 'Enter a clear street or billing address.';
       }
     }
     if (input.minLength > 0 && value.length < input.minLength) return `Use at least ${input.minLength} characters.`;
@@ -214,7 +261,16 @@
         });
       }
     });
-    input.addEventListener('change', function () { validateInput(input, true); });
+    input.addEventListener('change', function () {
+      validateInput(input, true);
+      if (input.name === 'preferredContactMethod') {
+        const form = input.form || input.closest('form');
+        if (form) ['phone', 'email'].forEach(function (name) {
+          const related = form.elements && form.elements[name];
+          if (related) validateInput(related, true);
+        });
+      }
+    });
   }
 
   function controlsWithin(root) {
