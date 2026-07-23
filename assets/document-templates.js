@@ -11,6 +11,8 @@
     design: null,
     previewTimer: null,
     previewUrl: null,
+    previewRequest: 0,
+    previewController: null,
     saving: false
   };
 
@@ -173,11 +175,16 @@
   function showLibrary() {
     state.selected = null;
     state.design = null;
+    window.clearTimeout(state.previewTimer);
+    if (state.previewController) state.previewController.abort();
+    state.previewController = null;
+    state.previewRequest += 1;
     libraryNodes.forEach((node) => { node.hidden = false; });
     editor.hidden = true;
     if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
     state.previewUrl = null;
     previewFrame.removeAttribute('src');
+    previewStatus.textContent = 'Waiting for changes…';
   }
 
   function syncHeaderDependentControls() {
@@ -387,7 +394,9 @@
   }
 
   function blockEditorFields(block) {
-    const fields = [modalField('label', 'Section heading', `<input id="templateModal-label" name="label" maxlength="80" value="${escapeHtml(block.label || '')}">`)];
+    const fields = block.type === 'FOOTER'
+      ? []
+      : [modalField('label', 'Section heading', `<input id="templateModal-label" name="label" maxlength="80" value="${escapeHtml(block.label || '')}">`)];
     const bodyTypes = new Set(['PAYMENT_OPTIONS', 'TERMS', 'DISCLAIMER', 'FOOTER', 'CONTRACT_BODY']);
     if (bodyTypes.has(block.type)) fields.push(modalField('body', block.type === 'CONTRACT_BODY' ? 'Main content' : 'Text', `<textarea id="templateModal-body" name="body" rows="6" maxlength="6000" placeholder="Enter the text shown on the document">${escapeHtml(block.body || '')}</textarea>`));
     if (block.type === 'PAYMENT_OPTIONS') {
@@ -408,7 +417,7 @@
     }
     if (block.type === 'LINE_ITEMS') {
       const columns = Array.isArray(block.columns) ? block.columns.join(', ') : 'DESCRIPTION, QTY, UNIT, TOTAL';
-      fields.push(modalField('columns', 'Column labels', `<input id="templateModal-columns" name="columns" maxlength="160" value="${escapeHtml(columns)}">`, 'Separate labels with commas. The table remains responsive when an invoice has many items.'));
+      fields.push(modalField('columns', 'Column labels', `<input id="templateModal-columns" name="columns" maxlength="160" value="${escapeHtml(columns)}">`, 'Enter four labels separated by commas: description, quantity, unit price, and total.'));
     }
     return fields.join('');
   }
@@ -426,7 +435,7 @@
         ['label', 'body', 'bankName', 'accountName', 'accountNumber', 'branchName', 'branchCode', 'swiftCode', 'referenceRule', 'buttonLabel', 'urlMode', 'customUrl', 'leftLabel', 'rightLabel'].forEach((field) => {
           if (data.has(field)) block[field] = String(data.get(field) || '').trim();
         });
-        if (data.has('columns')) block.columns = String(data.get('columns') || '').split(',').map((item) => item.trim().toUpperCase()).filter(Boolean).slice(0, 6);
+        if (data.has('columns')) block.columns = String(data.get('columns') || '').split(',').map((item) => item.trim().toUpperCase()).filter(Boolean).slice(0, 4);
         if (block.type === 'PAYMENT_OPTIONS') {
           const ids = data.getAll('paymentAccountId');
           const labels = data.getAll('paymentAccountLabel');
@@ -605,6 +614,7 @@
   }
 
   function schedulePreview(delay = 450) {
+    if (!state.selected || !state.design) return;
     window.clearTimeout(state.previewTimer);
     previewStatus.textContent = 'Updating preview…';
     state.previewTimer = window.setTimeout(updatePreview, delay);
@@ -612,15 +622,29 @@
 
   async function updatePreview() {
     if (!state.selected || !state.design) return;
+    const request = ++state.previewRequest;
+    if (state.previewController) state.previewController.abort();
+    const controller = new AbortController();
+    state.previewController = controller;
     try {
-      const blob = await api('/document-templates/preview.pdf', { method: 'POST', body: JSON.stringify({ documentType: state.selected.documentType, design: state.design }), expectBlob: true });
+      const blob = await api('/document-templates/preview.pdf', {
+        method: 'POST',
+        body: JSON.stringify({ documentType: state.selected.documentType, design: state.design }),
+        expectBlob: true,
+        signal: controller.signal
+      });
+      if (request !== state.previewRequest || controller.signal.aborted) return;
       if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
       state.previewUrl = URL.createObjectURL(blob);
       previewFrame.src = state.previewUrl;
       previewStatus.textContent = 'Preview updated';
     } catch (error) {
+      if (error && error.name === 'AbortError') return;
+      if (request !== state.previewRequest) return;
       previewStatus.textContent = 'Preview unavailable';
       notify(error.message || 'The preview could not be created.', false);
+    } finally {
+      if (state.previewController === controller) state.previewController = null;
     }
   }
 
@@ -692,7 +716,10 @@
 
   modal.addEventListener('click', (event) => { if (event.target === modal) closeModal(); });
   document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !modal.hidden) closeModal(); });
-  window.addEventListener('beforeunload', () => { if (state.previewUrl) URL.revokeObjectURL(state.previewUrl); });
+  window.addEventListener('beforeunload', () => {
+    if (state.previewController) state.previewController.abort();
+    if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
+  });
 
   loadTemplates().catch((error) => {
     statusNode.textContent = 'Templates could not be loaded';

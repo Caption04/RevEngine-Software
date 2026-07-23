@@ -124,7 +124,7 @@ function normalizeBlock(block, documentType) {
   const type = oneOf(block && block.type, BLOCK_TYPES, 'FOOTER');
   const fallback = defaultBlock(type, documentType);
   const columns = Array.isArray(block && block.columns)
-    ? block.columns.map((item) => text(item, 30).toUpperCase()).filter(Boolean).slice(0, 6)
+    ? block.columns.map((item) => text(item, 30).toUpperCase()).filter(Boolean).slice(0, 4)
     : fallback.columns;
   const accountSource = Array.isArray(block && block.accounts)
     ? block.accounts

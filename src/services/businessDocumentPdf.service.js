@@ -153,6 +153,7 @@ function normalizeTemplate(localization) {
     hasDetailedDesign,
     showHeader: design ? design.header && design.header.visible !== false : input.documentHeaderVisible !== false,
     showPageNumbers: design ? design.page && design.page.showPageNumbers !== false : input.documentShowPageNumbers !== false,
+    pageMargin: design && design.page && Number(design.page.margin) || 48,
     showDocumentLogo: design ? design.header && design.header.showLogo !== false : input.showDocumentLogo !== false,
     showLegalName: input.showLegalName !== false,
     showRegistrationNumber: input.showRegistrationNumber !== false,
@@ -171,10 +172,15 @@ function normalizeTemplate(localization) {
     showPaymentInstructions: design ? visible('PAYMENT_OPTIONS', true) : input.showPaymentInstructions !== false,
     primaryColor: design && design.theme && design.theme.primaryColor,
     accentColor: design && design.theme && design.theme.accentColor,
+    textColor: design && design.theme && design.theme.textColor,
+    mutedColor: design && design.theme && design.theme.mutedColor,
     tableHeaderColor: design && design.theme && design.theme.tableHeaderColor,
     borderColor: design && design.theme && design.theme.borderColor,
     bodySize: design && design.typography && Number(design.typography.bodySize) || 9,
     blocks,
+    customerDetails: block('CUSTOMER_DETAILS'),
+    documentDetails: block('DOCUMENT_DETAILS'),
+    lineItemsBlock: block('LINE_ITEMS'),
     paymentOptions: block('PAYMENT_OPTIONS'),
     onlinePayment: block('ONLINE_PAYMENT'),
     terms: block('TERMS'),
@@ -372,98 +378,132 @@ function drawLogoOrInitials({ x, y, size, companyName, primary, logoImage, showL
   return output;
 }
 
-function renderCompanyDetailLines(x, startY, details, size = 8, gap = 12) {
-  return details.map((value, index) => commandText(x, startY - index * gap, size, value)).join('');
+function renderCompanyDetailLines(x, startY, details, size = 8, gap = 12, color) {
+  return details.map((value, index) => commandText(x, startY - index * gap, size, value, false, color)).join('');
+}
+
+function documentBounds(template) {
+  const margin = Math.max(24, Math.min(72, Number(template && template.pageMargin) || 48));
+  return {
+    margin,
+    left: margin,
+    right: PAGE_WIDTH - margin,
+    top: PAGE_HEIGHT - margin,
+    bottom: margin,
+    width: PAGE_WIDTH - margin * 2
+  };
 }
 
 function companyDetailBottom(startY, details, gap = 12) {
   return details.length ? startY - (details.length - 1) * gap : startY;
 }
 
-function buildHeader({ kind, record, company, branding, localization, template, logoImage }) {
+function buildHeader({ kind, record, company, branding, localization, template, logoImage, bounds }) {
   const brand = branding || {};
+  const page = bounds || documentBounds(template);
+  const { left, right, top, bottom, width } = page;
   const primary = hexRgb(template.primaryColor || brand.primaryColor);
   const secondary = hexRgb(template.accentColor || brand.secondaryColor, '#263ff1');
+  const textColor = hexRgb(template.textColor, '#0E1A2F');
+  const mutedColor = hexRgb(template.mutedColor, '#60708A');
   const companyName = ascii(brand.brandName || company.tradingName || company.name || 'Company');
   const documentTitle = kind === 'quote' ? template.quoteLabel : kind === 'contract' ? template.contractLabel : template.invoiceLabel;
   const documentReference = record.number || record.contractNumber || (kind === 'quote' ? 'Quote' : kind === 'contract' ? 'Contract' : 'Invoice');
   const logoSize = { SMALL: 44, MEDIUM: 62, LARGE: 86 }[template.logoSize];
+  const logoBoxWidth = logoSize * 1.7;
   const details = companyDetails(company, brand, localization, template, companyName);
   let output = '';
-  let bodyStart = TOP - 100;
+  let bodyStart = top - 100;
 
-  if (!template.showHeader) return { output, bodyStart: TOP + 10, primary, secondary };
+  if (!template.showHeader) return { output, bodyStart: top + 10, primary, secondary, textColor, mutedColor, bounds: page };
 
   if (template.template === 'MODERN') {
     output += commandRect(0, PAGE_HEIGHT - 18, PAGE_WIDTH, 18, primary);
     if (template.headerStyle === 'STACKED') {
-      const logoX = template.logoPosition === 'RIGHT' ? RIGHT - logoSize * 1.7 : LEFT;
-      const nameY = TOP - logoSize - 12;
+      const logoX = template.logoPosition === 'RIGHT' ? right - logoBoxWidth : left;
+      const nameY = top - logoSize - 12;
       const detailStartY = nameY - 18;
-      output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 4, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
-      output += commandText(LEFT, nameY, 18, fitText(companyName, 38), true);
-      output += renderCompanyDetailLines(LEFT, detailStartY, details);
-      const stackedMetaX = template.logoPosition === 'RIGHT' ? 315 : 390;
-      output += commandText(stackedMetaX, TOP - 4, 19, documentTitle, true, darken(primary));
-      output += commandText(stackedMetaX, TOP - 27, 10, documentReference, true);
-      output += commandText(stackedMetaX, TOP - 44, 8, `Status: ${String(record.status || 'DRAFT').replace(/_/g, ' ')}`);
-      bodyStart = Math.min(TOP - logoSize - 86, companyDetailBottom(detailStartY, details) - 26);
+      output += drawLogoOrInitials({ x: logoX, y: top - logoSize + 4, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
+      output += commandText(left, nameY, 18, fitText(companyName, 38), true, textColor);
+      output += renderCompanyDetailLines(left, detailStartY, details, Math.max(7, template.bodySize - 1), 12, mutedColor);
+      const stackedMetaX = template.logoPosition === 'RIGHT' ? left + width * 0.5 : left + width * 0.68;
+      output += commandText(stackedMetaX, top - 4, 19, documentTitle, true, darken(primary));
+      output += commandText(stackedMetaX, top - 27, 10, documentReference, true, textColor);
+      output += commandText(stackedMetaX, top - 44, 8, `Status: ${String(record.status || 'DRAFT').replace(/_/g, ' ')}`, false, mutedColor);
+      bodyStart = Math.min(top - logoSize - 86, companyDetailBottom(detailStartY, details) - 26);
     } else {
-      const logoX = template.logoPosition === 'RIGHT' ? RIGHT - logoSize * 1.7 : LEFT;
-      const identityX = template.logoPosition === 'RIGHT' ? LEFT : LEFT + (template.showDocumentLogo ? logoSize * 1.7 + 12 : 0);
-      const detailStartY = TOP - 21;
-      output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 4, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
-      output += commandText(identityX, TOP - 2, template.headerStyle === 'COMPACT' ? 15 : logoSize >= 80 ? 15 : 18, fitText(companyName, logoSize >= 80 ? 24 : 31), true);
-      output += renderCompanyDetailLines(identityX, detailStartY, details, template.headerStyle === 'COMPACT' ? 7.5 : 8);
-      const metaX = template.logoPosition === 'RIGHT' ? 315 : 425;
-      output += commandText(metaX, TOP - 2, 19, documentTitle, true, darken(primary));
-      output += commandText(metaX, TOP - 26, 10, documentReference, true);
-      output += commandText(metaX, TOP - 43, 8, `Status: ${String(record.status || 'DRAFT').replace(/_/g, ' ')}`);
-      const defaultBodyStart = template.headerStyle === 'COMPACT' ? TOP - 68 : TOP - 82;
+      const logoX = template.logoPosition === 'RIGHT' ? right - logoBoxWidth : left;
+      const identityX = template.logoPosition === 'RIGHT' ? left : left + (template.showDocumentLogo ? logoBoxWidth + 12 : 0);
+      const detailStartY = top - 21;
+      output += drawLogoOrInitials({ x: logoX, y: top - logoSize + 4, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
+      output += commandText(identityX, top - 2, template.headerStyle === 'COMPACT' ? 15 : logoSize >= 80 ? 15 : 18, fitText(companyName, logoSize >= 80 ? 24 : 31), true, textColor);
+      output += renderCompanyDetailLines(identityX, detailStartY, details, template.headerStyle === 'COMPACT' ? 7.5 : Math.max(7, template.bodySize - 1), 12, mutedColor);
+      const metaX = template.logoPosition === 'RIGHT' ? left + width * 0.52 : left + width * 0.75;
+      output += commandText(metaX, top - 2, 19, documentTitle, true, darken(primary));
+      output += commandText(metaX, top - 26, 10, documentReference, true, textColor);
+      output += commandText(metaX, top - 43, 8, `Status: ${String(record.status || 'DRAFT').replace(/_/g, ' ')}`, false, mutedColor);
+      const defaultBodyStart = template.headerStyle === 'COMPACT' ? top - 68 : top - 82;
       bodyStart = Math.min(defaultBodyStart, companyDetailBottom(detailStartY, details) - 26);
     }
-    output += commandColorLine(LEFT, bodyStart + 12, RIGHT, bodyStart + 12, 2, secondary);
+    output += commandColorLine(left, bodyStart + 12, right, bodyStart + 12, 2, secondary);
   } else if (template.template === 'CLASSIC') {
-    output += commandStrokeRect(LEFT - 12, BOTTOM - 10, RIGHT - LEFT + 24, TOP - BOTTOM + 44, primary, 1.2);
-    const logoX = template.logoPosition === 'RIGHT' ? RIGHT - logoSize * 1.7 : LEFT;
-    const identityX = template.logoPosition === 'RIGHT' ? LEFT : LEFT + (template.showDocumentLogo ? logoSize * 1.7 + 12 : 0);
-    const detailStartY = TOP - 21;
-    output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 2, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
-    output += commandText(identityX, TOP - 1, logoSize >= 80 ? 15 : 18, fitText(companyName, logoSize >= 80 ? 24 : 31), true, darken(primary));
-    output += renderCompanyDetailLines(identityX, detailStartY, details);
-    const classicMetaX = template.logoPosition === 'RIGHT' ? 315 : 405;
-    output += commandText(classicMetaX, TOP - 2, 18, documentTitle, true, darken(primary));
-    output += commandText(classicMetaX, TOP - 25, 10, documentReference, true);
-    output += commandText(classicMetaX, TOP - 42, 8, `Status: ${String(record.status || 'DRAFT').replace(/_/g, ' ')}`);
-    bodyStart = Math.min(TOP - 82, companyDetailBottom(detailStartY, details) - 26);
-    output += commandLine(LEFT, bodyStart + 12, RIGHT, bodyStart + 12, 1, 0.7);
+    output += commandStrokeRect(left - 12, bottom - 10, right - left + 24, top - bottom + 44, primary, 1.2);
+    const logoX = template.logoPosition === 'RIGHT' ? right - logoBoxWidth : left;
+    const identityX = template.logoPosition === 'RIGHT' ? left : left + (template.showDocumentLogo ? logoBoxWidth + 12 : 0);
+    const detailStartY = top - 21;
+    output += drawLogoOrInitials({ x: logoX, y: top - logoSize + 2, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
+    output += commandText(identityX, top - 1, logoSize >= 80 ? 15 : 18, fitText(companyName, logoSize >= 80 ? 24 : 31), true, textColor);
+    output += renderCompanyDetailLines(identityX, detailStartY, details, Math.max(7, template.bodySize - 1), 12, mutedColor);
+    const classicMetaX = template.logoPosition === 'RIGHT' ? left + width * 0.52 : left + width * 0.71;
+    output += commandText(classicMetaX, top - 2, 18, documentTitle, true, darken(primary));
+    output += commandText(classicMetaX, top - 25, 10, documentReference, true, textColor);
+    output += commandText(classicMetaX, top - 42, 8, `Status: ${String(record.status || 'DRAFT').replace(/_/g, ' ')}`, false, mutedColor);
+    bodyStart = Math.min(top - 82, companyDetailBottom(detailStartY, details) - 26);
+    output += commandLine(left, bodyStart + 12, right, bodyStart + 12, 1, 0.7);
   } else {
-    const logoX = template.logoPosition === 'RIGHT' ? RIGHT - logoSize * 1.7 : LEFT;
-    const identityX = template.logoPosition === 'RIGHT' ? LEFT : LEFT + (template.showDocumentLogo ? logoSize * 1.7 + 12 : 0);
-    const detailStartY = TOP - 21;
-    output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 2, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
-    output += commandText(identityX, TOP - 1, logoSize >= 80 ? 14 : 16, fitText(companyName, logoSize >= 80 ? 25 : 34), true);
-    output += renderCompanyDetailLines(identityX, detailStartY, details, 7.5);
-    const minimalMetaX = template.logoPosition === 'RIGHT' ? 320 : 410;
-    output += commandText(minimalMetaX, TOP - 1, 17, documentTitle, true);
-    output += commandText(minimalMetaX, TOP - 23, 9, documentReference, true);
-    bodyStart = Math.min(TOP - 62, companyDetailBottom(detailStartY, details) - 22);
-    output += commandColorLine(LEFT, bodyStart + 10, RIGHT, bodyStart + 10, 1.5, primary);
+    const logoX = template.logoPosition === 'RIGHT' ? right - logoBoxWidth : left;
+    const identityX = template.logoPosition === 'RIGHT' ? left : left + (template.showDocumentLogo ? logoBoxWidth + 12 : 0);
+    const detailStartY = top - 21;
+    output += drawLogoOrInitials({ x: logoX, y: top - logoSize + 2, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
+    output += commandText(identityX, top - 1, logoSize >= 80 ? 14 : 16, fitText(companyName, logoSize >= 80 ? 25 : 34), true, textColor);
+    output += renderCompanyDetailLines(identityX, detailStartY, details, 7.5, 12, mutedColor);
+    const minimalMetaX = template.logoPosition === 'RIGHT' ? left + width * 0.53 : left + width * 0.72;
+    output += commandText(minimalMetaX, top - 1, 17, documentTitle, true, textColor);
+    output += commandText(minimalMetaX, top - 23, 9, documentReference, true, textColor);
+    bodyStart = Math.min(top - 62, companyDetailBottom(detailStartY, details) - 22);
+    output += commandColorLine(left, bodyStart + 10, right, bodyStart + 10, 1.5, primary);
   }
 
-  return { output, bodyStart, primary, secondary };
+  return { output, bodyStart, primary, secondary, textColor, mutedColor, bounds: page };
 }
 
 function buildPageCommands({ kind, record, company, branding, localization, items, pageIndex, pageCount, logoImage }) {
   const template = normalizeTemplate(localization);
-  const header = buildHeader({ kind, record, company, branding, localization, template, logoImage });
+  const bounds = documentBounds(template);
+  const { left, right, bottom, width } = bounds;
+  const header = buildHeader({ kind, record, company, branding, localization, template, logoImage, bounds });
+  const textColor = header.textColor;
+  const mutedColor = header.mutedColor;
+  const bodySize = Math.max(7, Math.min(12, Number(template.bodySize) || 9));
+  const smallText = Math.max(6.8, bodySize - 1);
+  const headingSize = Math.max(8, bodySize);
+  const metaLabelX = left + width * 0.62;
+  const metaValueX = left + width * 0.77;
+  const qtyX = left + width * 0.61;
+  const unitX = left + width * 0.72;
+  const totalX = left + width * 0.88;
+  const totalsLabelX = left + width * 0.62;
+  const totalsValueX = left + width * 0.84;
   let output = header.output;
   let y = header.bodyStart - 18;
 
   if (template.showCustomerDetails) {
-    output += commandText(LEFT, y, 9, kind === 'contract' ? 'CUSTOMER' : 'BILL TO', true, darken(header.primary, 0.3));
-    output += commandText(LEFT, y - 19, 12, customerName(record), true);
-    wrap(customerContact(record), 62).slice(0, 2).forEach((line, index) => { output += commandText(LEFT, y - 37 - index * 14, 8, line); });
+    const customerHeading = template.customerDetails && template.customerDetails.label || (kind === 'contract' ? 'Customer' : 'Bill to');
+    output += commandText(left, y, headingSize, customerHeading.toUpperCase(), true, darken(header.primary, 0.3));
+    output += commandText(left, y - 20, bodySize + 3, customerName(record), true, textColor);
+    wrap(customerContact(record), Math.max(38, Math.round(width / 8))).slice(0, 2).forEach((line, index) => {
+      output += commandText(left, y - 39 - index * 14, smallText, line, false, mutedColor);
+    });
   }
 
   const meta = kind === 'quote'
@@ -472,48 +512,62 @@ function buildPageCommands({ kind, record, company, branding, localization, item
       ? [['Starts', dateLabel(record.startDate)], ['Ends', dateLabel(record.endDate)], ['Status', String(record.status || 'DRAFT').replace(/_/g, ' ')]]
       : [['Issued', dateLabel(record.createdAt)], ['Due', dateLabel(record.dueDate)], ...(template.showPurchaseOrder && record.purchaseOrderNumber ? [['Customer PO', record.purchaseOrderNumber]] : [])];
   if (template.showDocumentDetails) {
-    meta.forEach(([label, value], index) => {
-      output += commandText(390, y - index * 18, 8, `${label}:`, true);
-      output += commandText(462, y - index * 18, 8, value);
+    const detailsHeading = template.documentDetails && template.documentDetails.label || 'Document details';
+    output += commandText(metaLabelX, y, headingSize, detailsHeading.toUpperCase(), true, darken(header.primary, 0.3));
+    meta.forEach(([itemLabel, value], index) => {
+      output += commandText(metaLabelX, y - 20 - index * 18, smallText, `${itemLabel}:`, true, textColor);
+      output += commandText(metaValueX, y - 20 - index * 18, smallText, value, false, textColor);
     });
   }
 
-  y -= 82;
+  y -= 96;
   if (kind === 'contract' && template.contractBody && template.contractBody.visible !== false && template.contractBody.body) {
-    output += commandText(LEFT, y, 9, template.contractBody.label || 'AGREEMENT', true, darken(header.primary, 0.3));
-    wrap(template.contractBody.body, 94).slice(0, 8).forEach((line, index) => { output += commandText(LEFT, y - 18 - index * 13, template.bodySize - 1, line); });
-    y -= Math.max(50, Math.min(8, wrap(template.contractBody.body, 94).length) * 13 + 30);
+    output += commandText(left, y, headingSize, template.contractBody.label || 'AGREEMENT', true, darken(header.primary, 0.3));
+    const contractLines = wrap(template.contractBody.body, Math.max(64, Math.round(width / 5.3))).slice(0, 8);
+    contractLines.forEach((line, index) => { output += commandText(left, y - 18 - index * 13, smallText, line, false, textColor); });
+    y -= Math.max(50, Math.min(8, contractLines.length) * 13 + 30);
   }
 
   const tableHeaderColor = template.tableHeaderColor ? hexRgb(template.tableHeaderColor) : template.template === 'MINIMAL' ? { r: 1, g: 1, b: 1 } : { r: 0.94, g: 0.955, b: 0.98 };
+  const configuredColumns = template.lineItemsBlock && Array.isArray(template.lineItemsBlock.columns) ? template.lineItemsBlock.columns : [];
+  const columnLabels = [
+    configuredColumns[0] || (kind === 'contract' ? 'SERVICE' : 'DESCRIPTION'),
+    configuredColumns[1] || 'QTY',
+    configuredColumns[2] || 'UNIT',
+    configuredColumns[3] || 'TOTAL'
+  ];
   if (template.showLineItems) {
-    if (template.template === 'MINIMAL') {
-      output += commandColorLine(LEFT, y + 5, RIGHT, y + 5, 1.2, header.primary);
-      output += commandLine(LEFT, y - 18, RIGHT, y - 18, 0.55, 0.72);
-    } else {
-      output += commandRect(LEFT, y - 18, RIGHT - LEFT, 25, tableHeaderColor);
-      if (template.template === 'CLASSIC') output += commandStrokeRect(LEFT, y - 18, RIGHT - LEFT, 25, header.primary, 0.7);
+    if (template.lineItemsBlock && template.lineItemsBlock.label) {
+      output += commandText(left, y, headingSize, template.lineItemsBlock.label.toUpperCase(), true, darken(header.primary, 0.3));
+      y -= 20;
     }
-    output += commandText(LEFT + 8, y - 11, 8, kind === 'contract' ? 'SERVICE' : 'DESCRIPTION', true);
-    output += commandText(355, y - 11, 8, 'QTY', true);
-    output += commandText(407, y - 11, 8, 'UNIT', true);
-    output += commandText(488, y - 11, 8, 'TOTAL', true);
+    if (template.template === 'MINIMAL') {
+      output += commandColorLine(left, y + 5, right, y + 5, 1.2, header.primary);
+      output += commandLine(left, y - 18, right, y - 18, 0.55, 0.72);
+    } else {
+      output += commandRect(left, y - 18, right - left, 25, tableHeaderColor);
+      if (template.template === 'CLASSIC') output += commandStrokeRect(left, y - 18, right - left, 25, header.primary, 0.7);
+    }
+    output += commandText(left + 8, y - 11, smallText, columnLabels[0], true, textColor);
+    output += commandText(qtyX, y - 11, smallText, columnLabels[1], true, textColor);
+    output += commandText(unitX, y - 11, smallText, columnLabels[2], true, textColor);
+    output += commandText(totalX, y - 11, smallText, columnLabels[3], true, textColor);
     y -= 37;
   }
 
   const rowHeight = template.tableDensity === 'COMPACT' ? 22 : 27;
   if (template.showLineItems) items.forEach((item) => {
-    const description = wrap(item.description || item.service && item.service.name || 'Item', 44)[0] || 'Item';
-    output += commandText(LEFT + 8, y, 8.5, description);
-    output += commandText(358, y, 8.5, Number(item.quantity || 1).toFixed(2).replace(/\.00$/, ''));
-    output += commandText(407, y, 8.5, money(item.unitPrice || 0, localization));
-    output += commandText(488, y, 8.5, money(item.lineTotal != null ? item.lineTotal : Number(item.quantity || 1) * Number(item.unitPrice || 0), localization));
-    output += commandLine(LEFT, y - 8, RIGHT, y - 8, 0.45, 0.91);
+    const description = wrap(item.description || item.service && item.service.name || 'Item', Math.max(30, Math.round(width / 11)))[0] || 'Item';
+    output += commandText(left + 8, y, bodySize - 0.5, description, false, textColor);
+    output += commandText(qtyX + 3, y, bodySize - 0.5, Number(item.quantity || 1).toFixed(2).replace(/\.00$/, ''), false, textColor);
+    output += commandText(unitX, y, bodySize - 0.5, money(item.unitPrice || 0, localization), false, textColor);
+    output += commandText(totalX, y, bodySize - 0.5, money(item.lineTotal != null ? item.lineTotal : Number(item.quantity || 1) * Number(item.unitPrice || 0), localization), false, textColor);
+    output += commandLine(left, y - 8, right, y - 8, 0.45, 0.91);
     y -= rowHeight;
   });
 
   if (pageIndex === pageCount - 1) {
-    let cursor = Math.max(y - 10, 220);
+    let cursor = Math.max(y - 10, bottom + 168);
     const designedBlocks = Array.isArray(template.blocks)
       ? template.blocks.filter((item) => item && item.visible !== false && ['TOTALS', 'TERMS', 'PAYMENT_OPTIONS', 'ONLINE_PAYMENT', 'DISCLAIMER', 'SIGNATURES', 'FOOTER'].includes(item.type))
       : [];
@@ -529,9 +583,9 @@ function buildPageCommands({ kind, record, company, branding, localization, item
     }
     const postBlocks = template.hasDetailedDesign ? designedBlocks : fallbackBlocks;
 
-    const drawHeading = (heading, atY, size = 8.5) => commandText(LEFT, atY, size, heading, true, darken(header.primary, 0.3));
+    const drawHeading = (heading, atY, size = headingSize - 0.5) => commandText(left, atY, size, heading, true, darken(header.primary, 0.3));
     for (const section of postBlocks) {
-      if (!section || section.visible === false || cursor < 68) continue;
+      if (!section || section.visible === false || cursor < bottom + 16) continue;
       if (section.type === 'TOTALS') {
         const totals = [
           ['Subtotal', record.subtotal != null ? record.subtotal : record.amount || 0],
@@ -541,11 +595,11 @@ function buildPageCommands({ kind, record, company, branding, localization, item
         ];
         output += drawHeading(section.label || 'SUMMARY', cursor);
         cursor -= 20;
-        totals.forEach(([label, value], index) => {
+        totals.forEach(([itemLabel, value], index) => {
           const isTotal = index === totals.length - 1;
-          if (isTotal) output += commandColorLine(350, cursor + 12, RIGHT, cursor + 12, 1.2, header.primary);
-          output += commandText(355, cursor, isTotal ? 10.5 : 8.2, label, isTotal);
-          output += commandText(472, cursor, isTotal ? 10.5 : 8.2, money(value, localization), isTotal);
+          if (isTotal) output += commandColorLine(totalsLabelX - 5, cursor + 12, right, cursor + 12, 1.2, header.primary);
+          output += commandText(totalsLabelX, cursor, isTotal ? bodySize + 1.5 : smallText, itemLabel, isTotal, textColor);
+          output += commandText(totalsValueX, cursor, isTotal ? bodySize + 1.5 : smallText, money(value, localization), isTotal, textColor);
           cursor -= isTotal ? 25 : 18;
         });
         cursor -= 6;
@@ -557,8 +611,8 @@ function buildPageCommands({ kind, record, company, branding, localization, item
         if (!body) continue;
         output += drawHeading(section.label || (kind === 'quote' ? 'NOTES' : 'TERMS'), cursor);
         cursor -= 17;
-        const lines = wrap(body, 96).slice(0, 5);
-        lines.forEach((line) => { output += commandText(LEFT, cursor, Math.max(6.8, template.bodySize - 1), line); cursor -= 11; });
+        const lines = wrap(body, Math.max(64, Math.round(width / 5.2))).slice(0, 5);
+        lines.forEach((line) => { output += commandText(left, cursor, smallText, line, false, textColor); cursor -= 11; });
         cursor -= 8;
         continue;
       }
@@ -579,10 +633,10 @@ function buildPageCommands({ kind, record, company, branding, localization, item
         const hasAccountDetails = accounts.some(accountHasDetails);
         const body = section.body || (!designedBlocks.length && localization && localization.paymentInstructions) || '';
         if (!hasAccountDetails && !body && !section.referenceRule) continue;
-        output += commandRect(LEFT, cursor - 5, RIGHT - LEFT, 19, template.tableHeaderColor ? hexRgb(template.tableHeaderColor) : { r: 0.93, g: 0.95, b: 0.98 });
-        output += commandText(LEFT + 7, cursor, 8.5, section.label || 'PAYMENT OPTIONS', true, darken(header.primary, 0.25));
+        output += commandRect(left, cursor - 5, right - left, 19, template.tableHeaderColor ? hexRgb(template.tableHeaderColor) : { r: 0.93, g: 0.95, b: 0.98 });
+        output += commandText(left + 7, cursor, headingSize - 0.5, section.label || 'PAYMENT OPTIONS', true, darken(header.primary, 0.25));
         cursor -= 23;
-        wrap(body, 96).slice(0, 3).forEach((line) => { output += commandText(LEFT, cursor, 7.2, line); cursor -= 10; });
+        wrap(body, Math.max(64, Math.round(width / 5.2))).slice(0, 3).forEach((line) => { output += commandText(left, cursor, Math.max(7, bodySize - 1.5), line, false, textColor); cursor -= 10; });
         for (const account of accounts.slice(0, 4)) {
           const rows = [
             ['Bank', account.bankName],
@@ -592,22 +646,22 @@ function buildPageCommands({ kind, record, company, branding, localization, item
             ['Branch code', account.branchCode],
             ['SWIFT code', account.swiftCode]
           ].filter((row) => row[1]);
-          if (!rows.length || cursor < 96) continue;
-          output += commandRect(LEFT, cursor - 4, RIGHT - LEFT, 16, template.accentColor ? hexRgb(template.accentColor) : { r: 0.96, g: 0.89, b: 0.42 });
-          output += commandText(LEFT + 6, cursor, 7.3, account.label || 'Payment option', true, darken(header.primary, 0.25));
+          if (!rows.length || cursor < bottom + 44) continue;
+          output += commandRect(left, cursor - 4, right - left, 16, template.accentColor ? hexRgb(template.accentColor) : { r: 0.96, g: 0.89, b: 0.42 });
+          output += commandText(left + 6, cursor, Math.max(7, bodySize - 1.7), account.label || 'Payment option', true, darken(header.primary, 0.25));
           cursor -= 18;
           for (const [rowLabel, value] of rows) {
-            if (cursor < 78) break;
-            output += commandStrokeRect(LEFT, cursor - 4, RIGHT - LEFT, 16, template.borderColor ? hexRgb(template.borderColor) : { r: 0.82, g: 0.86, b: 0.91 }, 0.45);
-            output += commandText(LEFT + 6, cursor, 7.2, rowLabel, true);
-            output += commandText(154, cursor, 7.2, value);
+            if (cursor < bottom + 26) break;
+            output += commandStrokeRect(left, cursor - 4, right - left, 16, template.borderColor ? hexRgb(template.borderColor) : { r: 0.82, g: 0.86, b: 0.91 }, 0.45);
+            output += commandText(left + 6, cursor, Math.max(7, bodySize - 1.8), rowLabel, true, textColor);
+            output += commandText(left + Math.min(116, width * 0.23), cursor, Math.max(7, bodySize - 1.8), value, false, textColor);
             cursor -= 16;
           }
         }
-        if (section.referenceRule && cursor >= 72) {
-          wrap(section.referenceRule, 94).slice(0, 2).forEach((line, index) => {
-            if (cursor < 64) return;
-            output += commandText(LEFT, cursor, 7.2, index === 0 ? `Reference: ${line}` : line, index === 0);
+        if (section.referenceRule && cursor >= bottom + 20) {
+          wrap(section.referenceRule, Math.max(64, Math.round(width / 5.2))).slice(0, 2).forEach((line, index) => {
+            if (cursor < bottom + 12) return;
+            output += commandText(left, cursor, Math.max(7, bodySize - 1.8), index === 0 ? `Reference: ${line}` : line, index === 0, textColor);
             cursor -= 10;
           });
         }
@@ -620,16 +674,16 @@ function buildPageCommands({ kind, record, company, branding, localization, item
         if (!paymentUrl) continue;
         output += drawHeading(section.label || 'PAY ONLINE', cursor);
         cursor -= 16;
-        wrap(`${section.buttonLabel || 'Make payment online'}: ${paymentUrl}`, 96).slice(0, 2).forEach((line) => { output += commandText(LEFT, cursor, 7.3, line, true, darken(header.primary, 0.15)); cursor -= 10; });
+        wrap(`${section.buttonLabel || 'Make payment online'}: ${paymentUrl}`, Math.max(64, Math.round(width / 5.2))).slice(0, 2).forEach((line) => { output += commandText(left, cursor, Math.max(7, bodySize - 1.7), line, true, darken(header.primary, 0.15)); cursor -= 10; });
         cursor -= 8;
         continue;
       }
 
       if (section.type === 'DISCLAIMER') {
         if (!section.body) continue;
-        output += drawHeading(section.label || 'IMPORTANT', cursor, 7.8);
+        output += drawHeading(section.label || 'IMPORTANT', cursor, Math.max(7.5, bodySize - 1));
         cursor -= 15;
-        wrap(section.body, 105).slice(0, 5).forEach((line) => { output += commandText(LEFT, cursor, 6.5, line); cursor -= 9; });
+        wrap(section.body, Math.max(70, Math.round(width / 4.8))).slice(0, 5).forEach((line) => { output += commandText(left, cursor, Math.max(6.5, bodySize - 2.5), line, false, textColor); cursor -= 9; });
         cursor -= 7;
         continue;
       }
@@ -637,10 +691,12 @@ function buildPageCommands({ kind, record, company, branding, localization, item
       if (section.type === 'SIGNATURES' && kind === 'contract') {
         output += drawHeading(section.label || 'SIGNATURES', cursor);
         cursor -= 28;
-        output += commandLine(LEFT, cursor, 250, cursor, 0.7, 0.5);
-        output += commandLine(345, cursor, RIGHT, cursor, 0.7, 0.5);
-        output += commandText(LEFT, cursor - 13, 7, section.leftLabel || 'For the company');
-        output += commandText(345, cursor - 13, 7, section.rightLabel || 'For the customer');
+        const leftSignatureEnd = left + width * 0.39;
+        const rightSignatureStart = left + width * 0.59;
+        output += commandLine(left, cursor, leftSignatureEnd, cursor, 0.7, 0.5);
+        output += commandLine(rightSignatureStart, cursor, right, cursor, 0.7, 0.5);
+        output += commandText(left, cursor - 13, Math.max(7, bodySize - 2), section.leftLabel || 'For the company', false, textColor);
+        output += commandText(rightSignatureStart, cursor - 13, Math.max(7, bodySize - 2), section.rightLabel || 'For the customer', false, textColor);
         cursor -= 32;
         continue;
       }
@@ -648,12 +704,12 @@ function buildPageCommands({ kind, record, company, branding, localization, item
       if (section.type === 'FOOTER') {
         const footer = section.body || localization && localization.invoiceFooter || branding && (branding.invoiceFooter || branding.invoiceTerms);
         if (!footer) continue;
-        wrap(footer, 100).slice(0, 2).forEach((line) => { output += commandText(LEFT, Math.max(cursor, 42), 7, line, false, { r: 0.34, g: 0.39, b: 0.48 }); cursor -= 10; });
+        wrap(footer, Math.max(68, Math.round(width / 5))).slice(0, 2).forEach((line) => { output += commandText(left, Math.max(cursor, bottom - 10), Math.max(7, bodySize - 2), line, false, mutedColor); cursor -= 10; });
       }
     }
   }
 
-  if (template.showPageNumbers) output += commandText(RIGHT - 54, 27, 7, `Page ${pageIndex + 1} of ${pageCount}`, false, { r: 0.4, g: 0.45, b: 0.54 });
+  if (template.showPageNumbers) output += commandText(right - 54, Math.max(20, bottom - 25), 7, `Page ${pageIndex + 1} of ${pageCount}`, false, mutedColor);
   return output;
 }
 
