@@ -302,7 +302,7 @@ function lineItemsHtml(lines) {
 
 function quoteDetail(item) {
   const canAct = item.status === "SENT";
-  return '<div class="client-detail-stack">' + badge(item.status) + '<p>' + escapeHtml(item.description || item.title || "") + '</p>' + lineItemsHtml(item.lineItems) + '<div class="client-total-row"><span>Total</span><strong>' + money(item.total) + '</strong></div>' + (canAct ? '<div class="client-action-row"><button class="primary-button" data-action="quote-accept" data-id="' + item.id + '" type="button">Accept</button><button class="secondary-button" data-action="quote-reject" data-id="' + item.id + '" type="button">Reject</button></div>' : "") + "</div>";
+  return '<div class="client-detail-stack">' + badge(item.status) + '<div class="client-action-row"><button class="secondary-button" data-action="quote-pdf" data-id="' + item.id + '" type="button">View PDF</button></div><p>' + escapeHtml(item.description || item.title || "") + '</p>' + lineItemsHtml(item.lineItems) + '<div class="client-total-row"><span>Total</span><strong>' + money(item.total) + '</strong></div>' + (canAct ? '<div class="client-action-row"><button class="primary-button" data-action="quote-accept" data-id="' + item.id + '" type="button">Accept</button><button class="secondary-button" data-action="quote-reject" data-id="' + item.id + '" type="button">Reject</button></div>' : "") + "</div>";
 }
 
 function invoicePaymentOptionsHtml(item) {
@@ -330,7 +330,7 @@ function invoicePaymentOptionsHtml(item) {
 }
 
 function invoiceDetail(item) {
-  return '<div class="client-detail-stack">' + badge(item.status) + (item.purchaseOrderNumber ? '<div class="client-detail-lines"><div><span>Purchase order</span><strong>' + escapeHtml(item.purchaseOrderNumber) + '</strong></div></div>' : '') + lineItemsHtml(item.lineItems) + '<div class="client-total-row"><span>Total</span><strong>' + money(item.total) + '</strong></div><div class="client-total-row"><span>Paid</span><strong>' + money(item.amountPaid) + '</strong></div><div class="client-total-row"><span>Due</span><strong>' + money(item.amountDue) + '</strong></div>' + invoicePaymentOptionsHtml(item) + '<h3>Payments</h3>' + (item.payments && item.payments.length ? item.payments.map(function(payment) { return listCard({ title: money(payment.amount), meta: [payment.method, payment.refundedAmount ? "Refunded " + money(payment.refundedAmount) : null, date(payment.receivedAt || payment.createdAt)].filter(Boolean).join(" - "), badge: badge(payment.status, payment.statusLabel) }); }).join("") : empty("No payments recorded yet.")) + '<h3>Receipts</h3>' + (item.receipts && item.receipts.length ? item.receipts.map(function(receipt) { return listCard({ id: receipt.id, title: receipt.receiptNumber || "Receipt", meta: money(receipt.amount), badge: badge("PAID"), action: "receipt-detail" }); }).join("") : empty("No receipts yet.")) + "</div>";
+  return '<div class="client-detail-stack">' + badge(item.status) + '<div class="client-action-row"><button class="secondary-button" data-action="invoice-pdf" data-id="' + item.id + '" type="button">View PDF</button></div>' + (item.purchaseOrderNumber ? '<div class="client-detail-lines"><div><span>Purchase order</span><strong>' + escapeHtml(item.purchaseOrderNumber) + '</strong></div></div>' : '') + lineItemsHtml(item.lineItems) + '<div class="client-total-row"><span>Total</span><strong>' + money(item.total) + '</strong></div><div class="client-total-row"><span>Paid</span><strong>' + money(item.amountPaid) + '</strong></div><div class="client-total-row"><span>Due</span><strong>' + money(item.amountDue) + '</strong></div>' + invoicePaymentOptionsHtml(item) + '<h3>Payments</h3>' + (item.payments && item.payments.length ? item.payments.map(function(payment) { return listCard({ title: money(payment.amount), meta: [payment.method, payment.refundedAmount ? "Refunded " + money(payment.refundedAmount) : null, date(payment.receivedAt || payment.createdAt)].filter(Boolean).join(" - "), badge: badge(payment.status, payment.statusLabel) }); }).join("") : empty("No payments recorded yet.")) + '<h3>Receipts</h3>' + (item.receipts && item.receipts.length ? item.receipts.map(function(receipt) { return listCard({ id: receipt.id, title: receipt.receiptNumber || "Receipt", meta: money(receipt.amount), badge: badge("PAID"), action: "receipt-detail" }); }).join("") : empty("No receipts yet.")) + "</div>";
 }
 
 function jobDetail(item) {
@@ -506,9 +506,17 @@ document.addEventListener("click", async function(event) {
       openDetail(item.title || "Quote", quoteDetail(item));
       return;
     }
+    if (action === "quote-pdf") {
+      window.open(API_BASE + "/client/quotes/" + encodeURIComponent(id) + "/pdf", "_blank", "noopener");
+      return;
+    }
     if (action === "invoice-detail") {
       const item = await api("/client/invoices/" + id);
       openDetail(item.invoiceNumber || "Invoice", invoiceDetail(item));
+      return;
+    }
+    if (action === "invoice-pdf") {
+      window.open(API_BASE + "/client/invoices/" + encodeURIComponent(id) + "/pdf", "_blank", "noopener");
       return;
     }
     if (action === "job-detail") {

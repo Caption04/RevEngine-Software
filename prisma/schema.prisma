@@ -806,63 +806,63 @@ model CompanyBranding {
 }
 
 model User {
-  id                          String                   @id @default(cuid())
+  id                          String                    @id @default(cuid())
   companyId                   String
-  email                       String                   @unique
+  email                       String                    @unique
   name                        String
   phone                       String?
   passwordHash                String
-  role                        Role                     @default(WORKER)
+  role                        Role                      @default(WORKER)
   jobTitle                    String?
   roleTemplateId              String?
-  defaultScopeType            AccessScopeType          @default(COMPANY)
-  createdAt                   DateTime                 @default(now())
-  updatedAt                   DateTime                 @updatedAt
-  company                     Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  roleTemplate                PermissionRoleTemplate?  @relation(fields: [roleTemplateId], references: [id], onDelete: SetNull)
+  defaultScopeType            AccessScopeType           @default(COMPANY)
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+  company                     Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  roleTemplate                PermissionRoleTemplate?   @relation(fields: [roleTemplateId], references: [id], onDelete: SetNull)
   worker                      WorkerProfile?
   auditLogs                   AuditLog[]
   quoteStatusChanges          QuoteStatusHistory[]
   invoiceStatusChanges        InvoiceStatusHistory[]
   paymentsCreated             Payment[]
   jobActivities               JobActivity[]
-  proofPhotosUploaded         JobProofPhoto[]          @relation("JobProofPhotoUploadedBy")
-  signaturesCaptured          JobSignature[]           @relation("JobSignatureCapturedBy")
-  jobsCompleted               Job[]                    @relation("JobCompletedBy")
+  proofPhotosUploaded         JobProofPhoto[]           @relation("JobProofPhotoUploadedBy")
+  signaturesCaptured          JobSignature[]            @relation("JobSignatureCapturedBy")
+  jobsCompleted               Job[]                     @relation("JobCompletedBy")
   completionLocationsCaptured JobCompletionLocation[]
   storageObjectsUploaded      StorageObject[]
-  stockMovementsCreated       StockMovement[]          @relation("StockMovementCreatedBy")
-  purchaseRequestsCreated     PurchaseRequest[]        @relation("PurchaseRequestRequestedBy")
-  purchaseRequestsApproved    PurchaseRequest[]        @relation("PurchaseRequestApprovedBy")
-  purchaseRequestsRejected    PurchaseRequest[]        @relation("PurchaseRequestRejectedBy")
-  purchaseOrdersApproved      PurchaseOrder[]          @relation("PurchaseOrderApprovedBy")
-  financeExportLogsCreated    FinanceExportLog[]       @relation("FinanceExportLogCreatedBy")
-  financeSyncLogsCreated      FinanceSyncLog[]         @relation("FinanceSyncLogCreatedBy")
+  stockMovementsCreated       StockMovement[]           @relation("StockMovementCreatedBy")
+  purchaseRequestsCreated     PurchaseRequest[]         @relation("PurchaseRequestRequestedBy")
+  purchaseRequestsApproved    PurchaseRequest[]         @relation("PurchaseRequestApprovedBy")
+  purchaseRequestsRejected    PurchaseRequest[]         @relation("PurchaseRequestRejectedBy")
+  purchaseOrdersApproved      PurchaseOrder[]           @relation("PurchaseOrderApprovedBy")
+  financeExportLogsCreated    FinanceExportLog[]        @relation("FinanceExportLogCreatedBy")
+  financeSyncLogsCreated      FinanceSyncLog[]          @relation("FinanceSyncLogCreatedBy")
   workerDevices               WorkerDevice[]
   offlineActionQueues         OfflineActionQueue[]
-  workerDevicesRevoked        WorkerDevice[]           @relation("WorkerDeviceRevokedBy")
-  checklistAnswersCaptured    JobChecklistAnswer[]     @relation("ChecklistAnswerCapturedBy")
-  approvalRequestsMade        ApprovalRequest[]        @relation("ApprovalRequestRequestedBy")
-  approvalRequestsDecided     ApprovalRequest[]        @relation("ApprovalRequestDecidedBy")
+  workerDevicesRevoked        WorkerDevice[]            @relation("WorkerDeviceRevokedBy")
+  checklistAnswersCaptured    JobChecklistAnswer[]      @relation("ChecklistAnswerCapturedBy")
+  approvalRequestsMade        ApprovalRequest[]         @relation("ApprovalRequestRequestedBy")
+  approvalRequestsDecided     ApprovalRequest[]         @relation("ApprovalRequestDecidedBy")
   permissionOverrides         UserPermissionOverride[]
   branchAccesses              UserBranchAccess[]
   accessGrants                UserAccessGrant[]
   teamMemberships             TeamMembership[]
-  invitationsSent             MemberInvitation[]       @relation("MemberInvitationInvitedBy")
-  invitationsAccepted         MemberInvitation[]       @relation("MemberInvitationAcceptedBy")
-  assignedLeads               Lead[]                   @relation("LeadAssignedTo")
-  createdLeadActivities       LeadActivity[]           @relation("LeadActivityCreatedBy")
+  invitationsSent             MemberInvitation[]        @relation("MemberInvitationInvitedBy")
+  invitationsAccepted         MemberInvitation[]        @relation("MemberInvitationAcceptedBy")
+  assignedLeads               Lead[]                    @relation("LeadAssignedTo")
+  createdLeadActivities       LeadActivity[]            @relation("LeadActivityCreatedBy")
   customerNotesCreated        CustomerNote[]            @relation("CustomerNoteCreatedBy")
-  solarReadingsCaptured        SolarReading[]            @relation("SolarReadingCapturedBy")
-  solarFaultsReported          SolarFault[]              @relation("SolarFaultReportedBy")
-  twoFactorEnabled            Boolean                  @default(false)
+  solarReadingsCaptured       SolarReading[]            @relation("SolarReadingCapturedBy")
+  solarFaultsReported         SolarFault[]              @relation("SolarFaultReportedBy")
+  twoFactorEnabled            Boolean                   @default(false)
   twoFactorSecretHash         String?
   twoFactorRecoveryCodes      Json?
-  failedLoginCount            Int                      @default(0)
+  failedLoginCount            Int                       @default(0)
   lockedUntil                 DateTime?
   disabledAt                  DateTime?
-  mustResetPassword           Boolean                  @default(false)
-  fullBusinessAccess          Boolean                  @default(false)
+  mustResetPassword           Boolean                   @default(false)
+  fullBusinessAccess          Boolean                   @default(false)
   passwordChangedAt           DateTime?
   sessions                    UserSession[]
   securityEvents              SecurityEvent[]
@@ -1120,11 +1120,11 @@ model MemberInvitation {
 }
 
 model Customer {
-  id                     String                     @id @default(cuid())
+  id                     String                    @id @default(cuid())
   companyId              String
   branchId               String?
-  customerType           CustomerType               @default(RESIDENTIAL)
-  status                 CustomerStatus             @default(ACTIVE)
+  customerType           CustomerType              @default(RESIDENTIAL)
+  status                 CustomerStatus            @default(ACTIVE)
   customerReference      String?
   name                   String
   companyName            String?
@@ -1139,53 +1139,53 @@ model Customer {
   address                String?
   billingEmail           String?
   billingContactName     String?
-  paymentTerms           CustomerPaymentTerms       @default(DUE_ON_RECEIPT)
-  purchaseOrderRequired  Boolean                    @default(false)
+  paymentTerms           CustomerPaymentTerms      @default(DUE_ON_RECEIPT)
+  purchaseOrderRequired  Boolean                   @default(false)
   serviceNotes           String?
   internalNotes          String?
   notes                  String?
-  createdAt         DateTime                  @default(now())
-  updatedAt         DateTime                  @updatedAt
-  company           Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  branch            Branch?                   @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  jobs              Job[]
-  quotes            Quote[]
-  invoices          Invoice[]
-  recurringJobRules RecurringJobRule[]
-  bookingRequests   BookingRequest[]
-  leads             Lead[]
-  clientAccounts    ClientAccount[]
-  properties        CustomerProperty[]
-  contacts          CustomerContact[]
-  profileNotes      CustomerNote[]
-  messageLogs       MessageLog[]
-  storageObjects    StorageObject[]
-  assets            Asset[]
-  solarSiteProfiles SolarSiteProfile[]
-  solarReadings     SolarReading[]
-  solarFaults       SolarFault[]
-  serviceContracts  ServiceContract[]
-  unappliedCredits  UnappliedCustomerCredit[]
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  company                Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch                 Branch?                   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  jobs                   Job[]
+  quotes                 Quote[]
+  invoices               Invoice[]
+  recurringJobRules      RecurringJobRule[]
+  bookingRequests        BookingRequest[]
+  leads                  Lead[]
+  clientAccounts         ClientAccount[]
+  properties             CustomerProperty[]
+  contacts               CustomerContact[]
+  profileNotes           CustomerNote[]
+  messageLogs            MessageLog[]
+  storageObjects         StorageObject[]
+  assets                 Asset[]
+  solarSiteProfiles      SolarSiteProfile[]
+  solarReadings          SolarReading[]
+  solarFaults            SolarFault[]
+  serviceContracts       ServiceContract[]
+  unappliedCredits       UnappliedCustomerCredit[]
 
+  @@unique([companyId, customerReference])
   @@index([companyId])
   @@index([companyId, branchId])
-  @@unique([companyId, customerReference])
 }
 
 model CustomerContact {
-  id          String   @id @default(cuid())
-  companyId   String
-  customerId  String
-  name        String
-  role        String?
-  email       String?
-  phone       String?
-  isPrimary   Boolean  @default(false)
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  companyId  String
+  customerId String
+  name       String
+  role       String?
+  email      String?
+  phone      String?
+  isPrimary  Boolean  @default(false)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([companyId, customerId])
   @@index([companyId, customerId, isPrimary])
@@ -1564,7 +1564,6 @@ model SolarFault {
   reportedById           String?
   faultCode              String?
   category               String?
-  number                 String?
   title                  String
   description            String?
   severity               SolarFaultSeverity @default(MEDIUM)
@@ -1573,7 +1572,7 @@ model SolarFault {
   acknowledgedAt         DateTime?
   resolvedAt             DateTime?
   downtimeMinutes        Int?
-  estimatedEnergyLossKwh Decimal?            @db.Decimal(14, 3)
+  estimatedEnergyLossKwh Decimal?           @db.Decimal(14, 3)
   rootCause              String?
   correctiveAction       String?
   createdAt              DateTime           @default(now())
@@ -2908,13 +2907,13 @@ model RecurringJobRule {
 }
 
 model Lead {
-  id                  String        @id @default(cuid())
+  id                  String         @id @default(cuid())
   companyId           String
   branchId            String?
   customerId          String?
   serviceId           String?
   assignedToId        String?
-  customerType        CustomerType  @default(RESIDENTIAL)
+  customerType        CustomerType   @default(RESIDENTIAL)
   name                String
   companyName         String?
   email               String?
@@ -2922,7 +2921,7 @@ model Lead {
   address             String?
   serviceNeed         String?
   source              String?
-  status              LeadStatus    @default(NEW)
+  status              LeadStatus     @default(NEW)
   notes               String?
   nextFollowUpAt      DateTime?
   lastContactedAt     DateTime?
@@ -2930,13 +2929,13 @@ model Lead {
   convertedCustomerId String?
   convertedQuoteId    String?
   convertedJobId      String?
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
-  company             Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  branch              Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  customer            Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  service             Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
-  assignedTo          User?         @relation("LeadAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  company             Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch              Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  customer            Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  service             Service?       @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  assignedTo          User?          @relation("LeadAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
   activities          LeadActivity[]
 
   @@index([companyId, status, createdAt])
@@ -3121,6 +3120,22 @@ model CompanyFinanceSettings {
   invoiceFooter                       String?
   allowedPaymentMethods               Json?
   paymentInstructions                 String?
+  documentTemplate                    String   @default("MODERN")
+  documentHeaderStyle                 String   @default("SPLIT")
+  documentLogoPosition                String   @default("LEFT")
+  documentLogoSize                    String   @default("MEDIUM")
+  documentTableDensity                String   @default("COMFORTABLE")
+  quoteLabel                          String   @default("QUOTE")
+  invoiceLabel                        String   @default("INVOICE")
+  showDocumentLogo                    Boolean  @default(true)
+  showCompanyAddress                  Boolean  @default(true)
+  showCompanyEmail                    Boolean  @default(true)
+  showCompanyPhone                    Boolean  @default(true)
+  showCompanyWebsite                  Boolean  @default(true)
+  showTax                             Boolean  @default(true)
+  showPurchaseOrder                   Boolean  @default(true)
+  showNotes                           Boolean  @default(true)
+  showPaymentInstructions             Boolean  @default(true)
   bankTransferProofRequired           Boolean  @default(true)
   enforceQuoteDepositBeforeScheduling Boolean  @default(false)
   defaultQuoteDepositPercent          Decimal  @default(0) @db.Decimal(7, 4)

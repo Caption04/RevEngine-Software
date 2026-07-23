@@ -46,17 +46,20 @@ test('branch and O&M pages use premium but plain-language presentation', () => {
   assert.match(css, /\.branch-card:hover/);
 });
 
-test('brand preview shows a real customer document example', () => {
+test('billing document preview uses the real PDF renderer', () => {
   const html = read('settings.html');
   const css = read('assets/app.css');
   const frontend = read('assets/api.js');
+  const routes = read('src/routes/api.js');
 
-  assert.match(html, /Customer document preview/);
-  assert.match(html, /Quote preview/);
-  assert.match(html, /Prepared for/);
-  assert.match(html, /data-preview-contact/);
-  assert.match(html, /data-preview-support/);
-  assert.match(css, /\.brand-preview-document/);
-  assert.match(frontend, /data-preview-contact/);
-  assert.match(frontend, /data-preview-website/);
+  assert.doesNotMatch(html, /Q-1042/);
+  assert.doesNotMatch(html, /brand-preview-document/);
+  assert.match(html, /Live customer document preview/);
+  assert.match(html, /data-document-preview-frame/);
+  assert.match(html, /data-document-preview-input/);
+  assert.match(css, /\.document-pdf-preview/);
+  assert.match(frontend, /refreshDocumentPreview/);
+  assert.match(frontend, /company\/document-preview\.pdf/);
+  assert.match(routes, /router\.post\('\/company\/document-preview\.pdf'/);
+  assert.match(routes, /createBusinessDocumentPdf/);
 });
