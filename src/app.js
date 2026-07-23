@@ -37,6 +37,7 @@ app.use(
         scriptSrc: ["'self'", "https://unpkg.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://unpkg.com"],
         connectSrc: ["'self'", "https://*.tile.openstreetmap.org"],
+        frameSrc: ["'self'", "blob:"],
       },
     },
   })

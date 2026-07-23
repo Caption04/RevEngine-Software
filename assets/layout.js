@@ -420,7 +420,7 @@
   }
 
   function sectionSearchTargetSelector() {
-    return '.table-wrap tbody tr, .table-scroll tbody tr, .data-table tbody tr, .list-item, .settings-row, .worker-location-card, .asset-card, .panel[data-searchable]';
+    return '.table-wrap tbody tr, .table-scroll tbody tr, .data-table tbody tr, .list-item, .settings-row, .worker-location-card, .asset-card, .document-template-card, .panel[data-searchable]';
   }
 
   function cleanSearchText(value) {
@@ -481,6 +481,7 @@
     };
 
     input.addEventListener('input', () => runSearch());
+    document.addEventListener('revengine:section-search-refresh', () => runSearch());
 
     results.addEventListener('click', (event) => {
       const button = event.target.closest('[data-section-result]');

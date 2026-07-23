@@ -1731,7 +1731,7 @@
   }
 
   function invoiceDueDateField() {
-    return '<div class="field"><label class="field-label-with-help" for="fc-dueDate"><span>Due Date</span><small data-invoice-due-help>Set from the customer’s payment terms. You can change it.</small></label><input id="fc-dueDate" name="dueDate" type="date"></div>';
+    return '<div class="field"><label for="fc-dueDate">Due Date</label><input id="fc-dueDate" name="dueDate" type="date"><small class="field-help" data-invoice-due-help>Set from the customer’s payment terms. You can change it.</small></div>';
   }
 
   function invoiceCompanyNote() {

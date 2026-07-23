@@ -5,7 +5,7 @@
   const state = {
     templates: [],
     blockTypes: [],
-    filter: 'ALL',
+    filter: 'INVOICE',
     selected: null,
     design: null,
     previewTimer: null,
@@ -116,10 +116,11 @@
   }
 
   function renderLibrary() {
-    const visible = state.templates.filter((template) => state.filter === 'ALL' || template.documentType === state.filter);
+    const visible = state.templates.filter((template) => template.documentType === state.filter);
     statusNode.textContent = `${visible.length} ${visible.length === 1 ? 'template' : 'templates'}`;
     if (!visible.length) {
       grid.innerHTML = '<div class="empty-state"><div><strong>No templates in this group</strong><span>Create one from scratch, use a ready-made design, or import an existing document.</span></div></div>';
+      document.dispatchEvent(new Event('revengine:section-search-refresh'));
       return;
     }
     grid.innerHTML = visible.map((template) => {
@@ -138,6 +139,7 @@
         </div>
       </article>`;
     }).join('');
+    document.dispatchEvent(new Event('revengine:section-search-refresh'));
   }
 
   function showLibrary() {
