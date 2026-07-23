@@ -482,7 +482,8 @@
         add('Restore', 'quote-restore', true, 'quotes.edit');
       } else {
         add('View PDF', 'quote-pdf', true, 'quotes.view');
-        if (status === 'DRAFT') add('Send', 'quote-send', true, 'quotes.send');
+        if (status === 'DRAFT') add('Edit', 'quote-edit', true, 'quotes.edit');
+        if (status === 'DRAFT') add('Send', 'quote-send', false, 'quotes.send');
         if (status === 'SENT') add('Accept', 'quote-accept', true, 'quotes.edit');
         if (status === 'SENT') add('Reject', 'quote-reject', false, 'quotes.edit');
         if (status === 'REJECTED') add('Reverse Rejection', 'quote-reverse-rejection', true, 'quotes.edit');
@@ -506,6 +507,7 @@
       const status = String(item.status || '').toUpperCase();
       const hasReceipts = Array.isArray(item.receipts) && item.receipts.length > 0;
       add('View PDF', 'invoice-pdf', true, 'invoices.view');
+      if (status === 'DRAFT') add('Edit', 'invoice-edit', true, 'invoices.edit');
       if (status === 'DRAFT') add(item.purchaseOrderNumber ? 'Edit Customer PO' : 'Add Customer PO', 'invoice-po', false, 'invoices.edit');
       if (status === 'DRAFT') add('Send', 'invoice-send', false, 'invoices.send');
       if (status !== 'PAID' && status !== 'VOID') add('Record Payment', 'invoice-pay', false, 'payments.manage');
@@ -1784,6 +1786,145 @@
     update();
   }
 
+  let documentLineItemSequence = 0;
+
+  function dateFieldValue(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+  }
+
+  function documentLineItemRow(item = {}) {
+    documentLineItemSequence += 1;
+    const index = documentLineItemSequence;
+    return '<div class="document-line-item" data-document-line-item>' +
+      '<input type="hidden" data-line-service-id value="' + escapeHtml(item.serviceId || '') + '">' +
+      '<div class="field document-line-description"><label for="document-line-description-' + index + '">Description</label><input id="document-line-description-' + index + '" data-line-description maxlength="300" required value="' + escapeHtml(item.description || '') + '"></div>' +
+      '<div class="field"><label for="document-line-quantity-' + index + '">Qty</label><input id="document-line-quantity-' + index + '" data-line-quantity type="number" min="0" step="0.01" required value="' + escapeHtml(item.quantity == null ? 1 : item.quantity) + '"></div>' +
+      '<div class="field"><label for="document-line-unit-' + index + '">Unit price</label><input id="document-line-unit-' + index + '" data-line-unit-price type="number" min="0" step="0.01" required value="' + escapeHtml(item.unitPrice == null ? 0 : item.unitPrice) + '"></div>' +
+      '<div class="field"><label for="document-line-discount-' + index + '">Discount</label><input id="document-line-discount-' + index + '" data-line-discount type="number" min="0" step="0.01" value="' + escapeHtml(item.discountAmount || 0) + '"></div>' +
+      '<div class="field"><label for="document-line-tax-' + index + '">Tax</label><input id="document-line-tax-' + index + '" data-line-tax type="number" min="0" step="0.01" value="' + escapeHtml(item.taxAmount || 0) + '"></div>' +
+      '<button class="secondary-button compact document-line-remove" type="button" data-remove-document-line>Remove</button>' +
+      '</div>';
+  }
+
+  function documentLineItemsEditor(record) {
+    const items = Array.isArray(record && record.lineItems) && record.lineItems.length
+      ? record.lineItems
+      : [{ description: record && (record.title || record.number) || 'Service', quantity: 1, unitPrice: record && (record.amount || record.total) || 0, discountAmount: 0, taxAmount: 0 }];
+    return '<section class="document-line-editor span-2" data-document-line-editor>' +
+      '<div class="document-line-editor-head"><div><strong>Line items</strong><small>Change the work description and amounts before sending.</small></div><button class="secondary-button compact" type="button" data-add-document-line>+ Add line</button></div>' +
+      '<div class="document-line-list" data-document-line-list>' + items.map(documentLineItemRow).join('') + '</div>' +
+      '</section>';
+  }
+
+  function updateDocumentLineRemoveButtons(form) {
+    const rows = Array.from(form.querySelectorAll('[data-document-line-item]'));
+    rows.forEach((row) => {
+      const button = row.querySelector('[data-remove-document-line]');
+      if (button) button.disabled = rows.length === 1;
+    });
+  }
+
+  function bindDocumentLineItemEditor(form) {
+    const list = form.querySelector('[data-document-line-list]');
+    const add = form.querySelector('[data-add-document-line]');
+    if (!list || !add) return;
+    add.addEventListener('click', () => {
+      list.insertAdjacentHTML('beforeend', documentLineItemRow({ quantity: 1, unitPrice: 0, discountAmount: 0, taxAmount: 0 }));
+      updateDocumentLineRemoveButtons(form);
+      if (window.RevEngineFormUX) window.RevEngineFormUX.refresh(form);
+    });
+    list.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-remove-document-line]');
+      if (!button || button.disabled) return;
+      const row = button.closest('[data-document-line-item]');
+      if (row) row.remove();
+      updateDocumentLineRemoveButtons(form);
+    });
+    updateDocumentLineRemoveButtons(form);
+  }
+
+  function collectDocumentLineItems(form) {
+    const rows = Array.from(form.querySelectorAll('[data-document-line-item]'));
+    if (!rows.length) throw new Error('Add at least one line item.');
+    return rows.map((row, index) => {
+      const description = String(row.querySelector('[data-line-description]').value || '').trim();
+      const quantity = Number(row.querySelector('[data-line-quantity]').value);
+      const unitPrice = Number(row.querySelector('[data-line-unit-price]').value);
+      const discountAmount = Number(row.querySelector('[data-line-discount]').value || 0);
+      const taxAmount = Number(row.querySelector('[data-line-tax]').value || 0);
+      if (!description) throw new Error('Every line item needs a description.');
+      if (![quantity, unitPrice, discountAmount, taxAmount].every(Number.isFinite)) throw new Error('Enter valid line item amounts.');
+      if ([quantity, unitPrice, discountAmount, taxAmount].some((value) => value < 0)) throw new Error('Line item amounts cannot be negative.');
+      const serviceId = row.querySelector('[data-line-service-id]').value || undefined;
+      return { serviceId, description, quantity, unitPrice, discountAmount, taxAmount, sortOrder: index };
+    });
+  }
+
+  async function openBillingDocumentEditor(resource, id) {
+    await preloadLookups();
+    const record = state[resource] && state[resource].find((item) => item.id === id) || await api('/' + resource + '/' + id);
+    if (!record || String(record.status || '').toUpperCase() !== 'DRAFT') throw new Error('Only draft documents can be edited.');
+
+    const quote = resource === 'quotes';
+    const fields = quote
+      ? field('title', 'Title', 'text', 'required maxlength="200"') +
+        select('customerId', 'Customer', optionList(state.customers, 'Select customer'), true) +
+        select('serviceId', 'Service', optionList(state.services, 'No service'), false) +
+        field('validUntil', 'Valid Until', 'date') +
+        '<div class="field span-2"><label for="fc-description">Notes</label><textarea id="fc-description" name="description" maxlength="1000"></textarea></div>' +
+        documentLineItemsEditor(record)
+      : invoiceCompanyNote() +
+        select('customerId', 'Customer', optionList(state.customers, 'Select customer'), true, 'data-invoice-customer') +
+        select('jobId', 'Work Order', optionList(state.jobs, 'No work order'), false) +
+        invoicePurchaseOrderField() +
+        invoiceDueDateField() +
+        documentLineItemsEditor(record);
+
+    closeModal();
+    const modal = document.createElement('div');
+    modal.className = 'fc-modal';
+    modal.innerHTML = '<div class="fc-dialog document-editor-dialog"><form novalidate><div class="panel-head"><div><h3>Edit ' + (quote ? 'Quote' : 'Invoice') + '</h3><small>Draft documents can be changed until they are sent.</small></div><button class="icon-button" type="button" data-close>&times;</button></div><div class="form-grid">' + fields + '</div><div class="fc-form-actions"><button class="secondary-button" type="button" data-close>Cancel</button><button class="primary-button" type="submit">Save changes</button></div><p class="fc-form-error" hidden></p></form></div>';
+    const form = modal.querySelector('form');
+    const setValue = (name, value) => { if (form.elements[name]) form.elements[name].value = value == null ? '' : value; };
+    setValue('customerId', record.customerId);
+    setValue('serviceId', record.serviceId);
+    setValue('jobId', record.jobId);
+    setValue('purchaseOrderNumber', record.purchaseOrderNumber);
+    setValue('dueDate', dateFieldValue(record.dueDate));
+    setValue('title', record.title);
+    setValue('validUntil', dateFieldValue(record.validUntil));
+    setValue('description', record.description);
+    if (!quote && form.elements.dueDate && record.dueDate) form.elements.dueDate.dataset.userChanged = 'true';
+    if (!quote) bindInvoiceCustomerRules(form);
+    bindDocumentLineItemEditor(form);
+    if (window.RevEngineFormUX) window.RevEngineFormUX.refresh(form);
+
+    modal.addEventListener('click', (event) => { if (event.target === modal || event.target.closest('[data-close]')) closeModal(); });
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (window.RevEngineFormUX && !window.RevEngineFormUX.validateForm(form)) return;
+      const error = modal.querySelector('.fc-form-error');
+      error.hidden = true;
+      try {
+        const body = Object.fromEntries(new FormData(form).entries());
+        Object.keys(body).forEach((key) => { if (body[key] === '') delete body[key]; });
+        body.lineItems = collectDocumentLineItems(form);
+        await api('/' + resource + '/' + id, { method: 'PATCH', body: JSON.stringify(body) });
+        closeModal();
+        showToast((quote ? 'Quote' : 'Invoice') + ' updated.', true);
+        if (quote) await loadQuotesResource(activeQuoteFilter());
+        else await load();
+      } catch (err) {
+        error.textContent = err.message;
+        error.hidden = false;
+        showToast(err.message, false);
+      }
+    });
+    document.body.appendChild(modal);
+  }
+
   function formFor(resource) {
     if (resource === 'leads') return {
       title: 'New Sales Enquiry',
@@ -2941,6 +3082,10 @@
         window.open(API_BASE + '/quotes/' + encodeURIComponent(id) + '/pdf', '_blank', 'noopener');
         return;
       }
+      if (action === 'quote-edit') {
+        await openBillingDocumentEditor('quotes', id);
+        return;
+      }
       if (action === 'quote-send') await api('/quotes/' + id + '/send', { method: 'POST', body: '{}' });
       if (action === 'quote-accept') await api('/quotes/' + id + '/accept', { method: 'POST', body: '{}' });
       if (action === 'quote-reject') await api('/quotes/' + id + '/reject', { method: 'POST', body: '{}' });
@@ -2979,6 +3124,10 @@
       }
       if (action === 'invoice-pdf') {
         window.open(API_BASE + '/invoices/' + encodeURIComponent(id) + '/pdf', '_blank', 'noopener');
+        return;
+      }
+      if (action === 'invoice-edit') {
+        await openBillingDocumentEditor('invoices', id);
         return;
       }
       if (action === 'invoice-po') {
@@ -3684,6 +3833,13 @@
     if (hasField('paymentTermsDays')) payload.paymentTermsDays = data.paymentTermsDays !== '' ? Number(data.paymentTermsDays) : undefined;
     if (hasField('invoiceFooter')) payload.invoiceFooter = data.invoiceFooter || undefined;
     if (hasField('paymentInstructions')) payload.paymentInstructions = data.paymentInstructions || undefined;
+    ['documentTemplate', 'documentHeaderStyle', 'documentLogoPosition', 'documentLogoSize', 'documentTableDensity', 'quoteLabel', 'invoiceLabel'].forEach((name) => {
+      if (hasField(name)) payload[name] = data[name] || undefined;
+    });
+    ['showDocumentLogo', 'showCompanyAddress', 'showCompanyEmail', 'showCompanyPhone', 'showCompanyWebsite', 'showTax', 'showPurchaseOrder', 'showNotes', 'showPaymentInstructions'].forEach((name) => {
+      const input = form.querySelector('[name="' + name + '"]');
+      if (input) payload[name] = Boolean(input.checked);
+    });
 
     const bankProofInput = form.querySelector('[name="bankTransferProofRequired"]');
     if (bankProofInput) payload.bankTransferProofRequired = Boolean(bankProofInput.checked);
@@ -3698,6 +3854,43 @@
       if (!payload.numberFormat) payload.numberFormat = defaults.numberFormat;
     }
     return payload;
+  }
+
+  let documentPreviewTimer = null;
+  let documentPreviewObjectUrl = null;
+
+  async function refreshDocumentPreview() {
+    const form = document.querySelector('[data-finance-settings-form]');
+    const frame = document.querySelector('[data-document-preview-frame]');
+    const status = document.querySelector('[data-document-preview-status]');
+    if (!form || !frame || frame.closest('[hidden]')) return;
+    const kindField = document.querySelector('[data-document-preview-kind]');
+    const kind = kindField && kindField.value === 'invoice' ? 'invoice' : 'quote';
+    if (status) status.textContent = 'Rendering preview…';
+    try {
+      const response = await fetch(`${API_BASE}/company/document-preview.pdf?kind=${encodeURIComponent(kind)}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(financePayload(form))
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error && payload.error.message || `HTTP ${response.status}`);
+      }
+      const blob = await response.blob();
+      if (documentPreviewObjectUrl) URL.revokeObjectURL(documentPreviewObjectUrl);
+      documentPreviewObjectUrl = URL.createObjectURL(blob);
+      frame.src = documentPreviewObjectUrl;
+      if (status) status.textContent = kind === 'invoice' ? 'Invoice preview' : 'Quote preview';
+    } catch (error) {
+      if (status) status.textContent = error.message || 'Preview unavailable';
+    }
+  }
+
+  function scheduleDocumentPreview() {
+    clearTimeout(documentPreviewTimer);
+    documentPreviewTimer = setTimeout(refreshDocumentPreview, 350);
   }
 
   function fillFinanceForm(settings) {
@@ -3721,6 +3914,7 @@
       form.querySelectorAll('[data-payment-method-option]').forEach((input) => { input.checked = defaults.paymentMethods.includes(input.value); });
     }
     syncPaymentMethodHiddenField(form);
+    scheduleDocumentPreview();
     if (!form.dataset.financeUiBound) {
       form.dataset.financeUiBound = 'true';
       const countryField = form.querySelector('[name="country"]');
@@ -3739,6 +3933,11 @@
         });
       }
       form.querySelectorAll('[data-payment-method-option]').forEach((input) => input.addEventListener('change', () => syncPaymentMethodHiddenField(form)));
+      form.querySelectorAll('[data-document-preview-input]').forEach((input) => {
+        input.addEventListener(input.type === 'checkbox' || input.tagName === 'SELECT' ? 'change' : 'input', scheduleDocumentPreview);
+      });
+      const previewKind = document.querySelector('[data-document-preview-kind]');
+      if (previewKind) previewKind.addEventListener('change', scheduleDocumentPreview);
     }
   }
 
@@ -3919,6 +4118,7 @@
           const settings = applyMarketCurrencyForDisplay(await api('/company/finance-settings', { method: 'PATCH', body: JSON.stringify(financePayload(financeForm)) }));
           state.financeSettings = settings;
           fillFinanceForm(settings);
+          scheduleDocumentPreview();
           setFormMessage('[data-finance-message]', 'Finance settings saved.', true);
         } catch (error) {
           setFormMessage('[data-finance-message]', error.message, false);
@@ -4024,6 +4224,7 @@
           state.profile = await api('/company/profile', { method: 'PATCH', body: JSON.stringify(formPayload('[data-profile-field]')) });
         }
         applyBranding();
+        scheduleDocumentPreview();
         const savedLabel = canChangeCompany && canChangeBrand ? 'Company details saved.' : canChangeBrand ? 'Brand saved.' : 'Company details saved.';
         if (message) {
           message.textContent = savedLabel;
@@ -4050,20 +4251,55 @@
     window.location.href = 'client-portal.html';
   }
 
+  async function pdfSafeLogoFile(file) {
+    if (!file || file.type !== 'image/webp') return file;
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    if (!context) throw new Error('This browser could not prepare the WEBP logo.');
+
+    let drawable = null;
+    let objectUrl = null;
+    try {
+      if (typeof createImageBitmap === 'function') {
+        drawable = await createImageBitmap(file);
+      } else {
+        objectUrl = URL.createObjectURL(file);
+        drawable = await new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = () => reject(new Error('This browser could not read the WEBP logo. Please upload a PNG or JPG instead.'));
+          image.src = objectUrl;
+        });
+      }
+
+      canvas.width = drawable.width || drawable.naturalWidth;
+      canvas.height = drawable.height || drawable.naturalHeight;
+      if (!canvas.width || !canvas.height) throw new Error('The WEBP logo has invalid dimensions.');
+      context.drawImage(drawable, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve, reject) => canvas.toBlob((result) => result ? resolve(result) : reject(new Error('This browser could not convert the WEBP logo. Please upload a PNG or JPG instead.')), 'image/png'));
+      const safeName = String(file.name || 'company-logo.webp').replace(/\.webp$/i, '') + '.png';
+      return new File([blob], safeName, { type: 'image/png', lastModified: Date.now() });
+    } finally {
+      if (drawable && typeof drawable.close === 'function') drawable.close();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    }
+  }
+
   async function uploadLogo(file) {
-  const formData = new FormData();
-  formData.append('logo', file);
+    const safeFile = await pdfSafeLogoFile(file);
+    const formData = new FormData();
+    formData.append('logo', safeFile);
 
-  const response = await fetch(`${API_BASE}/company/branding/logo`, {
-    method: 'POST',
-    credentials: 'include',
-    body: formData
-  });
+    const response = await fetch(`${API_BASE}/company/branding/logo`, {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+    });
 
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error && payload.error.message || `HTTP ${response.status}`);
-  return payload.data;
-}
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error && payload.error.message || `HTTP ${response.status}`);
+    return payload.data;
+  }
 
   async function load() {
     setStatus('Connecting to API...', true);

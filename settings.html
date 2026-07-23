@@ -88,6 +88,14 @@
                 <input id="tradingName" name="tradingName" placeholder="Trading as" data-profile-field="tradingName">
               </div>
               <div class="field">
+                <label for="registrationNumber">Company Registration Number</label>
+                <input id="registrationNumber" name="registrationNumber" placeholder="Registered company number" data-profile-field="registrationNumber">
+              </div>
+              <div class="field">
+                <label for="taxNumber">Tax/VAT Number</label>
+                <input id="taxNumber" name="taxNumber" placeholder="VAT or tax registration number" data-profile-field="taxNumber">
+              </div>
+              <div class="field">
                 <label for="primaryColor">Primary Color</label>
                 <input id="primaryColor" name="primaryColor" type="color" value="#2363ff" data-branding-field="primaryColor" data-preview-color>
               </div>
@@ -111,50 +119,13 @@
                 <label for="companyEmail">Company Email</label>
                 <input id="companyEmail" name="email" type="email" placeholder="office@example.com" data-profile-field="email">
               </div>
+              <div class="field">
+                <label for="companyPhone">Company Phone</label>
+                <input id="companyPhone" name="phone" placeholder="Main business phone" data-profile-field="phone">
+              </div>
               <div class="field span-2">
                 <label for="address">Business Address</label>
                 <input id="address" name="address" placeholder="Not set" data-profile-field="address">
-              </div>
-              <div class="brand-preview span-2" data-brand-preview>
-                <div class="brand-preview-label-row">
-                  <div>
-                    <strong>Customer document preview</strong>
-                    <small>See how your brand appears on quotes and invoices.</small>
-                  </div>
-                  <span>Quote preview</span>
-                </div>
-                <div class="brand-preview-document">
-                  <div class="brand-preview-head">
-                    <div class="brand-preview-identity">
-                      <div class="logo-preview small" data-preview-logo><img src="assets/rev-engine-mark.png" alt="Rev Engine logo"></div>
-                      <div>
-                        <strong data-preview-title>Rev Engine</strong>
-                        <small data-preview-contact>Company contact details</small>
-                      </div>
-                    </div>
-                    <div class="brand-preview-document-meta">
-                      <span>QUOTE</span>
-                      <strong data-preview-reference>Q-1042</strong>
-                    </div>
-                  </div>
-                  <div class="brand-preview-bar" data-preview-bar></div>
-                  <div class="brand-preview-body">
-                    <div>
-                      <small>Prepared for</small>
-                      <strong>Sample customer</strong>
-                      <span>Solar maintenance service</span>
-                    </div>
-                    <div class="brand-preview-total">
-                      <small>Total</small>
-                      <strong data-preview-total>USD 1,250.00</strong>
-                    </div>
-                  </div>
-                  <div class="brand-preview-footer">
-                    <span data-preview-footer-copy>Customer document footer</span>
-                    <span data-preview-support>Support details</span>
-                    <span data-preview-website>Website</span>
-                  </div>
-                </div>
               </div>
               <div class="form-actions span-2">
                 <button class="primary-button" type="submit">Save Company Details</button>
@@ -316,8 +287,9 @@
                 <label class="switch-row" for="financePricesIncludeTaxToggle">
                   <input id="financePricesIncludeTaxToggle" type="checkbox" name="pricesIncludeTax" data-finance-field="pricesIncludeTax">
                   <span class="switch-control" aria-hidden="true"></span>
-                  <span class="switch-copy">Line item prices already include VAT/tax.</span>
+                  <span class="switch-copy">Tax included</span>
                 </label>
+                <small class="field-help toggle-help">Turn this on when line item prices already include VAT/tax.</small>
               </div>
               <div class="form-section-title span-2">
                 <strong>Document numbering</strong>
@@ -350,6 +322,82 @@
                 <select id="financePaymentTermsDays" name="paymentTermsDays" data-finance-field="paymentTermsDays">
                   <option value="0">Due on receipt</option><option value="7">Net 7</option><option value="14">Net 14</option><option value="30">Net 30</option><option value="60">Net 60</option>
                 </select>
+              </div>
+
+              <div class="form-section-title span-2">
+                <strong>Document template</strong>
+                <span>The preview below is generated by the same PDF renderer used for real quotes and invoices.</span>
+              </div>
+              <div class="field">
+                <label for="financeDocumentTemplate">Template</label>
+                <select id="financeDocumentTemplate" name="documentTemplate" data-finance-field="documentTemplate" data-document-preview-input>
+                  <option value="MODERN">Modern</option>
+                  <option value="CLASSIC">Classic</option>
+                  <option value="MINIMAL">Minimal</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="financeDocumentHeaderStyle">Header arrangement</label>
+                <select id="financeDocumentHeaderStyle" name="documentHeaderStyle" data-finance-field="documentHeaderStyle" data-document-preview-input>
+                  <option value="SPLIT">Split</option>
+                  <option value="STACKED">Stacked</option>
+                  <option value="COMPACT">Compact</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="financeDocumentLogoPosition">Logo position</label>
+                <select id="financeDocumentLogoPosition" name="documentLogoPosition" data-finance-field="documentLogoPosition" data-document-preview-input>
+                  <option value="LEFT">Left</option>
+                  <option value="RIGHT">Right</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="financeDocumentLogoSize">Logo size</label>
+                <select id="financeDocumentLogoSize" name="documentLogoSize" data-finance-field="documentLogoSize" data-document-preview-input>
+                  <option value="SMALL">Small</option>
+                  <option value="MEDIUM">Medium</option>
+                  <option value="LARGE">Large</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="financeDocumentTableDensity">Table spacing</label>
+                <select id="financeDocumentTableDensity" name="documentTableDensity" data-finance-field="documentTableDensity" data-document-preview-input>
+                  <option value="COMFORTABLE">Comfortable</option>
+                  <option value="COMPACT">Compact</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="financePreviewKind">Preview document</label>
+                <select id="financePreviewKind" data-document-preview-kind>
+                  <option value="quote">Quote</option>
+                  <option value="invoice">Invoice</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="financeQuoteLabel">Quote label</label>
+                <input id="financeQuoteLabel" name="quoteLabel" maxlength="30" placeholder="QUOTE" data-finance-field="quoteLabel" data-document-preview-input>
+              </div>
+              <div class="field">
+                <label for="financeInvoiceLabel">Invoice label</label>
+                <input id="financeInvoiceLabel" name="invoiceLabel" maxlength="30" placeholder="INVOICE" data-finance-field="invoiceLabel" data-document-preview-input>
+              </div>
+              <div class="document-visibility-grid span-2" aria-label="Document content">
+                <label class="document-option"><input type="checkbox" name="showDocumentLogo" data-finance-field="showDocumentLogo" data-document-preview-input><span><strong>Company logo</strong><small>Use the uploaded company logo. Initials appear when no usable logo exists.</small></span></label>
+                <label class="document-option"><input type="checkbox" name="showCompanyAddress" data-finance-field="showCompanyAddress" data-document-preview-input><span><strong>Company address</strong><small>Show the address from Company Details.</small></span></label>
+                <label class="document-option"><input type="checkbox" name="showCompanyEmail" data-finance-field="showCompanyEmail" data-document-preview-input><span><strong>Company email</strong><small>Show the support or company email.</small></span></label>
+                <label class="document-option"><input type="checkbox" name="showCompanyPhone" data-finance-field="showCompanyPhone" data-document-preview-input><span><strong>Company phone</strong><small>Show the support or company phone number.</small></span></label>
+                <label class="document-option"><input type="checkbox" name="showCompanyWebsite" data-finance-field="showCompanyWebsite" data-document-preview-input><span><strong>Company website</strong><small>Show the customer-facing website.</small></span></label>
+                <label class="document-option"><input type="checkbox" name="showTax" data-finance-field="showTax" data-document-preview-input><span><strong>Tax row</strong><small>Show the configured tax or VAT total.</small></span></label>
+                <label class="document-option"><input type="checkbox" name="showPurchaseOrder" data-finance-field="showPurchaseOrder" data-document-preview-input><span><strong>Customer PO</strong><small>Show it only when the invoice has a PO number.</small></span></label>
+                <label class="document-option"><input type="checkbox" name="showNotes" data-finance-field="showNotes" data-document-preview-input><span><strong>Document notes</strong><small>Show quote notes or invoice payment notes.</small></span></label>
+                <label class="document-option"><input type="checkbox" name="showPaymentInstructions" data-finance-field="showPaymentInstructions" data-document-preview-input><span><strong>Payment instructions</strong><small>Show payment instructions on invoices.</small></span></label>
+              </div>
+              <div class="document-pdf-preview span-2" data-document-preview>
+                <div class="document-pdf-preview-head">
+                  <div><strong>Live customer document preview</strong><small>Unsaved changes are rendered using the real PDF generator.</small></div>
+                  <span data-document-preview-status>Loading preview…</span>
+                </div>
+                <iframe title="Customer document PDF preview" data-document-preview-frame></iframe>
               </div>
 
               <div class="form-section-title span-2">
@@ -413,8 +461,8 @@
                 <textarea id="financePaymentInstructions" name="paymentInstructions" data-finance-field="paymentInstructions" placeholder="Shown on customer invoices and payment pages. Example: Please use your invoice number as the bank transfer reference."></textarea>
               </div>
               <div class="field span-2">
-                <label for="financeInvoiceFooter">Invoice Footer</label>
-                <textarea id="financeInvoiceFooter" name="invoiceFooter" data-finance-field="invoiceFooter" placeholder="Optional legal note shown at the bottom of customer invoices."></textarea>
+                <label for="financeInvoiceFooter">Customer document footer</label>
+                <textarea id="financeInvoiceFooter" name="invoiceFooter" data-finance-field="invoiceFooter" placeholder="Optional customer-facing note shown at the bottom of quotes and invoices."></textarea>
               </div>
               <div class="form-actions span-2">
                 <button class="primary-button" type="submit">Save Billing &amp; Document Settings</button>

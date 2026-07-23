@@ -42,6 +42,7 @@ const { allocateFinancialNumber } = require('../services/payments/financialNumbe
 const { calculateInvoiceLedger, money: paymentMoney, recalculateInvoice: recalculateInvoiceLedger, recalculateInvoiceFinancials, refundableRemaining, syncUnappliedCreditForPayment } = require('../services/payments/invoiceLedger.service');
 const { paymentTermsDays, requirePurchaseOrderNumber, resolveInvoiceBranch } = require('../services/invoicePolicy.service');
 const { createBusinessDocumentPdf } = require('../services/businessDocumentPdf.service');
+const { loadBusinessDocumentLogo } = require('../services/businessDocumentLogo.service');
 const { reconcilePaymentLink } = require('../services/payments/paymentReconciliation.service');
 const {
   COOKIE_NAME,
@@ -876,6 +877,22 @@ function financeSettingsDefaults(companyId, country = 'ZW') {
     invoiceFooter: null,
     allowedPaymentMethods: region.allowedPaymentMethods,
     paymentInstructions: null,
+    documentTemplate: 'MODERN',
+    documentHeaderStyle: 'SPLIT',
+    documentLogoPosition: 'LEFT',
+    documentLogoSize: 'MEDIUM',
+    documentTableDensity: 'COMFORTABLE',
+    quoteLabel: 'QUOTE',
+    invoiceLabel: 'INVOICE',
+    showDocumentLogo: true,
+    showCompanyAddress: true,
+    showCompanyEmail: true,
+    showCompanyPhone: true,
+    showCompanyWebsite: true,
+    showTax: true,
+    showPurchaseOrder: true,
+    showNotes: true,
+    showPaymentInstructions: true,
     bankTransferProofRequired: true,
     enforceQuoteDepositBeforeScheduling: false,
     defaultQuoteDepositPercent: 0,
@@ -907,6 +924,22 @@ function financeLocalization(settings) {
     invoiceFooter: merged.invoiceFooter || null,
     allowedPaymentMethods: Array.isArray(merged.allowedPaymentMethods) ? merged.allowedPaymentMethods : financeSettingsDefaults(null, merged.country).allowedPaymentMethods,
     paymentInstructions: merged.paymentInstructions || null,
+    documentTemplate: ['MODERN', 'CLASSIC', 'MINIMAL'].includes(String(merged.documentTemplate || '').toUpperCase()) ? String(merged.documentTemplate).toUpperCase() : 'MODERN',
+    documentHeaderStyle: ['SPLIT', 'STACKED', 'COMPACT'].includes(String(merged.documentHeaderStyle || '').toUpperCase()) ? String(merged.documentHeaderStyle).toUpperCase() : 'SPLIT',
+    documentLogoPosition: ['LEFT', 'RIGHT'].includes(String(merged.documentLogoPosition || '').toUpperCase()) ? String(merged.documentLogoPosition).toUpperCase() : 'LEFT',
+    documentLogoSize: ['SMALL', 'MEDIUM', 'LARGE'].includes(String(merged.documentLogoSize || '').toUpperCase()) ? String(merged.documentLogoSize).toUpperCase() : 'MEDIUM',
+    documentTableDensity: ['COMPACT', 'COMFORTABLE'].includes(String(merged.documentTableDensity || '').toUpperCase()) ? String(merged.documentTableDensity).toUpperCase() : 'COMFORTABLE',
+    quoteLabel: merged.quoteLabel || 'QUOTE',
+    invoiceLabel: merged.invoiceLabel || 'INVOICE',
+    showDocumentLogo: merged.showDocumentLogo !== false,
+    showCompanyAddress: merged.showCompanyAddress !== false,
+    showCompanyEmail: merged.showCompanyEmail !== false,
+    showCompanyPhone: merged.showCompanyPhone !== false,
+    showCompanyWebsite: merged.showCompanyWebsite !== false,
+    showTax: merged.showTax !== false,
+    showPurchaseOrder: merged.showPurchaseOrder !== false,
+    showNotes: merged.showNotes !== false,
+    showPaymentInstructions: merged.showPaymentInstructions !== false,
     bankTransferProofRequired: merged.bankTransferProofRequired !== false,
     enforceQuoteDepositBeforeScheduling: Boolean(merged.enforceQuoteDepositBeforeScheduling),
     defaultQuoteDepositPercent: Number(merged.defaultQuoteDepositPercent || 0),
@@ -1448,6 +1481,22 @@ const financeSettingsSchema = z.object({
   invoiceFooter: optionalText(1000),
   allowedPaymentMethods: z.array(z.enum(paymentMethodValues)).max(20).optional(),
   paymentInstructions: optionalText(1000),
+  documentTemplate: z.enum(['MODERN', 'CLASSIC', 'MINIMAL']).optional(),
+  documentHeaderStyle: z.enum(['SPLIT', 'STACKED', 'COMPACT']).optional(),
+  documentLogoPosition: z.enum(['LEFT', 'RIGHT']).optional(),
+  documentLogoSize: z.enum(['SMALL', 'MEDIUM', 'LARGE']).optional(),
+  documentTableDensity: z.enum(['COMPACT', 'COMFORTABLE']).optional(),
+  quoteLabel: optionalText(30),
+  invoiceLabel: optionalText(30),
+  showDocumentLogo: z.boolean().optional(),
+  showCompanyAddress: z.boolean().optional(),
+  showCompanyEmail: z.boolean().optional(),
+  showCompanyPhone: z.boolean().optional(),
+  showCompanyWebsite: z.boolean().optional(),
+  showTax: z.boolean().optional(),
+  showPurchaseOrder: z.boolean().optional(),
+  showNotes: z.boolean().optional(),
+  showPaymentInstructions: z.boolean().optional(),
   bankTransferProofRequired: z.boolean().optional(),
   enforceQuoteDepositBeforeScheduling: z.boolean().optional(),
   defaultQuoteDepositPercent: z.coerce.number().min(0).max(100).optional(),
@@ -1456,6 +1505,34 @@ const financeSettingsSchema = z.object({
   if (value.defaultCurrency && value.allowedCurrencies && !value.allowedCurrencies.includes(value.defaultCurrency)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['allowedCurrencies'], message: 'Allowed currencies must include the default currency' });
   }
+});
+const documentPreviewSettingsSchema = z.object({
+  defaultCurrency: currencyCode.optional(),
+  numberFormat: z.string().trim().min(2).max(40).optional(),
+  taxName: optionalText(40),
+  taxRate: z.coerce.number().min(0).max(100).optional(),
+  quotePrefix: optionalText(20),
+  invoicePrefix: optionalText(20),
+  quoteExpiryDays: z.coerce.number().int().min(1).max(365).optional(),
+  paymentTermsDays: z.coerce.number().int().min(0).max(365).optional(),
+  invoiceFooter: optionalText(1000),
+  paymentInstructions: optionalText(1000),
+  documentTemplate: z.enum(['MODERN', 'CLASSIC', 'MINIMAL']).optional(),
+  documentHeaderStyle: z.enum(['SPLIT', 'STACKED', 'COMPACT']).optional(),
+  documentLogoPosition: z.enum(['LEFT', 'RIGHT']).optional(),
+  documentLogoSize: z.enum(['SMALL', 'MEDIUM', 'LARGE']).optional(),
+  documentTableDensity: z.enum(['COMPACT', 'COMFORTABLE']).optional(),
+  quoteLabel: optionalText(30),
+  invoiceLabel: optionalText(30),
+  showDocumentLogo: z.boolean().optional(),
+  showCompanyAddress: z.boolean().optional(),
+  showCompanyEmail: z.boolean().optional(),
+  showCompanyPhone: z.boolean().optional(),
+  showCompanyWebsite: z.boolean().optional(),
+  showTax: z.boolean().optional(),
+  showPurchaseOrder: z.boolean().optional(),
+  showNotes: z.boolean().optional(),
+  showPaymentInstructions: z.boolean().optional()
 });
 const financeIntegrationConfigSchema = z.record(z.union([z.string().trim().max(500), z.boolean(), z.number()])).default({});
 const financeIntegrationCreateSchema = z.object({
@@ -3513,7 +3590,7 @@ function clientCustomerWhere(account) { return account.customerId ? { companyId:
 function clientLine(item) { return item && { id: item.id, description: item.description, quantity: item.quantity, unitPrice: item.unitPrice, discountAmount: item.discountAmount, taxAmount: item.taxAmount, lineTotal: item.lineTotal, sortOrder: item.sortOrder }; }
 function clientCustomer(customer) { return customer && { id: customer.id, name: customer.name, email: customer.email, phone: customer.phone, address: customer.address }; }
 function clientJobSummary(job) { return job && { id: job.id, title: job.title, status: job.status, scheduledStart: job.scheduledStart, scheduledEnd: job.scheduledEnd, completedAt: job.completedAt }; }
-function clientQuote(quote) { return quote && { id: quote.id, quoteNumber: quote.id, customerId: quote.customerId, title: quote.title, description: quote.description, status: quote.status, service: quote.service && { id: quote.service.id, name: quote.service.name }, customer: clientCustomer(quote.customer), job: clientJobSummary(quote.job), createdAt: quote.createdAt, updatedAt: quote.updatedAt, validUntil: quote.validUntil, sentAt: quote.sentAt, acceptedAt: quote.acceptedAt, rejectedAt: quote.rejectedAt, subtotal: quote.subtotal, tax: quote.taxTotal, discount: quote.discountTotal, total: quote.total, amount: quote.amount, lineItems: (quote.lineItems || []).map(clientLine) }; }
+function clientQuote(quote) { return quote && { id: quote.id, quoteNumber: quote.number || quote.id, customerId: quote.customerId, title: quote.title, description: quote.description, status: quote.status, service: quote.service && { id: quote.service.id, name: quote.service.name }, customer: clientCustomer(quote.customer), job: clientJobSummary(quote.job), createdAt: quote.createdAt, updatedAt: quote.updatedAt, validUntil: quote.validUntil, sentAt: quote.sentAt, acceptedAt: quote.acceptedAt, rejectedAt: quote.rejectedAt, subtotal: quote.subtotal, tax: quote.taxTotal, discount: quote.discountTotal, total: quote.total, amount: quote.amount, lineItems: (quote.lineItems || []).map(clientLine) }; }
 function clientPayment(payment) {
   const presented = paymentPresentation(payment, customerPaymentStatusLabel);
   return presented && { id: presented.id, invoiceId: presented.invoiceId, amount: presented.amount, refundedAmount: presented.refundedAmount, appliedAmount: presented.appliedAmount, method: presented.method, status: presented.status, statusLabel: presented.statusLabel, reference: presented.reference, receivedAt: presented.receivedAt, confirmedAt: presented.confirmedAt, createdAt: presented.createdAt };
@@ -3587,6 +3664,21 @@ router.get("/client/quotes/:id", requireClientAuth, validate(idParam, "params"),
   sendData(res, normalize(clientQuote(quote)));
 }));
 
+router.get("/client/quotes/:id/pdf", requireClientAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
+  const record = await clientOwnedQuote(req.clientAccount, req.params.id);
+  if (!record) throw notFound("Quote not found");
+  const [company, finance] = await Promise.all([
+    getCompanyWithBranding(req.clientAccount.companyId),
+    getCompanyFinanceSettings(req.clientAccount.companyId)
+  ]);
+  if (!company) throw notFound("Company not found");
+  const branding = publicBranding(company);
+  const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
+  const pdf = createBusinessDocumentPdf({ kind: 'quote', record: normalize(record), company: normalize(company), branding, localization: financeLocalization(finance), logoImage });
+  const filename = `quote-${String(record.number || record.id).replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80)}.pdf`;
+  res.status(200).set('Content-Type', 'application/pdf').set('Content-Disposition', `inline; filename="${filename}"`).set('Cache-Control', 'private, no-store').send(pdf);
+}));
+
 router.post("/client/quotes/:id/accept", requireClientAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
   const quote = await clientOwnedQuote(req.clientAccount, req.params.id);
   if (!quote) throw notFound("Quote not found");
@@ -3647,6 +3739,21 @@ router.get("/client/invoices/:id", requireClientAuth, validate(idParam, "params"
     activePaymentProvidersForCompany(req.clientAccount.companyId)
   ]);
   sendData(res, normalize(clientInvoice(invoice, clientPaymentOptionsFromSettings(finance, activeProviders))));
+}));
+
+router.get("/client/invoices/:id/pdf", requireClientAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
+  const record = await clientOwnedInvoice(req.clientAccount, req.params.id);
+  if (!record) throw notFound("Invoice not found");
+  const [company, finance] = await Promise.all([
+    getCompanyWithBranding(req.clientAccount.companyId),
+    getCompanyFinanceSettings(req.clientAccount.companyId)
+  ]);
+  if (!company) throw notFound("Company not found");
+  const branding = publicBranding(company);
+  const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
+  const pdf = createBusinessDocumentPdf({ kind: 'invoice', record: normalize(record), company: normalize(company), branding, localization: financeLocalization(finance), logoImage });
+  const filename = `invoice-${String(record.number || record.id).replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80)}.pdf`;
+  res.status(200).set('Content-Type', 'application/pdf').set('Content-Disposition', `inline; filename="${filename}"`).set('Cache-Control', 'private, no-store').send(pdf);
 }));
 
 router.post("/client/invoices/:id/pay-online", requireClientAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
@@ -4485,6 +4592,47 @@ router.patch('/company/finance-settings', requireRole(...adminRoles), validate(f
   }
   await audit(req, 'UPDATE', 'CompanyFinanceSettings', data.id, { section: 'finance-localization' });
   sendData(res, normalize(financeLocalization(data)));
+}));
+
+router.post('/company/document-preview.pdf', requireRole(...adminRoles), validate(z.object({ kind: z.enum(['quote', 'invoice']).optional() }), 'query'), validate(documentPreviewSettingsSchema), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['settings.finance.manage', 'finance.exports.manage']);
+  const [company, storedFinance] = await Promise.all([
+    getCompanyWithBranding(req.companyId),
+    getCompanyFinanceSettings(req.companyId)
+  ]);
+  if (!company) throw notFound('Company not found');
+  const kind = req.query.kind || 'quote';
+  const localization = financeLocalization({ ...storedFinance, ...req.body, companyId: req.companyId });
+  const branding = publicBranding(company);
+  const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
+  const now = new Date();
+  const record = {
+    id: 'preview',
+    number: kind === 'quote' ? `${localization.quotePrefix || 'Q'}-0001` : `${localization.invoicePrefix || 'INV'}-0001`,
+    title: 'Solar system maintenance',
+    description: 'Routine inspection, panel cleaning, and performance checks.',
+    paymentPlanNotes: 'Thank you. Please contact us before the due date if payment arrangements need to change.',
+    status: 'DRAFT',
+    createdAt: now,
+    validUntil: addDaysFromNow(localization.quoteExpiryDays),
+    dueDate: addDaysFromNow(localization.paymentTermsDays),
+    purchaseOrderNumber: 'PO-1042',
+    customer: { customerType: 'BUSINESS', companyName: 'Sample Solar Customer', name: 'Accounts Team', email: 'accounts@example.com', phone: '+263 77 000 0000' },
+    lineItems: [
+      { description: 'Solar panel inspection and cleaning', quantity: 1, unitPrice: 850, lineTotal: 850 },
+      { description: 'Inverter performance test', quantity: 1, unitPrice: 400, lineTotal: 400 }
+    ],
+    subtotal: 1250,
+    discountTotal: 0,
+    taxTotal: localization.showTax ? 187.5 : 0,
+    total: localization.showTax ? 1437.5 : 1250
+  };
+  const pdf = createBusinessDocumentPdf({ kind, record, company: normalize(company), branding, localization, logoImage });
+  res.status(200)
+    .set('Content-Type', 'application/pdf')
+    .set('Content-Disposition', 'inline; filename="document-preview.pdf"')
+    .set('Cache-Control', 'private, no-store')
+    .send(pdf);
 }));
 
 router.get('/finance/integrations', requireRole(...adminRoles), asyncHandler(async (req, res) => {
@@ -7440,6 +7588,7 @@ router.post('/leads/:id/convert', validate(idParam, 'params'), validate(leadConv
           branchId: lead.branchId || undefined,
           customerId: customer.id,
           serviceId: selectedServiceId || undefined,
+          number: await nextQuoteNumber(tx, req.companyId),
           title: quoteTitle,
           description: lead.notes || lead.serviceNeed || undefined,
           status: 'DRAFT',
@@ -8527,7 +8676,8 @@ router.post('/booking-requests/:id/create-quote', requireRole(...adminRoles), va
     return sendData(res, normalize(existingQuote));
   }
   const data = await prisma.$transaction(async (tx) => {
-    const quote = await tx.quote.create({ data: { companyId: req.companyId, customerId: customer.id, serviceId: existing.serviceId, jobId: existing.convertedJobId, title, description, status: 'DRAFT' } });
+    const finance = financeLocalization(await getCompanyFinanceSettings(req.companyId, tx));
+    const quote = await tx.quote.create({ data: { companyId: req.companyId, customerId: customer.id, serviceId: existing.serviceId, jobId: existing.convertedJobId, number: await nextQuoteNumber(tx, req.companyId), title, description, status: 'DRAFT', validUntil: addDaysFromNow(finance.quoteExpiryDays) } });
     await tx.quoteLineItem.create({ data: { companyId: req.companyId, quoteId: quote.id, serviceId: existing.serviceId, description: existing.serviceName || quote.title, quantity: 1, unitPrice: amountValue, discountAmount: 0, taxAmount: 0, ...moneyLine({ quantity: 1, unitPrice: amountValue, discountAmount: 0, taxAmount: 0 }), sortOrder: 0 } });
     await addQuoteStatusHistory(tx, req, { ...quote, status: null }, 'DRAFT', 'Quote created from booking request');
     const draft = await recalcQuote(tx, req.companyId, quote.id);
@@ -9788,8 +9938,10 @@ router.get('/quotes/:id/pdf', validate(idParam, 'params'), asyncHandler(async (r
     getCompanyFinanceSettings(req.companyId)
   ]);
   if (!record || !company) throw notFound('Quote not found');
-  const pdf = await createBusinessDocumentPdf({ kind: 'quote', record: normalize(record), company: normalize(company), branding: publicBranding(company), localization: financeLocalization(finance), baseUrl: `${req.protocol}://${req.get('host')}` });
-  const filename = `quote-${String(record.title || record.id).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || record.id}.pdf`;
+  const branding = publicBranding(company);
+  const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
+  const pdf = createBusinessDocumentPdf({ kind: 'quote', record: normalize(record), company: normalize(company), branding, localization: financeLocalization(finance), logoImage });
+  const filename = `quote-${String(record.number || record.id).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || record.id}.pdf`;
   res.status(200)
     .set('Content-Type', 'application/pdf')
     .set('Content-Disposition', `inline; filename="${filename}"`)
@@ -9954,6 +10106,11 @@ const invoiceSchema = z.object({
   amount: amount.optional(),
   lineItems: lineItemsSchema
 });
+const invoicePatchSchema = invoiceSchema.partial().omit({ number: true });
+
+function assertDraftInvoiceEditable(invoice) {
+  if (!invoice || invoice.status !== 'DRAFT') throw new AppError(409, 'Only draft invoices can be edited');
+}
 
 function fallbackInvoiceLines(body) {
   if (body.lineItems && body.lineItems.length) return body.lineItems;
@@ -10007,7 +10164,9 @@ router.get('/invoices/:id/pdf', validate(idParam, 'params'), asyncHandler(async 
     getCompanyFinanceSettings(req.companyId)
   ]);
   if (!record || !company) throw notFound('Invoice not found');
-  const pdf = await createBusinessDocumentPdf({ kind: 'invoice', record: normalize(record), company: normalize(company), branding: publicBranding(company), localization: financeLocalization(finance), baseUrl: `${req.protocol}://${req.get('host')}` });
+  const branding = publicBranding(company);
+  const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
+  const pdf = createBusinessDocumentPdf({ kind: 'invoice', record: normalize(record), company: normalize(company), branding, localization: financeLocalization(finance), logoImage });
   const filename = `invoice-${String(record.number || record.id).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || record.id}.pdf`;
   res.status(200)
     .set('Content-Type', 'application/pdf')
@@ -10016,9 +10175,9 @@ router.get('/invoices/:id/pdf', validate(idParam, 'params'), asyncHandler(async 
     .send(pdf);
 }));
 
-router.patch('/invoices/:id', validate(idParam, 'params'), validate(invoiceSchema.partial()), asyncHandler(async (req, res) => {
+router.patch('/invoices/:id', validate(idParam, 'params'), validate(invoicePatchSchema), asyncHandler(async (req, res) => {
   const invoice = await requireInvoice(req, req.params.id);
-  if (invoice.status === 'PAID' || invoice.status === 'VOID') throw new AppError(409, 'Paid or void invoices cannot be edited');
+  assertDraftInvoiceEditable(invoice);
   const context = await validateInvoiceRelations(req, req.body, invoice);
   const { lineItems, ...invoiceData } = req.body;
   invoiceData.branchId = context.branchId;
@@ -10125,7 +10284,7 @@ router.post('/invoices/:id/mark-paid', validate(idParam, 'params'), asyncHandler
 
 router.post('/invoices/:id/line-items', validate(idParam, 'params'), validate(lineItemSchema), asyncHandler(async (req, res) => {
   const invoice = await requireInvoice(req, req.params.id);
-  if (invoice.status === 'PAID' || invoice.status === 'VOID') throw new AppError(409, 'Paid or void invoices cannot be edited');
+  assertDraftInvoiceEditable(invoice);
   if (req.body.serviceId) await requireService(req, req.body.serviceId);
   const data = await prisma.$transaction(async (tx) => {
     await tx.invoiceLineItem.create({ data: { ...req.body, ...moneyLine(req.body), companyId: req.companyId, invoiceId: invoice.id } });
@@ -10137,7 +10296,7 @@ router.post('/invoices/:id/line-items', validate(idParam, 'params'), validate(li
 
 router.patch('/invoices/:id/line-items/:lineItemId', validate(lineItemParam, 'params'), validate(lineItemSchema.partial()), asyncHandler(async (req, res) => {
   const invoice = await requireInvoice(req, req.params.id);
-  if (invoice.status === 'PAID' || invoice.status === 'VOID') throw new AppError(409, 'Paid or void invoices cannot be edited');
+  assertDraftInvoiceEditable(invoice);
   await requireInvoiceLineItem(req, invoice.id, req.params.lineItemId);
   if (req.body.serviceId) await requireService(req, req.body.serviceId);
   const data = await prisma.$transaction(async (tx) => {
@@ -10152,7 +10311,7 @@ router.patch('/invoices/:id/line-items/:lineItemId', validate(lineItemParam, 'pa
 
 router.delete('/invoices/:id/line-items/:lineItemId', validate(lineItemParam, 'params'), asyncHandler(async (req, res) => {
   const invoice = await requireInvoice(req, req.params.id);
-  if (invoice.status === 'PAID' || invoice.status === 'VOID') throw new AppError(409, 'Paid or void invoices cannot be edited');
+  assertDraftInvoiceEditable(invoice);
   await requireInvoiceLineItem(req, invoice.id, req.params.lineItemId);
   const data = await prisma.$transaction(async (tx) => {
     await tx.invoiceLineItem.delete({ where: { id: req.params.lineItemId } });
