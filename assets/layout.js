@@ -38,6 +38,7 @@
     ['mobile-sync', 'Mobile Sync', 'mobile-sync.html', 'settings'],
     ['reports', 'Solar & Business Reports', 'reports.html', 'chart'],
     ['executive-dashboard', 'Business Performance', 'executive-dashboard.html', 'chart'],
+    ['document-templates', 'Document Studio', 'document-templates.html', 'file'],
     ['onboarding', 'Solar Company Setup', 'onboarding.html', 'settings'],
     ['security-center', 'Security', 'security-center.html', 'settings'],
     ['settings', 'Settings', 'settings.html', 'settings']
@@ -88,7 +89,7 @@
     ['Commercial', 'Solar quotes, invoices, and payments', ['quotes', 'invoices', 'collections']],
     ['Reports', 'Business results', ['executive-dashboard', 'reports']],
     ['O&M Management', 'Sites, equipment, contracts, and stock', ['branches', 'approvals', 'assets', 'service-contracts', 'contract-automation', 'inventory', 'purchase-requests', 'purchase-orders', 'procurement-costing']],
-    ['Company', 'Business setup', ['workspaces', 'settings']]
+    ['Company', 'Business setup', ['workspaces', 'document-templates', 'settings']]
   ];
 
   const pagePermissions = {
@@ -98,6 +99,7 @@
     'solar-operations': 'contract.automation.manage', assets: 'contract.automation.manage', 'service-contracts': 'contract.automation.manage', 'contract-automation': 'contract.automation.manage',
     inventory: 'inventory.view', 'purchase-requests': 'purchaseRequest.create', 'purchase-orders': 'purchaseOrder.manage', 'procurement-costing': 'inventory.manage',
     'mobile-sync': 'mobile.sync.manage', reports: ['reports.money.view', 'reports.work.view', 'reports.workers.view', 'reports.sales.view', 'reports.stock.view'], 'executive-dashboard': 'dashboard.executive.view', onboarding: 'company.settings.manage',
+    'document-templates': ['company.settings.manage', 'settings.finance.manage'],
     settings: ['company.settings.view', 'company.settings.manage', 'company.branding.manage', 'settings.finance.manage', 'finance.exports.manage', 'notifications.view', 'integration.view', 'integration.manage', 'audit.view'], 'security-center': 'security.view'
   };
 

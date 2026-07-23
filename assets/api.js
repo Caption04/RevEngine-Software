@@ -103,10 +103,10 @@
       row: (item) => [item.name, item.property && item.property.label || item.customer && item.customer.name || '-', solarAssetTypeLabel(item.assetType), solarCapacityLabel(item), item.monitoringIdentifier || item.serialNumber || item.assetTag || '-', item.warrantyStatus || warrantyLabel(item), badge(item.status)]
     },
     'service-contracts': {
-      columns: ['O&M Contract', 'Client', 'Status', 'Response SLA', 'Covered Equipment', 'Due Maintenance'],
+      columns: ['O&M Contract', 'Client', 'Status', 'Response SLA', 'Covered Equipment', 'Due Maintenance', 'Actions'],
       emptyTitle: 'No solar O&M contracts yet',
       emptyText: 'Create an O&M agreement for recurring inspections, cleaning, fault response, and preventive maintenance.',
-      row: (item) => [item.contractNumber || item.name, item.customer && item.customer.name || '-', badge(item.status), [item.responseSlaHours && item.responseSlaHours + 'h response', item.completionSlaHours && item.completionSlaHours + 'h resolution'].filter(Boolean).join(' / ') || '-', (item.assets || []).length || 0, (item.upcomingDueWork || []).length || 0]
+      row: (item) => [item.contractNumber || item.name, item.customer && item.customer.name || '-', badge(item.status), [item.responseSlaHours && item.responseSlaHours + 'h response', item.completionSlaHours && item.completionSlaHours + 'h resolution'].filter(Boolean).join(' / ') || '-', (item.assets || []).length || 0, (item.upcomingDueWork || []).length || 0, rowActions('service-contracts', item)]
     },
     quotes: {
       columns: ['Solar Quote', 'Client', 'Status', 'Total', 'Valid Until', 'Actions'],
@@ -490,6 +490,7 @@
         add('Delete', 'quote-delete', false, 'quotes.edit');
       }
     }
+    if (resource === 'service-contracts') add('View PDF', 'contract-pdf', true, 'contract.automation.manage');
     if (resource === 'customers') add('Open profile', 'customer-profile', true, 'customers.view');
     if (resource === 'jobs') add('Details', 'job-detail', true, 'jobs.view');
     if (resource === 'jobs' && item.status !== 'COMPLETED' && item.status !== 'CANCELLED') add(item.scheduledStart ? 'Reschedule' : 'Schedule', item.scheduledStart ? 'job-reschedule' : 'job-schedule', false, 'schedule.manage');
@@ -536,6 +537,7 @@
       jobs: 'Job Actions',
       quotes: 'Quote Actions',
       invoices: 'Invoice Actions',
+      'service-contracts': 'Contract Actions',
       'booking-requests': 'Booking Request Actions'
     }[resource] || 'Actions';
   }
@@ -545,6 +547,7 @@
     if (resource === 'jobs') return item.title || 'Job';
     if (resource === 'quotes') return item.title || 'Quote';
     if (resource === 'invoices') return item.number || 'Invoice';
+    if (resource === 'service-contracts') return item.contractNumber || item.name || 'O&M Contract';
     if (resource === 'booking-requests') return item.customerType === 'BUSINESS' ? item.companyName || item.customerName || item.publicReference || 'Booking request' : item.customerName || item.publicReference || 'Booking request';
     return 'Select an action';
   }
@@ -3121,6 +3124,10 @@
           if (!purchaseOrderNumber) return;
         }
         await api('/jobs/' + id + '/create-invoice', { method: 'POST', body: JSON.stringify(purchaseOrderNumber ? { purchaseOrderNumber } : {}) });
+      }
+      if (action === 'contract-pdf') {
+        window.open(API_BASE + '/service-contracts/' + encodeURIComponent(id) + '/pdf', '_blank', 'noopener');
+        return;
       }
       if (action === 'invoice-pdf') {
         window.open(API_BASE + '/invoices/' + encodeURIComponent(id) + '/pdf', '_blank', 'noopener');

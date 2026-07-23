@@ -355,7 +355,7 @@ function assetDetail(item) {
 }
 
 function contractDetail(item) {
-  return '<div class="client-detail-stack">' + badge(item.status) + '<div class="client-detail-lines"><div><span>O&M Contract</span><strong>' + escapeHtml(item.contractNumber || item.id) + '</strong><small>' + date(item.startDate) + " - " + date(item.endDate) + '</small></div><div><span>Response SLA</span><strong>' + escapeHtml(item.responseSlaHours ? item.responseSlaHours + " hours" : "Not set") + '</strong></div><div><span>Completion SLA</span><strong>' + escapeHtml(item.completionSlaHours ? item.completionSlaHours + " hours" : "Not set") + '</strong></div></div><h3>Covered Solar Equipment</h3>' + ((item.assets || []).length ? item.assets.map(function(asset) { return listCard({ title: asset.name || "Solar Equipment", meta: asset.assetType || "", badge: badge(asset.status || "ACTIVE") }); }).join("") : empty("No covered solar equipment listed.")) + '<h3>Upcoming Due Work</h3>' + ((item.upcomingDueWork || []).length ? item.upcomingDueWork.map(function(work) { return listCard({ title: work.title || "Due work", meta: dateTime(work.nextDueAt), badge: badge("DUE") }); }).join("") : empty("No upcoming due work.")) + "</div>";
+  return '<div class="client-detail-stack">' + badge(item.status) + '<div class="client-action-row"><button class="secondary-button" data-action="contract-pdf" data-id="' + item.id + '" type="button">View PDF</button></div><div class="client-detail-lines"><div><span>O&M Contract</span><strong>' + escapeHtml(item.contractNumber || item.id) + '</strong><small>' + date(item.startDate) + " - " + date(item.endDate) + '</small></div><div><span>Response SLA</span><strong>' + escapeHtml(item.responseSlaHours ? item.responseSlaHours + " hours" : "Not set") + '</strong></div><div><span>Completion SLA</span><strong>' + escapeHtml(item.completionSlaHours ? item.completionSlaHours + " hours" : "Not set") + '</strong></div></div><h3>Covered Solar Equipment</h3>' + ((item.assets || []).length ? item.assets.map(function(asset) { return listCard({ title: asset.name || "Solar Equipment", meta: asset.assetType || "", badge: badge(asset.status || "ACTIVE") }); }).join("") : empty("No covered solar equipment listed.")) + '<h3>Upcoming Due Work</h3>' + ((item.upcomingDueWork || []).length ? item.upcomingDueWork.map(function(work) { return listCard({ title: work.title || "Due work", meta: dateTime(work.nextDueAt), badge: badge("DUE") }); }).join("") : empty("No upcoming due work.")) + "</div>";
 }
 
 async function loadAll() {
@@ -517,6 +517,10 @@ document.addEventListener("click", async function(event) {
     }
     if (action === "invoice-pdf") {
       window.open(API_BASE + "/client/invoices/" + encodeURIComponent(id) + "/pdf", "_blank", "noopener");
+      return;
+    }
+    if (action === "contract-pdf") {
+      window.open(API_BASE + "/client/service-contracts/" + encodeURIComponent(id) + "/pdf", "_blank", "noopener");
       return;
     }
     if (action === "job-detail") {

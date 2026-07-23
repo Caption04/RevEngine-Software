@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rev Engine Document Studio</title>
+    <link rel="stylesheet" href="assets/app.css">
+    <script defer src="assets/ui-feedback.js"></script>
+    <script defer src="assets/layout.js"></script>
+    <script defer src="assets/document-templates.js"></script>
+  </head>
+  <body data-page="document-templates" data-title="Document Studio">
+    <section class="page document-studio-page">
+      <div class="hero-row" data-template-library-view>
+        <div class="hero-copy">
+          <p class="eyebrow">Customer documents</p>
+          <h2>Document Studio</h2>
+          <p>Keep your existing invoice, quote, and contract style—or build a new one for your company.</p>
+        </div>
+        <div class="document-studio-hero-actions">
+          <button class="secondary-button" type="button" data-import-template>Import existing document</button>
+          <button class="secondary-button" type="button" data-create-blank>Start from scratch</button>
+          <button class="primary-button" type="button" data-create-starter>Use a ready-made template</button>
+        </div>
+      </div>
+
+      <section data-template-library-view>
+        <div class="toolbar document-template-toolbar">
+          <div class="tabs" role="tablist" aria-label="Document type">
+            <button class="tab active" type="button" data-document-filter="ALL">All</button>
+            <button class="tab" type="button" data-document-filter="INVOICE">Invoices</button>
+            <button class="tab" type="button" data-document-filter="QUOTE">Quotes</button>
+            <button class="tab" type="button" data-document-filter="CONTRACT">Contracts</button>
+          </div>
+          <span class="api-status" data-template-status>Loading templates…</span>
+        </div>
+        <section class="document-template-grid" data-template-grid>
+          <div class="empty-state"><div><strong>Loading document templates</strong><span>Please wait a moment.</span></div></div>
+        </section>
+      </section>
+
+      <section class="document-template-editor" data-template-editor hidden>
+        <div class="document-editor-heading">
+          <div>
+            <button class="text-button" type="button" data-back-to-templates>← Back to templates</button>
+            <div class="document-editor-title-row">
+              <div>
+                <p class="eyebrow" data-editor-type>Invoice template</p>
+                <h2 data-editor-title>Template</h2>
+                <p data-editor-summary>Edit the working draft, preview it, then publish it when it is ready.</p>
+              </div>
+              <span class="badge gray" data-editor-status>Draft</span>
+            </div>
+          </div>
+          <div class="document-editor-actions">
+            <button class="secondary-button" type="button" data-duplicate-template>Duplicate</button>
+            <button class="secondary-button" type="button" data-save-template>Save draft</button>
+            <button class="primary-button" type="button" data-publish-template>Publish as default</button>
+          </div>
+        </div>
+
+        <div class="document-import-banner" data-import-banner hidden>
+          <div>
+            <strong>Your original document is kept as a reference.</strong>
+            <span>Match the sections and styling below, then compare the live preview with the source file.</span>
+          </div>
+          <a class="secondary-button compact" target="_blank" rel="noopener" data-import-source-link>View imported file</a>
+        </div>
+
+        <div class="document-studio-workspace">
+          <aside class="document-designer-panel">
+            <section class="card document-control-card">
+              <div class="document-control-heading">
+                <div><strong>Template details</strong><span>Name this template so your team can recognise it.</span></div>
+              </div>
+              <div class="field">
+                <label for="documentTemplateName">Template name</label>
+                <input id="documentTemplateName" maxlength="120" data-template-name>
+              </div>
+            </section>
+
+            <section class="card document-control-card">
+              <div class="document-control-heading">
+                <div><strong>Page and brand style</strong><span>Set the basic look used across every page.</span></div>
+              </div>
+              <div class="document-style-grid">
+                <div class="field"><label for="documentPrimaryColor">Main colour</label><input id="documentPrimaryColor" type="color" data-design-path="theme.primaryColor"></div>
+                <div class="field"><label for="documentAccentColor">Accent colour</label><input id="documentAccentColor" type="color" data-design-path="theme.accentColor"></div>
+                <div class="field"><label for="documentTextColor">Text colour</label><input id="documentTextColor" type="color" data-design-path="theme.textColor"></div>
+                <div class="field"><label for="documentTableColor">Table heading</label><input id="documentTableColor" type="color" data-design-path="theme.tableHeaderColor"></div>
+                <div class="field"><label for="documentHeaderLayout">Header layout</label><select id="documentHeaderLayout" data-design-path="header.layout"><option value="SPLIT">Split</option><option value="STACKED">Stacked</option><option value="COMPACT">Compact</option></select></div>
+                <div class="field"><label for="documentLogoPosition">Logo position</label><select id="documentLogoPosition" data-design-path="header.logoPosition"><option value="LEFT">Left</option><option value="RIGHT">Right</option></select></div>
+                <div class="field"><label for="documentLogoSize">Logo size</label><select id="documentLogoSize" data-design-path="header.logoSize"><option value="SMALL">Small</option><option value="MEDIUM">Medium</option><option value="LARGE">Large</option></select></div>
+                <div class="field"><label for="documentBodySize">Text size</label><select id="documentBodySize" data-design-path="typography.bodySize"><option value="8">Small</option><option value="9">Normal</option><option value="10">Large</option><option value="11">Extra large</option></select></div>
+                <div class="field"><label for="documentPageMargin">Page margin</label><select id="documentPageMargin" data-design-path="page.margin"><option value="30">Narrow</option><option value="42">Normal</option><option value="56">Wide</option></select></div>
+                <label class="document-logo-toggle"><input type="checkbox" data-design-path="header.showLogo"><span><strong>Show company logo</strong><small>Uses the logo saved in Company Details.</small></span></label>
+                <div class="document-detail-options">
+                  <label><input type="checkbox" data-design-path="header.showLegalName"><span>Legal company name</span></label>
+                  <label><input type="checkbox" data-design-path="header.showRegistrationNumber"><span>Registration number</span></label>
+                  <label><input type="checkbox" data-design-path="header.showTaxNumber"><span>Tax or VAT number</span></label>
+                  <label><input type="checkbox" data-design-path="header.showAddress"><span>Company address</span></label>
+                  <label><input type="checkbox" data-design-path="header.showEmail"><span>Company email</span></label>
+                  <label><input type="checkbox" data-design-path="header.showPhone"><span>Company phone</span></label>
+                  <label><input type="checkbox" data-design-path="header.showWebsite"><span>Company website</span></label>
+                </div>
+              </div>
+            </section>
+
+            <section class="card document-control-card">
+              <div class="document-control-heading split-heading">
+                <div><strong>Document sections</strong><span>Show, hide, edit, and arrange the parts of this document.</span></div>
+                <button class="secondary-button compact" type="button" data-add-block>+ Add section</button>
+              </div>
+              <div class="document-block-list" data-block-list></div>
+            </section>
+
+            <button class="danger-link" type="button" data-archive-template>Archive this template</button>
+          </aside>
+
+          <section class="card document-preview-panel">
+            <div class="document-preview-heading">
+              <div><strong>Live PDF preview</strong><span>Uses sample customer data. The same renderer creates real documents.</span></div>
+              <span data-preview-status>Waiting for changes…</span>
+            </div>
+            <iframe title="Document template preview" data-template-preview-frame></iframe>
+          </section>
+        </div>
+      </section>
+    </section>
+
+    <div class="modal-backdrop" data-template-modal hidden>
+      <section class="modal-card document-template-modal-card" role="dialog" aria-modal="true" aria-labelledby="documentTemplateModalTitle">
+        <div class="modal-header">
+          <div><h3 id="documentTemplateModalTitle" data-template-modal-title>New template</h3><p data-template-modal-copy></p></div>
+          <button class="icon-button" type="button" aria-label="Close" data-close-template-modal>×</button>
+        </div>
+        <form data-template-modal-form></form>
+      </section>
+    </div>
+  </body>
+</html>
