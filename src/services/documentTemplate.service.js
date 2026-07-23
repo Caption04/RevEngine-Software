@@ -4,7 +4,7 @@ const crypto = require('node:crypto');
 
 const DOCUMENT_TYPES = ['QUOTE', 'INVOICE', 'CONTRACT'];
 const SOURCE_TYPES = ['STARTER', 'BLANK', 'IMPORTED'];
-const STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
+const STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED', 'DELETED'];
 const BLOCK_TYPES = [
   'CUSTOMER_DETAILS',
   'DOCUMENT_DETAILS',
@@ -73,18 +73,35 @@ function blockOrder(documentType) {
 function starterDesign(documentType = 'INVOICE', variant = 'PROFESSIONAL') {
   const type = oneOf(documentType, DOCUMENT_TYPES, 'INVOICE');
   const chosen = oneOf(variant, ['PROFESSIONAL', 'CLASSIC', 'MINIMAL', 'BLANK'], 'PROFESSIONAL');
+  const isBlank = chosen === 'BLANK';
   const theme = chosen === 'CLASSIC'
-    ? { primaryColor: '#17365D', accentColor: '#D6A900', textColor: '#13213C', mutedColor: '#5B6574', borderColor: '#A7B0BE', tableHeaderColor: '#DCE5F1' }
+    ? { primaryColor: '#17365D', accentColor: '#D6A900', textColor: '#13213C', mutedColor: '#5B6574', borderColor: '#7C8797', tableHeaderColor: '#E4D39A' }
     : chosen === 'MINIMAL'
-      ? { primaryColor: '#111827', accentColor: '#6B7280', textColor: '#111827', mutedColor: '#6B7280', borderColor: '#D1D5DB', tableHeaderColor: '#F3F4F6' }
-      : { primaryColor: '#1D65BC', accentColor: '#FFE386', textColor: '#11213D', mutedColor: '#60708A', borderColor: '#D8E1EE', tableHeaderColor: '#EDF4FC' };
-  const included = chosen === 'BLANK' ? ['CUSTOMER_DETAILS', 'DOCUMENT_DETAILS'] : blockOrder(type);
+      ? { primaryColor: '#111827', accentColor: '#111827', textColor: '#111827', mutedColor: '#6B7280', borderColor: '#D1D5DB', tableHeaderColor: '#FFFFFF' }
+      : isBlank
+        ? { primaryColor: '#111827', accentColor: '#D1D5DB', textColor: '#111827', mutedColor: '#6B7280', borderColor: '#E5E7EB', tableHeaderColor: '#F9FAFB' }
+        : { primaryColor: '#1D65BC', accentColor: '#FFE386', textColor: '#11213D', mutedColor: '#60708A', borderColor: '#D8E1EE', tableHeaderColor: '#EDF4FC' };
+  const included = isBlank ? [] : blockOrder(type);
   return normalizeDesign({
     version: 1,
-    page: { size: 'A4', orientation: 'PORTRAIT', margin: 42 },
-    typography: { fontFamily: 'HELVETICA', bodySize: 9, headingScale: 1.15 },
+    variant: chosen,
+    page: { size: 'A4', orientation: 'PORTRAIT', margin: chosen === 'MINIMAL' ? 56 : 42, showPageNumbers: !isBlank },
+    typography: { fontFamily: chosen === 'CLASSIC' ? 'HELVETICA_CONDENSED' : 'HELVETICA', bodySize: chosen === 'MINIMAL' ? 8 : 9, headingScale: chosen === 'CLASSIC' ? 1.25 : 1.15 },
     theme,
-    header: { layout: chosen === 'MINIMAL' ? 'COMPACT' : chosen === 'CLASSIC' ? 'STACKED' : 'SPLIT', logoPosition: 'LEFT', logoSize: 'MEDIUM', showLogo: true, showLegalName: true, showRegistrationNumber: true, showTaxNumber: true, showAddress: true, showEmail: true, showPhone: true, showWebsite: true },
+    header: {
+      visible: !isBlank,
+      layout: chosen === 'MINIMAL' ? 'COMPACT' : chosen === 'CLASSIC' ? 'STACKED' : 'SPLIT',
+      logoPosition: chosen === 'CLASSIC' ? 'RIGHT' : 'LEFT',
+      logoSize: chosen === 'MINIMAL' ? 'SMALL' : chosen === 'CLASSIC' ? 'LARGE' : 'MEDIUM',
+      showLogo: !isBlank,
+      showLegalName: !isBlank,
+      showRegistrationNumber: !isBlank,
+      showTaxNumber: !isBlank,
+      showAddress: !isBlank,
+      showEmail: !isBlank,
+      showPhone: !isBlank,
+      showWebsite: !isBlank
+    },
     blocks: included.map((item) => defaultBlock(item, type))
   }, type);
 }
@@ -150,12 +167,15 @@ function normalizeDesign(input, documentType = 'INVOICE') {
     seen.add(block.id);
     unique.push(block);
   }
+  const inferredVariant = source.variant || (source.header && source.header.layout === 'STACKED' ? 'CLASSIC' : source.header && source.header.layout === 'COMPACT' ? 'MINIMAL' : 'PROFESSIONAL');
   return {
     version: 1,
+    variant: oneOf(inferredVariant, ['PROFESSIONAL', 'CLASSIC', 'MINIMAL', 'BLANK'], 'PROFESSIONAL'),
     page: {
       size: 'A4',
       orientation: oneOf(source.page && source.page.orientation, ['PORTRAIT'], 'PORTRAIT'),
-      margin: number(source.page && source.page.margin, 42, 24, 72)
+      margin: number(source.page && source.page.margin, 42, 24, 72),
+      showPageNumbers: bool(source.page && source.page.showPageNumbers, true)
     },
     typography: {
       fontFamily: oneOf(source.typography && source.typography.fontFamily, ['HELVETICA', 'HELVETICA_CONDENSED'], 'HELVETICA'),
@@ -171,6 +191,7 @@ function normalizeDesign(input, documentType = 'INVOICE') {
       tableHeaderColor: color(source.theme && source.theme.tableHeaderColor, '#EDF4FC')
     },
     header: {
+      visible: bool(source.header && source.header.visible, true),
       layout: oneOf(source.header && source.header.layout, ['SPLIT', 'STACKED', 'COMPACT'], 'SPLIT'),
       logoPosition: oneOf(source.header && source.header.logoPosition, ['LEFT', 'RIGHT'], 'LEFT'),
       logoSize: oneOf(source.header && source.header.logoSize, ['SMALL', 'MEDIUM', 'LARGE'], 'MEDIUM'),
@@ -199,8 +220,11 @@ function rendererLocalization(finance, template) {
   return {
     ...(finance || {}),
     documentDesign: design,
-    documentTemplate: template.sourceType === 'STARTER' && String(template.name || '').toLowerCase().includes('classic') ? 'CLASSIC' : 'MODERN',
+    documentTemplate: design.variant === 'CLASSIC' ? 'CLASSIC' : design.variant === 'MINIMAL' ? 'MINIMAL' : 'MODERN',
+    documentDesignVariant: design.variant,
+    documentHeaderVisible: design.header.visible,
     documentHeaderStyle: design.header.layout,
+    documentShowPageNumbers: design.page.showPageNumbers,
     documentLogoPosition: design.header.logoPosition,
     documentLogoSize: design.header.logoSize,
     showDocumentLogo: design.header.showLogo,
@@ -245,8 +269,6 @@ async function findTemplateVersion(client, companyId, templateId, version) {
 
 async function seedStarterTemplates(client, companyId) {
   if (!client || !client.documentTemplate || !client.documentTemplateVersion) return;
-  const existing = await client.documentTemplate.count({ where: { companyId } });
-  if (existing) return;
   const definitions = [
     ['Professional invoice', 'INVOICE', 'PROFESSIONAL', true],
     ['Professional quote', 'QUOTE', 'PROFESSIONAL', true],
@@ -254,10 +276,14 @@ async function seedStarterTemplates(client, companyId) {
     ['Classic invoice', 'INVOICE', 'CLASSIC', false],
     ['Minimal quote', 'QUOTE', 'MINIMAL', false]
   ];
-  for (const [name, documentType, variant, isDefault] of definitions) {
+  for (const [name, documentType, variant, preferredDefault] of definitions) {
+    const existing = await client.documentTemplate.findFirst({ where: { companyId, name, documentType, isSystem: true } });
+    if (existing) continue;
     const design = starterDesign(documentType, variant);
+    const hasDefault = await client.documentTemplate.count({ where: { companyId, documentType, isDefault: true, status: 'PUBLISHED' } });
+    const isDefault = preferredDefault && !hasDefault;
     const template = await client.documentTemplate.create({
-      data: { companyId, name, documentType, sourceType: 'STARTER', status: 'PUBLISHED', isDefault, design, currentVersion: 1, publishedAt: new Date() }
+      data: { companyId, name, documentType, sourceType: 'STARTER', status: 'PUBLISHED', isDefault, isSystem: true, design, currentVersion: 1, publishedAt: new Date() }
     });
     await client.documentTemplateVersion.create({ data: { companyId, templateId: template.id, version: 1, design, publishedAt: new Date() } });
   }

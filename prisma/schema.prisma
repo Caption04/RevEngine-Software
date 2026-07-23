@@ -3166,6 +3166,7 @@ model DocumentTemplate {
   sourceType       String                    @default("STARTER")
   status           String                    @default("DRAFT")
   isDefault        Boolean                   @default(false)
+  isSystem         Boolean                   @default(false)
   design           Json
   currentVersion   Int                       @default(0)
   importFileName   String?
@@ -3182,6 +3183,7 @@ model DocumentTemplate {
   @@index([companyId, documentType, status])
   @@index([companyId, documentType, isDefault])
   @@index([companyId, updatedAt])
+  @@index([companyId, isSystem])
 }
 
 model DocumentTemplateVersion {

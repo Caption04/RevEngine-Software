@@ -76,6 +76,12 @@ function wrap(value, maxCharacters) {
   return rows;
 }
 
+function fitText(value, maxCharacters) {
+  const normalized = ascii(value);
+  if (normalized.length <= maxCharacters) return normalized;
+  return `${normalized.slice(0, Math.max(1, maxCharacters - 3)).trimEnd()}...`;
+}
+
 function money(value, localization) {
   const amount = Number(value || 0);
   const currency = localization && localization.defaultCurrency || 'USD';
@@ -128,6 +134,7 @@ function normalizeTemplate(localization) {
   const input = localization || {};
   const design = input.documentDesign && typeof input.documentDesign === 'object' ? input.documentDesign : null;
   const blocks = design && Array.isArray(design.blocks) ? design.blocks : [];
+  const hasDetailedDesign = Boolean(design);
   const visible = (type, fallback = true) => {
     const block = blocks.find((item) => item && item.type === type);
     return block ? block.visible !== false : fallback;
@@ -143,6 +150,9 @@ function normalizeTemplate(localization) {
     quoteLabel: ascii(input.quoteLabel || 'QUOTE').slice(0, 30) || 'QUOTE',
     invoiceLabel: ascii(input.invoiceLabel || 'INVOICE').slice(0, 30) || 'INVOICE',
     contractLabel: ascii(input.contractLabel || 'CONTRACT').slice(0, 30) || 'CONTRACT',
+    hasDetailedDesign,
+    showHeader: design ? design.header && design.header.visible !== false : input.documentHeaderVisible !== false,
+    showPageNumbers: design ? design.page && design.page.showPageNumbers !== false : input.documentShowPageNumbers !== false,
     showDocumentLogo: design ? design.header && design.header.showLogo !== false : input.showDocumentLogo !== false,
     showLegalName: input.showLegalName !== false,
     showRegistrationNumber: input.showRegistrationNumber !== false,
@@ -151,10 +161,10 @@ function normalizeTemplate(localization) {
     showCompanyEmail: input.showCompanyEmail !== false,
     showCompanyPhone: input.showCompanyPhone !== false,
     showCompanyWebsite: input.showCompanyWebsite !== false,
-    showCustomerDetails: visible('CUSTOMER_DETAILS', true),
-    showDocumentDetails: visible('DOCUMENT_DETAILS', true),
-    showLineItems: visible('LINE_ITEMS', true),
-    showTotals: visible('TOTALS', true),
+    showCustomerDetails: visible('CUSTOMER_DETAILS', !hasDetailedDesign),
+    showDocumentDetails: visible('DOCUMENT_DETAILS', !hasDetailedDesign),
+    showLineItems: visible('LINE_ITEMS', !hasDetailedDesign),
+    showTotals: visible('TOTALS', !hasDetailedDesign),
     showTax: design ? visible('TOTALS', true) : input.showTax !== false,
     showPurchaseOrder: design ? visible('DOCUMENT_DETAILS', true) : input.showPurchaseOrder !== false,
     showNotes: design ? visible('TERMS', true) : input.showNotes !== false,
@@ -377,10 +387,12 @@ function buildHeader({ kind, record, company, branding, localization, template, 
   const companyName = ascii(brand.brandName || company.tradingName || company.name || 'Company');
   const documentTitle = kind === 'quote' ? template.quoteLabel : kind === 'contract' ? template.contractLabel : template.invoiceLabel;
   const documentReference = record.number || record.contractNumber || (kind === 'quote' ? 'Quote' : kind === 'contract' ? 'Contract' : 'Invoice');
-  const logoSize = { SMALL: 34, MEDIUM: 46, LARGE: 60 }[template.logoSize];
+  const logoSize = { SMALL: 44, MEDIUM: 62, LARGE: 86 }[template.logoSize];
   const details = companyDetails(company, brand, localization, template, companyName);
   let output = '';
   let bodyStart = TOP - 100;
+
+  if (!template.showHeader) return { output, bodyStart: TOP + 10, primary, secondary };
 
   if (template.template === 'MODERN') {
     output += commandRect(0, PAGE_HEIGHT - 18, PAGE_WIDTH, 18, primary);
@@ -389,7 +401,7 @@ function buildHeader({ kind, record, company, branding, localization, template, 
       const nameY = TOP - logoSize - 12;
       const detailStartY = nameY - 18;
       output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 4, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
-      output += commandText(LEFT, nameY, 18, companyName, true);
+      output += commandText(LEFT, nameY, 18, fitText(companyName, 38), true);
       output += renderCompanyDetailLines(LEFT, detailStartY, details);
       const stackedMetaX = template.logoPosition === 'RIGHT' ? 315 : 390;
       output += commandText(stackedMetaX, TOP - 4, 19, documentTitle, true, darken(primary));
@@ -401,9 +413,9 @@ function buildHeader({ kind, record, company, branding, localization, template, 
       const identityX = template.logoPosition === 'RIGHT' ? LEFT : LEFT + (template.showDocumentLogo ? logoSize * 1.7 + 12 : 0);
       const detailStartY = TOP - 21;
       output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 4, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
-      output += commandText(identityX, TOP - 2, template.headerStyle === 'COMPACT' ? 16 : 19, companyName, true);
+      output += commandText(identityX, TOP - 2, template.headerStyle === 'COMPACT' ? 15 : logoSize >= 80 ? 15 : 18, fitText(companyName, logoSize >= 80 ? 24 : 31), true);
       output += renderCompanyDetailLines(identityX, detailStartY, details, template.headerStyle === 'COMPACT' ? 7.5 : 8);
-      const metaX = template.logoPosition === 'RIGHT' ? 315 : 400;
+      const metaX = template.logoPosition === 'RIGHT' ? 315 : 425;
       output += commandText(metaX, TOP - 2, 19, documentTitle, true, darken(primary));
       output += commandText(metaX, TOP - 26, 10, documentReference, true);
       output += commandText(metaX, TOP - 43, 8, `Status: ${String(record.status || 'DRAFT').replace(/_/g, ' ')}`);
@@ -417,7 +429,7 @@ function buildHeader({ kind, record, company, branding, localization, template, 
     const identityX = template.logoPosition === 'RIGHT' ? LEFT : LEFT + (template.showDocumentLogo ? logoSize * 1.7 + 12 : 0);
     const detailStartY = TOP - 21;
     output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 2, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
-    output += commandText(identityX, TOP - 1, 18, companyName, true, darken(primary));
+    output += commandText(identityX, TOP - 1, logoSize >= 80 ? 15 : 18, fitText(companyName, logoSize >= 80 ? 24 : 31), true, darken(primary));
     output += renderCompanyDetailLines(identityX, detailStartY, details);
     const classicMetaX = template.logoPosition === 'RIGHT' ? 315 : 405;
     output += commandText(classicMetaX, TOP - 2, 18, documentTitle, true, darken(primary));
@@ -430,7 +442,7 @@ function buildHeader({ kind, record, company, branding, localization, template, 
     const identityX = template.logoPosition === 'RIGHT' ? LEFT : LEFT + (template.showDocumentLogo ? logoSize * 1.7 + 12 : 0);
     const detailStartY = TOP - 21;
     output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 2, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
-    output += commandText(identityX, TOP - 1, 17, companyName, true);
+    output += commandText(identityX, TOP - 1, logoSize >= 80 ? 14 : 16, fitText(companyName, logoSize >= 80 ? 25 : 34), true);
     output += renderCompanyDetailLines(identityX, detailStartY, details, 7.5);
     const minimalMetaX = template.logoPosition === 'RIGHT' ? 320 : 410;
     output += commandText(minimalMetaX, TOP - 1, 17, documentTitle, true);
@@ -473,9 +485,15 @@ function buildPageCommands({ kind, record, company, branding, localization, item
     y -= Math.max(50, Math.min(8, wrap(template.contractBody.body, 94).length) * 13 + 30);
   }
 
-  const tableHeaderColor = template.tableHeaderColor ? hexRgb(template.tableHeaderColor) : template.template === 'MINIMAL' ? { r: 0.965, g: 0.97, b: 0.98 } : { r: 0.94, g: 0.955, b: 0.98 };
+  const tableHeaderColor = template.tableHeaderColor ? hexRgb(template.tableHeaderColor) : template.template === 'MINIMAL' ? { r: 1, g: 1, b: 1 } : { r: 0.94, g: 0.955, b: 0.98 };
   if (template.showLineItems) {
-    output += commandRect(LEFT, y - 18, RIGHT - LEFT, 25, tableHeaderColor);
+    if (template.template === 'MINIMAL') {
+      output += commandColorLine(LEFT, y + 5, RIGHT, y + 5, 1.2, header.primary);
+      output += commandLine(LEFT, y - 18, RIGHT, y - 18, 0.55, 0.72);
+    } else {
+      output += commandRect(LEFT, y - 18, RIGHT - LEFT, 25, tableHeaderColor);
+      if (template.template === 'CLASSIC') output += commandStrokeRect(LEFT, y - 18, RIGHT - LEFT, 25, header.primary, 0.7);
+    }
     output += commandText(LEFT + 8, y - 11, 8, kind === 'contract' ? 'SERVICE' : 'DESCRIPTION', true);
     output += commandText(355, y - 11, 8, 'QTY', true);
     output += commandText(407, y - 11, 8, 'UNIT', true);
@@ -496,11 +514,11 @@ function buildPageCommands({ kind, record, company, branding, localization, item
 
   if (pageIndex === pageCount - 1) {
     let cursor = Math.max(y - 10, 220);
-    const designedBlocks = Array.isArray(template.blocks) && template.blocks.length
+    const designedBlocks = Array.isArray(template.blocks)
       ? template.blocks.filter((item) => item && item.visible !== false && ['TOTALS', 'TERMS', 'PAYMENT_OPTIONS', 'ONLINE_PAYMENT', 'DISCLAIMER', 'SIGNATURES', 'FOOTER'].includes(item.type))
       : [];
     const fallbackBlocks = [];
-    if (!designedBlocks.length) {
+    if (!template.hasDetailedDesign) {
       if (template.showTotals) fallbackBlocks.push({ type: 'TOTALS', label: 'Summary', visible: true });
       if (template.showNotes) fallbackBlocks.push({ type: 'TERMS', label: kind === 'quote' ? 'Notes' : 'Terms', body: kind === 'quote' ? record.description : record.paymentPlanNotes, visible: true });
       if ((kind === 'invoice' || kind === 'contract') && template.showPaymentInstructions) fallbackBlocks.push(template.paymentOptions || { type: 'PAYMENT_OPTIONS', label: 'Payment options', body: localization && localization.paymentInstructions, visible: true });
@@ -509,7 +527,7 @@ function buildPageCommands({ kind, record, company, branding, localization, item
       if (kind === 'contract' && template.signatures) fallbackBlocks.push(template.signatures);
       fallbackBlocks.push(template.footer || { type: 'FOOTER', body: localization && localization.invoiceFooter || branding && (branding.invoiceFooter || branding.invoiceTerms), visible: true });
     }
-    const postBlocks = designedBlocks.length ? designedBlocks : fallbackBlocks;
+    const postBlocks = template.hasDetailedDesign ? designedBlocks : fallbackBlocks;
 
     const drawHeading = (heading, atY, size = 8.5) => commandText(LEFT, atY, size, heading, true, darken(header.primary, 0.3));
     for (const section of postBlocks) {
@@ -635,7 +653,7 @@ function buildPageCommands({ kind, record, company, branding, localization, item
     }
   }
 
-  output += commandText(RIGHT - 54, 27, 7, `Page ${pageIndex + 1} of ${pageCount}`, false, { r: 0.4, g: 0.45, b: 0.54 });
+  if (template.showPageNumbers) output += commandText(RIGHT - 54, 27, 7, `Page ${pageIndex + 1} of ${pageCount}`, false, { r: 0.4, g: 0.45, b: 0.54 });
   return output;
 }
 

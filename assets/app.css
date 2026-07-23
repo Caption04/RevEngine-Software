@@ -7654,3 +7654,292 @@ body.modal-open { overflow: hidden; }
   gap: 12px;
 }
 .payment-account-editor-heading strong { color: var(--ink); font-size: 13px; }
+
+/* Document Studio usability and template management */
+.document-studio-page [data-template-library-view][hidden],
+.modal-backdrop[hidden],
+.document-import-banner[hidden],
+.document-template-management-actions [hidden] {
+  display: none !important;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+  background: rgba(9, 20, 40, .48);
+  backdrop-filter: blur(8px);
+}
+
+.modal-card {
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(88vh, 880px);
+  overflow: auto;
+  border: 1px solid rgba(210, 220, 234, .95);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(13, 30, 55, .24);
+}
+
+.document-template-modal-card .modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.document-template-modal-card .modal-header h3,
+.document-template-modal-card .modal-header p {
+  margin: 0;
+}
+
+.document-template-modal-card .modal-header p {
+  margin-top: 5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.document-template-library-status,
+.document-import-actions,
+.document-template-management-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.document-editor-heading {
+  align-items: center;
+  padding: 15px 17px;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 12px 30px rgba(28, 49, 82, .06);
+}
+
+.document-editor-identity {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.document-editor-title-row {
+  margin: 0;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.document-editor-title-row h2 {
+  margin: 1px 0 0;
+  font-size: clamp(24px, 2.2vw, 32px);
+}
+
+.document-editor-actions {
+  flex-wrap: nowrap;
+}
+
+.document-import-banner {
+  align-items: center;
+}
+
+.document-import-actions {
+  justify-content: flex-end;
+}
+
+.danger-text {
+  color: #b42318 !important;
+}
+
+.document-template-management {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 15px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: #fbfcfe;
+}
+
+.document-template-management > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.document-template-management span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.document-template-management.is-system {
+  border-color: #cbdcf4;
+  background: #f5f9ff;
+}
+
+.document-template-card-preview::before {
+  display: none;
+}
+
+.document-template-card-preview {
+  display: grid;
+  place-items: center;
+}
+
+.document-template-paper {
+  position: relative;
+  z-index: 1;
+  width: min(210px, 85%);
+  height: 142px;
+  padding: 18px 16px;
+  border-radius: 3px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(34, 54, 85, .13);
+}
+
+.document-template-mini-header,
+.document-template-mini-lines,
+.document-template-mini-table {
+  width: 100%;
+  margin-inline: 0;
+}
+
+.document-template-card.variant-professional .document-template-paper {
+  border-top: 6px solid var(--template-primary, #1d65bc);
+}
+
+.document-template-card.variant-professional .document-template-mini-header {
+  padding-top: 5px;
+}
+
+.document-template-card.variant-classic .document-template-paper {
+  border: 2px solid #17365d;
+  box-shadow: inset 0 0 0 4px #fff, 0 12px 30px rgba(34, 54, 85, .13);
+}
+
+.document-template-card.variant-classic .document-template-mini-header {
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  padding-top: 2px;
+  border-bottom: 3px solid #d6a900;
+  padding-bottom: 10px;
+}
+
+.document-template-card.variant-classic .document-template-mini-header i {
+  border-radius: 50%;
+}
+
+.document-template-card.variant-classic .document-template-mini-table i:first-child {
+  background: #e4d39a;
+}
+
+.document-template-card.variant-minimal .document-template-paper {
+  padding: 22px 20px;
+  box-shadow: 0 10px 24px rgba(34, 54, 85, .09);
+}
+
+.document-template-card.variant-minimal .document-template-mini-header {
+  padding-top: 0;
+  gap: 12px;
+}
+
+.document-template-card.variant-minimal .document-template-mini-header i {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.document-template-card.variant-minimal .document-template-mini-header span {
+  width: 52px;
+  height: 5px;
+}
+
+.document-template-card.variant-minimal .document-template-mini-lines {
+  margin-top: 24px;
+  gap: 8px;
+}
+
+.document-template-card.variant-minimal .document-template-mini-lines i:nth-child(3),
+.document-template-card.variant-minimal .document-template-mini-lines i:nth-child(4) {
+  display: none;
+}
+
+.document-template-card.variant-minimal .document-template-mini-table {
+  margin-top: 22px;
+  border-top: 1px solid #111827;
+  padding-top: 6px;
+}
+
+.document-template-card.variant-minimal .document-template-mini-table i:first-child {
+  background: transparent;
+  border-bottom: 1px solid #cfd5dd;
+}
+
+.document-template-card.variant-blank .document-template-paper {
+  background: #fff;
+}
+
+.document-template-card.variant-blank .document-template-mini-header,
+.document-template-card.variant-blank .document-template-mini-lines,
+.document-template-card.variant-blank .document-template-mini-table {
+  display: none;
+}
+
+.document-style-grid > .field,
+.document-modal-grid > .field {
+  min-width: 0;
+  align-content: start;
+}
+
+.document-style-grid > .field {
+  min-height: 74px;
+}
+
+.document-detail-options.is-disabled {
+  opacity: .48;
+  pointer-events: none;
+}
+
+.document-logo-toggle {
+  min-height: 66px;
+  align-items: center;
+}
+
+.document-logo-toggle input {
+  flex: 0 0 auto;
+  margin-top: 0;
+}
+
+@media (max-width: 720px) {
+  .modal-backdrop {
+    place-items: end center;
+    padding: 12px;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: 92vh;
+    border-radius: 20px 20px 12px 12px;
+  }
+
+  .document-editor-actions,
+  .document-template-management,
+  .document-import-actions {
+    display: grid;
+    width: 100%;
+  }
+
+  .document-editor-actions > *,
+  .document-template-management-actions > *,
+  .document-import-actions > * {
+    width: 100%;
+    justify-content: center;
+  }
+}

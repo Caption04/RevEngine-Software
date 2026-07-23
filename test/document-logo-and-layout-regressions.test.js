@@ -19,7 +19,7 @@ test('document logos preserve their original aspect ratio inside the logo box', 
       defaultCurrency: 'USD',
       numberFormat: 'en-US',
       documentTemplate: 'MODERN',
-      documentLogoSize: 'MEDIUM',
+      documentLogoSize: 'LARGE',
       documentLogoPosition: 'RIGHT'
     },
     logoImage: { buffer: squareLogo, type: 'jpeg' },
@@ -36,8 +36,8 @@ test('document logos preserve their original aspect ratio inside the logo box', 
   });
 
   const source = pdf.toString('latin1');
-  assert.match(source, /q 46\.00 0 0 46\.00 501\.00 [\d.]+ cm \/Logo Do Q/);
-  assert.doesNotMatch(source, /q 78\.20 0 0 46\.00 [\d.]+ [\d.]+ cm \/Logo Do Q/);
+  assert.match(source, /q 86\.00 0 0 86\.00 461\.00 [\d.]+ cm \/Logo Do Q/);
+  assert.doesNotMatch(source, /q 146\.20 0 0 86\.00 [\d.]+ [\d.]+ cm \/Logo Do Q/);
 });
 
 test('Document Studio style controls use fixed aligned rows', () => {

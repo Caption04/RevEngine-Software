@@ -6,6 +6,7 @@
     templates: [],
     blockTypes: [],
     filter: 'INVOICE',
+    showArchived: false,
     selected: null,
     design: null,
     previewTimer: null,
@@ -115,27 +116,54 @@
     return 'gray';
   }
 
+  function templateVariant(template) {
+    const design = template && template.design || {};
+    const variant = design.variant;
+    if (['PROFESSIONAL', 'CLASSIC', 'MINIMAL', 'BLANK'].includes(variant)) return variant;
+    if (design.header && design.header.layout === 'STACKED') return 'CLASSIC';
+    if (design.header && design.header.layout === 'COMPACT') return 'MINIMAL';
+    return 'PROFESSIONAL';
+  }
+
+  function syncArchivedToggle() {
+    const button = document.querySelector('[data-toggle-archived]');
+    if (!button) return;
+    button.textContent = state.showArchived ? 'Back to active' : 'View archived';
+    button.classList.toggle('active', state.showArchived);
+  }
+
   function renderLibrary() {
     const visible = state.templates.filter((template) => template.documentType === state.filter);
-    statusNode.textContent = `${visible.length} ${visible.length === 1 ? 'template' : 'templates'}`;
+    statusNode.textContent = state.showArchived
+      ? `${visible.length} archived ${visible.length === 1 ? 'template' : 'templates'}`
+      : `${visible.length} ${visible.length === 1 ? 'template' : 'templates'}`;
+    syncArchivedToggle();
     if (!visible.length) {
-      grid.innerHTML = '<div class="empty-state"><div><strong>No templates in this group</strong><span>Create one from scratch, use a ready-made design, or import an existing document.</span></div></div>';
+      grid.innerHTML = state.showArchived
+        ? '<div class="empty-state"><div><strong>No archived templates</strong><span>Templates you archive will appear here and can be restored.</span></div></div>'
+        : '<div class="empty-state"><div><strong>No templates in this group</strong><span>Create one from scratch, use a ready-made design, or import an existing document.</span></div></div>';
       document.dispatchEvent(new Event('revengine:section-search-refresh'));
       return;
     }
     grid.innerHTML = visible.map((template) => {
-      const source = template.sourceType === 'IMPORTED' ? 'Imported reference' : template.sourceType === 'BLANK' ? 'Built from scratch' : 'Ready-made template';
+      const source = template.isSystem ? 'System template' : template.sourceType === 'IMPORTED' && template.hasImportSource ? 'Imported reference' : template.sourceType === 'BLANK' ? 'Built from scratch' : 'Ready-made template';
       const version = template.currentVersion ? `Version ${template.currentVersion}` : 'Not published yet';
-      return `<article class="card document-template-card" data-template-card="${escapeHtml(template.id)}">
-        <div class="document-template-card-preview" data-template-open="${escapeHtml(template.id)}">
-          <div class="document-template-mini-header"><i style="background:${escapeHtml(template.design && template.design.theme && template.design.theme.primaryColor || '#1D65BC')}"></i><span></span></div>
-          <div class="document-template-mini-lines"><i></i><i></i><i></i><i></i></div>
-          <div class="document-template-mini-table"><i></i><i></i><i></i></div>
+      const variant = templateVariant(template);
+      const activeActions = `<button class="secondary-button compact" type="button" data-template-open="${escapeHtml(template.id)}">Edit template</button><button class="text-button" type="button" data-template-duplicate="${escapeHtml(template.id)}">Duplicate</button>`;
+      const archivedActions = `<button class="secondary-button compact" type="button" data-template-restore="${escapeHtml(template.id)}">Restore</button>${template.isSystem ? '' : `<button class="text-button danger-text" type="button" data-template-delete="${escapeHtml(template.id)}">Delete</button>`}`;
+      const primary = template.design && template.design.theme && template.design.theme.primaryColor || '#1D65BC';
+      return `<article class="card document-template-card variant-${variant.toLowerCase()}" data-template-card="${escapeHtml(template.id)}" data-template-variant="${escapeHtml(variant)}" style="--template-primary:${escapeHtml(primary)}">
+        <div class="document-template-card-preview"${state.showArchived ? '' : ` data-template-open="${escapeHtml(template.id)}"`}>
+          <div class="document-template-paper">
+            <div class="document-template-mini-header"><i style="background:${escapeHtml(template.design && template.design.theme && template.design.theme.primaryColor || '#1D65BC')}"></i><span></span></div>
+            <div class="document-template-mini-lines"><i></i><i></i><i></i><i></i></div>
+            <div class="document-template-mini-table"><i></i><i></i><i></i></div>
+          </div>
         </div>
         <div class="document-template-card-body">
-          <div class="document-template-card-title"><div><small>${escapeHtml(label(template.documentType))}</small><strong>${escapeHtml(template.name)}</strong></div><span class="badge ${templateTone(template)}">${escapeHtml(template.isDefault ? 'Default' : label(template.status))}</span></div>
+          <div class="document-template-card-title"><div><small>${escapeHtml(label(template.documentType))}${template.isSystem ? ' · System' : ''}</small><strong>${escapeHtml(template.name)}</strong></div><span class="badge ${templateTone(template)}">${escapeHtml(state.showArchived ? 'Archived' : template.isDefault ? 'Default' : label(template.status))}</span></div>
           <p>${escapeHtml(source)} · ${escapeHtml(version)}</p>
-          <div class="document-template-card-actions"><button class="secondary-button compact" type="button" data-template-open="${escapeHtml(template.id)}">Edit template</button><button class="text-button" type="button" data-template-duplicate="${escapeHtml(template.id)}">Duplicate</button></div>
+          <div class="document-template-card-actions">${state.showArchived ? archivedActions : activeActions}</div>
         </div>
       </article>`;
     }).join('');
@@ -152,6 +180,13 @@
     previewFrame.removeAttribute('src');
   }
 
+  function syncHeaderDependentControls() {
+    const visible = getPath(state.design, 'header.visible') !== false;
+    document.querySelectorAll('[data-header-dependent]').forEach((control) => { control.disabled = !visible; });
+    const group = document.querySelector('[data-header-dependent-group]');
+    if (group) group.classList.toggle('is-disabled', !visible);
+  }
+
   function syncControlValues() {
     document.querySelector('[data-template-name]').value = state.selected.name || '';
     document.querySelectorAll('[data-design-path]').forEach((control) => {
@@ -159,6 +194,7 @@
       if (control.type === 'checkbox') control.checked = value !== false;
       else control.value = value == null ? '' : String(value);
     });
+    syncHeaderDependentControls();
   }
 
   function renderBlocks() {
@@ -184,28 +220,38 @@
   function openEditor(template) {
     state.selected = deepClone(template);
     state.design = deepClone(template.design || {});
+    if (!state.design.variant) state.design.variant = templateVariant(template);
     libraryNodes.forEach((node) => { node.hidden = true; });
     editor.hidden = false;
     document.querySelector('[data-editor-type]').textContent = `${label(template.documentType)} template`;
     document.querySelector('[data-editor-title]').textContent = template.name;
-    document.querySelector('[data-editor-status]').textContent = template.isDefault ? 'Published default' : label(template.status);
+    document.querySelector('[data-editor-status]').textContent = template.isDefault ? 'Published default' : template.isSystem ? 'System template' : label(template.status);
     document.querySelector('[data-editor-status]').className = `badge ${templateTone(template)}`;
+
     const importBanner = document.querySelector('[data-import-banner]');
-    importBanner.hidden = template.sourceType !== 'IMPORTED';
-    if (template.sourceType === 'IMPORTED') {
-      const link = document.querySelector('[data-import-source-link]');
-      link.href = `${API_BASE}/document-templates/${encodeURIComponent(template.id)}/import-source`;
-      link.textContent = template.importFileName ? `View ${template.importFileName}` : 'View imported file';
-    }
+    importBanner.hidden = !template.hasImportSource;
+    const viewImport = document.querySelector('[data-view-import-source]');
+    if (viewImport) viewImport.textContent = template.importFileName ? `View ${template.importFileName}` : 'View imported file';
+
+    const management = document.querySelector('[data-template-management]');
+    const managementActions = document.querySelector('[data-template-management-actions]');
+    const managementCopy = document.querySelector('[data-template-management-copy]');
+    if (management) management.classList.toggle('is-system', Boolean(template.isSystem));
+    if (managementActions) managementActions.querySelectorAll('[data-archive-template], [data-delete-template]').forEach((button) => { button.hidden = Boolean(template.isSystem); });
+    if (managementCopy) managementCopy.textContent = template.isSystem
+      ? 'System templates stay available for every company. Duplicate this template to create a removable version.'
+      : 'Archive it temporarily or delete it from your library. Issued documents keep their saved version.';
+
     syncControlValues();
     renderBlocks();
     schedulePreview(80);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.querySelector('[data-template-name]').focus({ preventScroll: true });
   }
 
   async function loadTemplates(selectId) {
     statusNode.textContent = 'Loading templates…';
-    const data = await api('/document-templates');
+    const suffix = state.showArchived ? '?status=ARCHIVED' : '';
+    const data = await api(`/document-templates${suffix}`);
     state.templates = data.templates || [];
     state.blockTypes = data.blockTypes || Object.keys(BLOCK_LABELS);
     renderLibrary();
@@ -264,9 +310,8 @@
       body: `${modalField('name', 'Template name', '<input id="templateModal-name" name="name" minlength="2" maxlength="120" required placeholder="Example: Zimbabwe invoice">')}${modalField('documentType', 'Document type', '<select id="templateModal-documentType" name="documentType" required><option value="INVOICE">Invoice</option><option value="QUOTE">Quote</option><option value="CONTRACT">Contract</option></select>')}${variants}`,
       onSubmit: async (data) => {
         const created = await api('/document-templates', { method: 'POST', body: JSON.stringify({ name: data.get('name'), documentType: data.get('documentType'), startingPoint: blank ? 'BLANK' : 'STARTER', starterVariant: data.get('starterVariant') || 'PROFESSIONAL' }) });
-        state.templates.push(created);
-        renderLibrary();
-        openEditor(created);
+        state.showArchived = false;
+        await loadTemplates(created.id);
         notify('Template created.');
       }
     });
@@ -280,9 +325,8 @@
       body: `${modalField('name', 'Template name', '<input id="templateModal-name" name="name" minlength="2" maxlength="120" required placeholder="Example: Existing company invoice">')}${modalField('documentType', 'Document type', '<select id="templateModal-documentType" name="documentType" required><option value="INVOICE">Invoice</option><option value="QUOTE">Quote</option><option value="CONTRACT">Contract</option></select>')}${modalField('file', 'Document file', '<input id="templateModal-file" name="file" type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp" required>', 'PDF, DOCX, PNG, JPG, or WEBP. Maximum 12 MB.')}`,
       onSubmit: async (data) => {
         const created = await api('/document-templates/import', { method: 'POST', body: data });
-        state.templates.push(created);
-        renderLibrary();
-        openEditor(created);
+        state.showArchived = false;
+        await loadTemplates(created.id);
         notify('Document imported. Match its design using the editable sections.');
       }
     });
@@ -492,23 +536,72 @@
 
   async function duplicateTemplate(id) {
     const duplicate = await api(`/document-templates/${encodeURIComponent(id)}/duplicate`, { method: 'POST' });
+    state.showArchived = false;
     await loadTemplates(duplicate.id);
     notify('Template duplicated.');
   }
 
   async function archiveTemplate() {
-    if (!state.selected) return;
+    if (!state.selected || state.selected.isSystem) return;
     const accepted = !window.RevEngineUI || await window.RevEngineUI.confirm({
       title: `Archive ${state.selected.name}?`,
-      message: 'The template will disappear from the library. Previously issued documents keep their saved template version.',
+      message: 'You can restore it later from Archived templates. Documents already issued will not change.',
       confirmLabel: 'Archive template',
       danger: true
     });
     if (!accepted) return;
-    await api(`/document-templates/${encodeURIComponent(state.selected.id)}`, { method: 'DELETE' });
+    await api(`/document-templates/${encodeURIComponent(state.selected.id)}/archive`, { method: 'POST' });
     showLibrary();
     await loadTemplates();
     notify('Template archived.');
+  }
+
+  async function restoreTemplate(id) {
+    const restored = await api(`/document-templates/${encodeURIComponent(id)}/restore`, { method: 'POST' });
+    await loadTemplates();
+    notify(`${restored.name} restored.`);
+  }
+
+  async function deleteTemplate(id = state.selected && state.selected.id) {
+    const template = state.templates.find((item) => item.id === id) || state.selected;
+    if (!template || template.isSystem) return;
+    const accepted = !window.RevEngineUI || await window.RevEngineUI.confirm({
+      title: `Delete ${template.name}?`,
+      message: 'This removes the template from your library. Documents already issued keep the exact saved version.',
+      confirmLabel: 'Delete template',
+      danger: true
+    });
+    if (!accepted) return;
+    await api(`/document-templates/${encodeURIComponent(template.id)}`, { method: 'DELETE' });
+    if (state.selected && state.selected.id === template.id) showLibrary();
+    await loadTemplates();
+    notify('Template deleted.');
+  }
+
+  function viewImportedSource() {
+    if (!state.selected || !state.selected.hasImportSource) return;
+    const url = `${API_BASE}/document-templates/${encodeURIComponent(state.selected.id)}/import-source`;
+    const opened = window.open(url, '_blank');
+    if (opened) opened.opener = null;
+    else notify('Allow pop-ups for this site, then try again.', false);
+  }
+
+  async function removeImportedSource() {
+    if (!state.selected || !state.selected.hasImportSource) return;
+    const accepted = !window.RevEngineUI || await window.RevEngineUI.confirm({
+      title: 'Remove imported file?',
+      message: 'The editable template stays. Only the original reference file is removed.',
+      confirmLabel: 'Remove file',
+      danger: true
+    });
+    if (!accepted) return;
+    const updated = await api(`/document-templates/${encodeURIComponent(state.selected.id)}/import-source`, { method: 'DELETE' });
+    state.selected = deepClone(updated);
+    const index = state.templates.findIndex((item) => item.id === updated.id);
+    if (index >= 0) state.templates[index] = updated;
+    document.querySelector('[data-import-banner]').hidden = true;
+    renderLibrary();
+    notify('Imported file removed.');
   }
 
   function schedulePreview(delay = 450) {
@@ -534,6 +627,8 @@
   document.addEventListener('click', async (event) => {
     const open = event.target.closest('[data-template-open]');
     const duplicate = event.target.closest('[data-template-duplicate]');
+    const restore = event.target.closest('[data-template-restore]');
+    const deleteCard = event.target.closest('[data-template-delete]');
     const move = event.target.closest('[data-block-move]');
     try {
       if (open) {
@@ -542,6 +637,13 @@
         return;
       }
       if (duplicate) { await duplicateTemplate(duplicate.dataset.templateDuplicate); return; }
+      if (restore) { await restoreTemplate(restore.dataset.templateRestore); return; }
+      if (deleteCard) { await deleteTemplate(deleteCard.dataset.templateDelete); return; }
+      if (event.target.closest('[data-toggle-archived]')) {
+        state.showArchived = !state.showArchived;
+        await loadTemplates();
+        return;
+      }
       if (event.target.closest('[data-import-template]')) { importTemplateModal(); return; }
       if (event.target.closest('[data-create-blank]')) { createTemplateModal(true); return; }
       if (event.target.closest('[data-create-starter]')) { createTemplateModal(false); return; }
@@ -551,6 +653,9 @@
       if (event.target.closest('[data-publish-template]')) { await publishTemplate(); return; }
       if (event.target.closest('[data-duplicate-template]') && state.selected) { await duplicateTemplate(state.selected.id); return; }
       if (event.target.closest('[data-archive-template]')) { await archiveTemplate(); return; }
+      if (event.target.closest('[data-delete-template]')) { await deleteTemplate(); return; }
+      if (event.target.closest('[data-view-import-source]')) { viewImportedSource(); return; }
+      if (event.target.closest('[data-remove-import-source]')) { await removeImportedSource(); return; }
       if (event.target.closest('[data-close-template-modal]')) { closeModal(); return; }
       const edit = event.target.closest('[data-block-edit]');
       if (edit) { editBlock(edit.dataset.blockEdit); return; }
@@ -574,6 +679,7 @@
       let value = control.type === 'checkbox' ? control.checked : control.value;
       if (['typography.bodySize', 'page.margin'].includes(control.dataset.designPath)) value = Number(value);
       setPath(state.design, control.dataset.designPath, value);
+      if (control.dataset.designPath === 'header.visible') syncHeaderDependentControls();
       schedulePreview();
     };
     control.addEventListener(control.type === 'color' ? 'input' : 'change', update);

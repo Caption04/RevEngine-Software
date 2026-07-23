@@ -31,7 +31,10 @@
             <button class="tab" type="button" data-document-filter="QUOTE">Quotes</button>
             <button class="tab" type="button" data-document-filter="CONTRACT">Contracts</button>
           </div>
-          <span class="api-status" data-template-status>Loading templates…</span>
+          <div class="document-template-library-status">
+            <span class="api-status" data-template-status>Loading templates…</span>
+            <button class="secondary-button compact" type="button" data-toggle-archived>View archived</button>
+          </div>
         </div>
         <section class="document-template-grid" data-template-grid>
           <div class="empty-state"><div><strong>Loading document templates</strong><span>Please wait a moment.</span></div></div>
@@ -40,19 +43,17 @@
 
       <section class="document-template-editor" data-template-editor hidden>
         <div class="document-editor-heading">
-          <div>
-            <button class="text-button" type="button" data-back-to-templates>← Back to templates</button>
+          <div class="document-editor-identity">
+            <button class="text-button" type="button" data-back-to-templates>← Templates</button>
             <div class="document-editor-title-row">
               <div>
                 <p class="eyebrow" data-editor-type>Invoice template</p>
                 <h2 data-editor-title>Template</h2>
-                <p data-editor-summary>Edit the working draft, preview it, then publish it when it is ready.</p>
               </div>
               <span class="badge gray" data-editor-status>Draft</span>
             </div>
           </div>
           <div class="document-editor-actions">
-            <button class="secondary-button" type="button" data-duplicate-template>Duplicate</button>
             <button class="secondary-button" type="button" data-save-template>Save draft</button>
             <button class="primary-button" type="button" data-publish-template>Publish as default</button>
           </div>
@@ -63,7 +64,10 @@
             <strong>Your original document is kept as a reference.</strong>
             <span>Match the sections and styling below, then compare the live preview with the source file.</span>
           </div>
-          <a class="secondary-button compact" target="_blank" rel="noopener" data-import-source-link>View imported file</a>
+          <div class="document-import-actions">
+            <button class="secondary-button compact" type="button" data-view-import-source>View imported file</button>
+            <button class="text-button danger-text" type="button" data-remove-import-source>Remove imported file</button>
+          </div>
         </div>
 
         <div class="document-studio-workspace">
@@ -87,20 +91,22 @@
                 <div class="field"><label for="documentAccentColor">Accent colour</label><input id="documentAccentColor" type="color" data-design-path="theme.accentColor"></div>
                 <div class="field"><label for="documentTextColor">Text colour</label><input id="documentTextColor" type="color" data-design-path="theme.textColor"></div>
                 <div class="field"><label for="documentTableColor">Table heading</label><input id="documentTableColor" type="color" data-design-path="theme.tableHeaderColor"></div>
-                <div class="field"><label for="documentHeaderLayout">Header layout</label><select id="documentHeaderLayout" data-design-path="header.layout"><option value="SPLIT">Split</option><option value="STACKED">Stacked</option><option value="COMPACT">Compact</option></select></div>
-                <div class="field"><label for="documentLogoPosition">Logo position</label><select id="documentLogoPosition" data-design-path="header.logoPosition"><option value="LEFT">Left</option><option value="RIGHT">Right</option></select></div>
-                <div class="field"><label for="documentLogoSize">Logo size</label><select id="documentLogoSize" data-design-path="header.logoSize"><option value="SMALL">Small</option><option value="MEDIUM">Medium</option><option value="LARGE">Large</option></select></div>
+                <div class="field"><label for="documentHeaderLayout">Header layout</label><select id="documentHeaderLayout" data-design-path="header.layout" data-header-dependent><option value="SPLIT">Split</option><option value="STACKED">Stacked</option><option value="COMPACT">Compact</option></select></div>
+                <div class="field"><label for="documentLogoPosition">Logo position</label><select id="documentLogoPosition" data-design-path="header.logoPosition" data-header-dependent><option value="LEFT">Left</option><option value="RIGHT">Right</option></select></div>
+                <div class="field"><label for="documentLogoSize">Logo size</label><select id="documentLogoSize" data-design-path="header.logoSize" data-header-dependent><option value="SMALL">Small</option><option value="MEDIUM">Medium</option><option value="LARGE">Large</option></select></div>
                 <div class="field"><label for="documentBodySize">Text size</label><select id="documentBodySize" data-design-path="typography.bodySize"><option value="8">Small</option><option value="9">Normal</option><option value="10">Large</option><option value="11">Extra large</option></select></div>
                 <div class="field"><label for="documentPageMargin">Page margin</label><select id="documentPageMargin" data-design-path="page.margin"><option value="30">Narrow</option><option value="42">Normal</option><option value="56">Wide</option></select></div>
-                <label class="document-logo-toggle"><input type="checkbox" data-design-path="header.showLogo"><span><strong>Show company logo</strong><small>Uses the logo saved in Company Details.</small></span></label>
-                <div class="document-detail-options">
-                  <label><input type="checkbox" data-design-path="header.showLegalName"><span>Legal company name</span></label>
-                  <label><input type="checkbox" data-design-path="header.showRegistrationNumber"><span>Registration number</span></label>
-                  <label><input type="checkbox" data-design-path="header.showTaxNumber"><span>Tax or VAT number</span></label>
-                  <label><input type="checkbox" data-design-path="header.showAddress"><span>Company address</span></label>
-                  <label><input type="checkbox" data-design-path="header.showEmail"><span>Company email</span></label>
-                  <label><input type="checkbox" data-design-path="header.showPhone"><span>Company phone</span></label>
-                  <label><input type="checkbox" data-design-path="header.showWebsite"><span>Company website</span></label>
+                <label class="document-logo-toggle"><input type="checkbox" data-design-path="header.visible"><span><strong>Show document header</strong><small>Displays company identity and the document number.</small></span></label>
+                <label class="document-logo-toggle"><input type="checkbox" data-design-path="header.showLogo" data-header-dependent><span><strong>Show company logo</strong><small>Uses the logo saved in Company Details.</small></span></label>
+                <label class="document-logo-toggle"><input type="checkbox" data-design-path="page.showPageNumbers"><span><strong>Show page numbers</strong><small>Adds a page count in the footer.</small></span></label>
+                <div class="document-detail-options" data-header-dependent-group>
+                  <label><input type="checkbox" data-design-path="header.showLegalName" data-header-dependent><span>Legal company name</span></label>
+                  <label><input type="checkbox" data-design-path="header.showRegistrationNumber" data-header-dependent><span>Registration number</span></label>
+                  <label><input type="checkbox" data-design-path="header.showTaxNumber" data-header-dependent><span>Tax or VAT number</span></label>
+                  <label><input type="checkbox" data-design-path="header.showAddress" data-header-dependent><span>Company address</span></label>
+                  <label><input type="checkbox" data-design-path="header.showEmail" data-header-dependent><span>Company email</span></label>
+                  <label><input type="checkbox" data-design-path="header.showPhone" data-header-dependent><span>Company phone</span></label>
+                  <label><input type="checkbox" data-design-path="header.showWebsite" data-header-dependent><span>Company website</span></label>
                 </div>
               </div>
             </section>
@@ -113,7 +119,17 @@
               <div class="document-block-list" data-block-list></div>
             </section>
 
-            <button class="danger-link" type="button" data-archive-template>Archive this template</button>
+            <section class="document-template-management" data-template-management>
+              <div>
+                <strong>Template management</strong>
+                <span data-template-management-copy>Keep active templates tidy without changing documents already issued.</span>
+              </div>
+              <div class="document-template-management-actions" data-template-management-actions>
+                <button class="secondary-button compact" type="button" data-duplicate-template>Duplicate</button>
+                <button class="text-button" type="button" data-archive-template>Archive</button>
+                <button class="text-button danger-text" type="button" data-delete-template>Delete</button>
+              </div>
+            </section>
           </aside>
 
           <section class="card document-preview-panel">

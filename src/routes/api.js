@@ -4721,6 +4721,18 @@ function safeDocumentTemplate(template) {
   };
 }
 
+async function removeDocumentTemplateImportFile(template) {
+  if (!template || !template.importSourceUrl) return;
+  const storedName = path.basename(template.importSourceUrl);
+  await fs.promises.unlink(path.join(documentImportDir, storedName)).catch((error) => {
+    if (!error || error.code !== 'ENOENT') throw error;
+  });
+}
+
+function editableDocumentTemplateWhere(id, companyId) {
+  return { id, companyId, status: { notIn: ['ARCHIVED', 'DELETED'] } };
+}
+
 function documentTemplateKind(documentType) {
   return String(documentType || '').toUpperCase() === 'QUOTE'
     ? 'quote'
@@ -4797,10 +4809,11 @@ async function lockDefaultDocumentTemplate(tx, companyId, documentType, entityMo
 router.get('/document-templates', requireRole(...adminRoles), asyncHandler(async (req, res) => {
   await requireAnyPermission(req, ['company.settings.view', 'company.settings.manage', 'settings.finance.manage']);
   await seedStarterTemplates(prisma, req.companyId);
+  const archivedOnly = String(req.query.status || '').toUpperCase() === 'ARCHIVED';
   const templates = await prisma.documentTemplate.findMany({
-    where: { companyId: req.companyId, status: { not: 'ARCHIVED' } },
+    where: { companyId: req.companyId, status: archivedOnly ? 'ARCHIVED' : { notIn: ['ARCHIVED', 'DELETED'] } },
     include: { versions: { where: { publishedAt: { not: null } }, orderBy: { version: 'desc' }, take: 10 } },
-    orderBy: [{ documentType: 'asc' }, { isDefault: 'desc' }, { updatedAt: 'desc' }]
+    orderBy: [{ documentType: 'asc' }, { isDefault: 'desc' }, { isSystem: 'desc' }, { updatedAt: 'desc' }]
   });
   sendData(res, normalize({
     blockTypes: DOCUMENT_BLOCK_TYPES,
@@ -4812,7 +4825,7 @@ router.get('/document-templates', requireRole(...adminRoles), asyncHandler(async
 router.get('/document-templates/:id', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
   await requireAnyPermission(req, ['company.settings.view', 'company.settings.manage', 'settings.finance.manage']);
   const template = await prisma.documentTemplate.findFirst({
-    where: { id: req.params.id, companyId: req.companyId },
+    where: { id: req.params.id, companyId: req.companyId, status: { not: 'DELETED' } },
     include: { versions: { where: { publishedAt: { not: null } }, orderBy: { version: 'desc' }, take: 25 } }
   });
   if (!template) throw notFound('Document template not found');
@@ -4887,9 +4900,23 @@ router.get('/document-templates/:id/import-source', requireRole(...adminRoles), 
     .sendFile(sourcePath);
 }));
 
+router.delete('/document-templates/:id/import-source', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.manage', 'settings.finance.manage']);
+  const template = await prisma.documentTemplate.findFirst({ where: editableDocumentTemplateWhere(req.params.id, req.companyId) });
+  if (!template) throw notFound('Document template not found');
+  if (!template.importSourceUrl) throw notFound('Imported source not found');
+  await removeDocumentTemplateImportFile(template);
+  const updated = await prisma.documentTemplate.update({
+    where: { id: template.id },
+    data: { sourceType: 'BLANK', importFileName: null, importMimeType: null, importSourceUrl: null, importStatus: null }
+  });
+  await audit(req, 'REMOVE_IMPORT', 'DocumentTemplate', template.id, { fileName: template.importFileName });
+  sendData(res, normalize(safeDocumentTemplate(updated)));
+}));
+
 router.patch('/document-templates/:id', requireRole(...adminRoles), validate(idParam, 'params'), validate(documentTemplatePatchSchema), asyncHandler(async (req, res) => {
   await requireAnyPermission(req, ['company.settings.manage', 'settings.finance.manage']);
-  const existing = await prisma.documentTemplate.findFirst({ where: { id: req.params.id, companyId: req.companyId, status: { not: 'ARCHIVED' } } });
+  const existing = await prisma.documentTemplate.findFirst({ where: editableDocumentTemplateWhere(req.params.id, req.companyId) });
   if (!existing) throw notFound('Document template not found');
   const data = {};
   if (req.body.name) data.name = req.body.name;
@@ -4904,7 +4931,7 @@ router.patch('/document-templates/:id', requireRole(...adminRoles), validate(idP
 
 router.post('/document-templates/:id/duplicate', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
   await requireAnyPermission(req, ['company.settings.manage', 'settings.finance.manage']);
-  const existing = await prisma.documentTemplate.findFirst({ where: { id: req.params.id, companyId: req.companyId, status: { not: 'ARCHIVED' } } });
+  const existing = await prisma.documentTemplate.findFirst({ where: editableDocumentTemplateWhere(req.params.id, req.companyId) });
   if (!existing) throw notFound('Document template not found');
   const template = await prisma.documentTemplate.create({
     data: {
@@ -4924,7 +4951,7 @@ router.post('/document-templates/:id/duplicate', requireRole(...adminRoles), val
 
 router.post('/document-templates/:id/publish', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
   await requireAnyPermission(req, ['company.settings.manage', 'settings.finance.manage']);
-  const template = await prisma.documentTemplate.findFirst({ where: { id: req.params.id, companyId: req.companyId, status: { not: 'ARCHIVED' } } });
+  const template = await prisma.documentTemplate.findFirst({ where: editableDocumentTemplateWhere(req.params.id, req.companyId) });
   if (!template) throw notFound('Document template not found');
   const published = await prisma.$transaction(async (tx) => {
     await tx.documentTemplate.updateMany({
@@ -4945,13 +4972,48 @@ router.post('/document-templates/:id/publish', requireRole(...adminRoles), valid
   sendData(res, normalize(safeDocumentTemplate(published)));
 }));
 
-router.delete('/document-templates/:id', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
+router.post('/document-templates/:id/archive', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
   await requireAnyPermission(req, ['company.settings.manage', 'settings.finance.manage']);
-  const template = await prisma.documentTemplate.findFirst({ where: { id: req.params.id, companyId: req.companyId } });
+  const template = await prisma.documentTemplate.findFirst({ where: editableDocumentTemplateWhere(req.params.id, req.companyId) });
   if (!template) throw notFound('Document template not found');
+  if (template.isSystem) throw new AppError(400, 'System templates cannot be archived. Duplicate it to create your own version.');
+  if (template.isDefault) throw new AppError(409, 'Publish another template as the default before archiving this one.');
   await prisma.documentTemplate.update({ where: { id: template.id }, data: { status: 'ARCHIVED', isDefault: false, archivedAt: new Date() } });
   await audit(req, 'ARCHIVE', 'DocumentTemplate', template.id, { documentType: template.documentType });
   sendData(res, { archived: true });
+}));
+
+router.post('/document-templates/:id/restore', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.manage', 'settings.finance.manage']);
+  const template = await prisma.documentTemplate.findFirst({ where: { id: req.params.id, companyId: req.companyId, status: 'ARCHIVED' } });
+  if (!template) throw notFound('Archived template not found');
+  const status = template.currentVersion > 0 ? 'PUBLISHED' : 'DRAFT';
+  const restored = await prisma.documentTemplate.update({ where: { id: template.id }, data: { status, archivedAt: null, isDefault: false } });
+  await audit(req, 'RESTORE', 'DocumentTemplate', template.id, { documentType: template.documentType });
+  sendData(res, normalize(safeDocumentTemplate(restored)));
+}));
+
+router.delete('/document-templates/:id', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.manage', 'settings.finance.manage']);
+  const template = await prisma.documentTemplate.findFirst({ where: { id: req.params.id, companyId: req.companyId, status: { not: 'DELETED' } } });
+  if (!template) throw notFound('Document template not found');
+  if (template.isSystem) throw new AppError(400, 'System templates cannot be deleted. Duplicate it to create your own version.');
+  if (template.isDefault) throw new AppError(409, 'Publish another template as the default before deleting this one.');
+  await removeDocumentTemplateImportFile(template);
+  await prisma.documentTemplate.update({
+    where: { id: template.id },
+    data: {
+      status: 'DELETED',
+      isDefault: false,
+      archivedAt: new Date(),
+      importFileName: null,
+      importMimeType: null,
+      importSourceUrl: null,
+      importStatus: null
+    }
+  });
+  await audit(req, 'DELETE', 'DocumentTemplate', template.id, { documentType: template.documentType });
+  sendData(res, { deleted: true });
 }));
 
 router.post('/document-templates/preview.pdf', requireRole(...adminRoles), validate(documentTemplatePreviewSchema), asyncHandler(async (req, res) => {

@@ -43,12 +43,17 @@ test('document studio exposes ready-made, blank, imported, preview, publish, and
     "router.patch('/document-templates/:id'",
     "router.post('/document-templates/:id/publish'",
     "router.post('/document-templates/:id/duplicate'",
+    "router.post('/document-templates/:id/archive'",
+    "router.post('/document-templates/:id/restore'",
+    "router.delete('/document-templates/:id/import-source'",
     "router.delete('/document-templates/:id'",
     "router.post('/document-templates/preview.pdf'"
   ]) assert.match(routes, new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   assert.match(routes, /where: \{ companyId: req\.companyId/);
   assert.match(routes, /documentTemplateVersion\.create/);
-  assert.match(routes, /status: 'ARCHIVED', isDefault: false/);
+  assert.match(routes, /status: 'ARCHIVED'/);
+  assert.match(routes, /status: 'DELETED'/);
+  assert.match(routes, /System templates cannot be deleted/);
   assert.match(routes, /12 \* 1024 \* 1024/);
   assert.match(routes, /application\/pdf/);
   assert.match(routes, /application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document/);
@@ -67,6 +72,11 @@ test('structured designs preserve editable payment, legal, signature, and contra
   const invoice = starterDesign('INVOICE', 'PROFESSIONAL');
   assert.deepEqual(invoice.blocks.map((block) => block.type), ['CUSTOMER_DETAILS', 'DOCUMENT_DETAILS', 'LINE_ITEMS', 'TOTALS', 'PAYMENT_OPTIONS', 'ONLINE_PAYMENT', 'DISCLAIMER', 'FOOTER']);
   assert.match(invoice.blocks.find((block) => block.type === 'DISCLAIMER').body, /confirm that the payment details/i);
+  const blank = starterDesign('INVOICE', 'BLANK');
+  assert.equal(blank.header.visible, false);
+  assert.equal(blank.page.showPageNumbers, false);
+  assert.deepEqual(blank.blocks, []);
+
   const contract = starterDesign('CONTRACT', 'PROFESSIONAL');
   assert.ok(contract.blocks.some((block) => block.type === 'CONTRACT_BODY'));
   assert.ok(contract.blocks.some((block) => block.type === 'SIGNATURES'));
