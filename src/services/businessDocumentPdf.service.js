@@ -1,5 +1,7 @@
 'use strict';
 
+const zlib = require('node:zlib');
+
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
 const LEFT = 48;
@@ -85,7 +87,8 @@ function customerName(record) {
 
 function customerContact(record) {
   const customer = record && record.customer || {};
-  return [customer.name, customer.email, customer.phone].filter(Boolean).join(' · ');
+  const displayName = customerName(record);
+  return [customer.name !== displayName ? customer.name : null, customer.email, customer.phone].filter(Boolean).join(' · ');
 }
 
 function lineItems(record) {
@@ -99,12 +102,14 @@ function buildPageCommands({ kind, record, company, branding, localization, item
   const companyName = ascii(brand.brandName || company.tradingName || company.name || 'Company');
   const documentTitle = kind === 'quote' ? 'QUOTE' : 'INVOICE';
   const documentReference = kind === 'quote'
-    ? record.title || `Quote ${String(record.id || '').slice(-8).toUpperCase()}`
+    ? record.number || `Quote ${String(record.id || '').slice(-8).toUpperCase()}`
     : record.number || `Invoice ${String(record.id || '').slice(-8).toUpperCase()}`;
   let output = commandRect(0, PAGE_HEIGHT - 34, PAGE_WIDTH, 34, primary);
   output += commandText(LEFT, TOP, 19, companyName, true);
-  output += commandText(LEFT, TOP - 22, 9, [company.email, company.phone, company.address].filter(Boolean).join(' · '));
-  output += commandText(LEFT, TOP - 44, 9, [brand.supportEmail, brand.supportPhone, brand.websiteUrl].filter(Boolean).join(' · '));
+  const companyContact = [brand.supportEmail || company.email, brand.supportPhone || company.phone, company.address].filter(Boolean).join(' · ');
+  const website = brand.websiteUrl || '';
+  output += commandText(LEFT, TOP - 22, 9, companyContact);
+  if (website) output += commandText(LEFT, TOP - 38, 8, website);
   output += commandText(405, TOP, 20, documentTitle, true);
   output += commandText(405, TOP - 24, 10, documentReference, true);
   output += commandText(405, TOP - 42, 9, `Status: ${String(record.status || 'DRAFT').replace(/_/g, ' ')}`);
@@ -124,7 +129,7 @@ function buildPageCommands({ kind, record, company, branding, localization, item
     : [
         ['Issued', dateLabel(record.createdAt)],
         ['Due', dateLabel(record.dueDate)],
-        ['Customer PO', record.purchaseOrderNumber || '-']
+        ...(record.purchaseOrderNumber ? [['Customer PO', record.purchaseOrderNumber]] : [])
       ];
   meta.forEach(([label, value], index) => {
     output += commandText(390, y - index * 18, 9, `${label}:`, true);
@@ -167,7 +172,12 @@ function buildPageCommands({ kind, record, company, branding, localization, item
       output += commandText(LEFT, 135, 9, kind === 'quote' ? 'Notes' : 'Payment notes', true);
       wrap(note, 88).slice(0, 3).forEach((line, index) => { output += commandText(LEFT, 119 - index * 14, 8, line); });
     }
-    const footer = brand.invoiceFooter || brand.invoiceTerms;
+    const paymentInstructions = localization && localization.paymentInstructions;
+    if (kind === 'invoice' && paymentInstructions) {
+      output += commandText(LEFT, 101, 8, 'Payment instructions', true);
+      wrap(paymentInstructions, 90).slice(0, 2).forEach((line, index) => { output += commandText(LEFT, 88 - index * 12, 7, line); });
+    }
+    const footer = localization && localization.invoiceFooter || brand.invoiceFooter || brand.invoiceTerms;
     if (footer) wrap(footer, 95).slice(0, 2).forEach((line, index) => { output += commandText(LEFT, 75 - index * 13, 7, line); });
   }
 

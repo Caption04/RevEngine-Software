@@ -867,6 +867,7 @@ function financeSettingsDefaults(companyId, country = 'ZW') {
     pricesIncludeTax: false,
     dateFormat: 'yyyy-MM-dd',
     numberFormat: region.numberFormat,
+    quotePrefix: 'Q',
     invoicePrefix: 'INV',
     receiptPrefix: 'RCT',
     quoteExpiryDays: 14,
@@ -897,6 +898,7 @@ function financeLocalization(settings) {
     pricesIncludeTax: Boolean(merged.pricesIncludeTax),
     dateFormat: merged.dateFormat,
     numberFormat: merged.numberFormat,
+    quotePrefix: merged.quotePrefix || 'Q',
     invoicePrefix: merged.invoicePrefix || 'INV',
     receiptPrefix: merged.receiptPrefix || 'RCT',
     quoteExpiryDays: Number(merged.quoteExpiryDays || 14),
@@ -1437,6 +1439,7 @@ const financeSettingsSchema = z.object({
   pricesIncludeTax: z.boolean().optional(),
   dateFormat: z.string().trim().min(2).max(40).optional(),
   numberFormat: z.string().trim().min(2).max(40).optional(),
+  quotePrefix: optionalText(20),
   invoicePrefix: optionalText(20),
   receiptPrefix: optionalText(20),
   quoteExpiryDays: z.coerce.number().int().min(1).max(365).optional(),
@@ -2349,6 +2352,21 @@ async function addQuoteStatusHistory(tx, req, quote, toStatus, note) {
 
 async function addInvoiceStatusHistory(tx, req, invoice, toStatus, note) {
   await tx.invoiceStatusHistory.create({ data: { companyId: req.companyId, invoiceId: invoice.id, fromStatus: invoice.status, toStatus, changedById: req.user && req.user.id, note } });
+}
+
+async function nextQuoteNumber(tx, companyId) {
+  const counter = await tx.companyInvoiceCounter.upsert({ where: { companyId }, update: {}, create: { companyId } });
+  const settings = await getCompanyFinanceSettings(companyId, tx);
+  const prefix = settings.quotePrefix || 'Q';
+  let nextNumber = counter.quoteNextNumber || 1;
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
+    const number = `${prefix}-${String(nextNumber).padStart(counter.padding, '0')}`;
+    const existingCount = await tx.quote.count({ where: { companyId, number } });
+    await tx.companyInvoiceCounter.update({ where: { companyId }, data: { quoteNextNumber: nextNumber + 1 } });
+    nextNumber += 1;
+    if (existingCount === 0) return number;
+  }
+  throw new AppError(409, 'Could not allocate quote number');
 }
 
 async function nextInvoiceNumber(tx, companyId) {
@@ -9735,6 +9753,7 @@ router.post('/quotes', validate(quoteSchema), asyncHandler(async (req, res) => {
   const data = await prisma.$transaction(async (tx) => {
     const { lineItems, amount: ignoredAmount, ...quoteData } = req.body;
     if (!quoteData.validUntil) quoteData.validUntil = addDaysFromNow(financeLocalization(finance).quoteExpiryDays);
+    quoteData.number = await nextQuoteNumber(tx, req.companyId);
     const quote = await tx.quote.create({
   data: {
     ...quoteData,
@@ -9769,7 +9788,7 @@ router.get('/quotes/:id/pdf', validate(idParam, 'params'), asyncHandler(async (r
     getCompanyFinanceSettings(req.companyId)
   ]);
   if (!record || !company) throw notFound('Quote not found');
-  const pdf = createBusinessDocumentPdf({ kind: 'quote', record: normalize(record), company: normalize(company), branding: publicBranding(company), localization: financeLocalization(finance) });
+  const pdf = await createBusinessDocumentPdf({ kind: 'quote', record: normalize(record), company: normalize(company), branding: publicBranding(company), localization: financeLocalization(finance), baseUrl: `${req.protocol}://${req.get('host')}` });
   const filename = `quote-${String(record.title || record.id).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || record.id}.pdf`;
   res.status(200)
     .set('Content-Type', 'application/pdf')
@@ -9988,7 +10007,7 @@ router.get('/invoices/:id/pdf', validate(idParam, 'params'), asyncHandler(async 
     getCompanyFinanceSettings(req.companyId)
   ]);
   if (!record || !company) throw notFound('Invoice not found');
-  const pdf = createBusinessDocumentPdf({ kind: 'invoice', record: normalize(record), company: normalize(company), branding: publicBranding(company), localization: financeLocalization(finance) });
+  const pdf = await createBusinessDocumentPdf({ kind: 'invoice', record: normalize(record), company: normalize(company), branding: publicBranding(company), localization: financeLocalization(finance), baseUrl: `${req.protocol}://${req.get('host')}` });
   const filename = `invoice-${String(record.number || record.id).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || record.id}.pdf`;
   res.status(200)
     .set('Content-Type', 'application/pdf')

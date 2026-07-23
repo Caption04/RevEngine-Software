@@ -1564,6 +1564,7 @@ model SolarFault {
   reportedById           String?
   faultCode              String?
   category               String?
+  number                 String?
   title                  String
   description            String?
   severity               SolarFaultSeverity @default(MEDIUM)
@@ -2236,6 +2237,7 @@ model Quote {
   customerId             String
   serviceId              String?
   jobId                  String?
+  number                 String?
   title                  String
   description            String?
   status                 QuoteStatus          @default(DRAFT)
@@ -2266,6 +2268,7 @@ model Quote {
   lineItems              QuoteLineItem[]
   statusHistory          QuoteStatusHistory[]
 
+  @@unique([companyId, number])
   @@index([companyId])
   @@index([companyId, deletedAt])
   @@index([companyId, branchId])
@@ -2313,6 +2316,7 @@ model CompanyInvoiceCounter {
   companyId            String   @unique
   prefix               String   @default("INV")
   nextNumber           Int      @default(1)
+  quoteNextNumber      Int      @default(1)
   receiptNextNumber    Int      @default(1)
   creditNoteNextNumber Int      @default(1)
   padding              Int      @default(4)
@@ -3108,6 +3112,7 @@ model CompanyFinanceSettings {
   pricesIncludeTax                    Boolean  @default(false)
   dateFormat                          String   @default("yyyy-MM-dd")
   numberFormat                        String   @default("en-ZW")
+  quotePrefix                         String?
   invoicePrefix                       String?
   receiptPrefix                       String?
   quoteExpiryDays                     Int      @default(14)

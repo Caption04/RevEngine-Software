@@ -410,12 +410,19 @@
     const contact = document.querySelector('[data-preview-contact]');
     const support = document.querySelector('[data-preview-support]');
     const websiteNode = document.querySelector('[data-preview-website]');
+    const finance = applyMarketCurrencyForDisplay(state.financeSettings || {});
+    const quoteRef = document.querySelector('[data-preview-reference]');
+    const previewTotal = document.querySelector('[data-preview-total]');
+    const previewFooter = document.querySelector('[data-preview-footer-copy]');
     if (title) title.textContent = name;
     if (logo) logo.innerHTML = logoUrl ? `<img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(name)} logo">` : initials(name);
     if (bar) bar.style.background = primaryColor;
     if (contact) contact.textContent = contactText;
     if (support) support.textContent = supportText;
     if (websiteNode) websiteNode.textContent = websiteText;
+    if (quoteRef) quoteRef.textContent = `${finance.quotePrefix || 'Q'}-1042`;
+    if (previewTotal) previewTotal.textContent = `${finance.defaultCurrency || 'USD'} 1,250.00`;
+    if (previewFooter) previewFooter.textContent = finance.invoiceFooter || 'Customer document footer';
   }
 
   function formPayload(selector) {
@@ -3670,6 +3677,7 @@
     }
     if (hasField('taxName')) payload.taxName = data.taxName || defaults.taxName;
     if (hasField('taxRate')) payload.taxRate = data.taxRate !== '' ? Number(data.taxRate) : undefined;
+    if (hasField('quotePrefix')) payload.quotePrefix = data.quotePrefix || undefined;
     if (hasField('invoicePrefix')) payload.invoicePrefix = data.invoicePrefix || undefined;
     if (hasField('receiptPrefix')) payload.receiptPrefix = data.receiptPrefix || undefined;
     if (hasField('quoteExpiryDays')) payload.quoteExpiryDays = data.quoteExpiryDays !== '' ? Number(data.quoteExpiryDays) : undefined;
@@ -3902,23 +3910,6 @@
     document.querySelectorAll('[data-branding-field], [data-profile-field]').forEach((field) => {
       field.addEventListener('input', updateBrandingPreview);
     });
-
-    const invoiceDefaultsForm = document.querySelector('[data-invoice-defaults-form]');
-    if (invoiceDefaultsForm && !invoiceDefaultsForm.dataset.bound) {
-      invoiceDefaultsForm.dataset.bound = 'true';
-      invoiceDefaultsForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        try {
-          const settings = applyMarketCurrencyForDisplay(await api('/company/finance-settings', { method: 'PATCH', body: JSON.stringify(financePayload(invoiceDefaultsForm)) }));
-          state.financeSettings = settings;
-          fillFinanceForm(settings);
-          setFormMessage('[data-invoice-defaults-message]', 'Invoice and payment defaults saved.', true);
-        } catch (error) {
-          setFormMessage('[data-invoice-defaults-message]', error.message, false);
-        }
-      });
-    }
-
     const financeForm = document.querySelector('[data-finance-settings-form]');
     if (financeForm && !financeForm.dataset.bound) {
       financeForm.dataset.bound = 'true';

@@ -23,8 +23,7 @@
           <button class="settings-tab active" type="button" data-settings-target="company" data-required-any-permission="company.settings.view,company.settings.manage,company.branding.manage">Company Details</button>
           <button class="settings-tab" type="button" data-settings-target="jobs" data-required-permission="company.settings.manage">Solar Work Order Defaults</button>
           <button class="settings-tab" type="button" data-settings-target="scheduling" data-required-permission="company.settings.manage">Scheduling</button>
-          <button class="settings-tab" type="button" data-settings-target="billing" data-required-permission="settings.finance.manage">Invoice Defaults</button>
-          <button class="settings-tab" type="button" data-settings-target="finance" data-required-any-permission="settings.finance.manage,finance.exports.manage">Money Settings &amp; Files</button>
+                    <button class="settings-tab" type="button" data-settings-target="finance" data-required-any-permission="settings.finance.manage,finance.exports.manage">Billing &amp; Documents</button>
           <button class="settings-tab" type="button" data-settings-target="notifications" data-required-permission="notifications.view">Sent Messages</button>
           <button class="settings-tab" type="button" data-settings-target="integrations" data-required-any-permission="integration.view,integration.manage">Connected Apps</button>
           <button class="settings-tab" type="button" data-settings-target="admin-tools" data-required-permission="audit.view">Company Activity</button>
@@ -135,7 +134,7 @@
                     </div>
                     <div class="brand-preview-document-meta">
                       <span>QUOTE</span>
-                      <strong>Q-1042</strong>
+                      <strong data-preview-reference>Q-1042</strong>
                     </div>
                   </div>
                   <div class="brand-preview-bar" data-preview-bar></div>
@@ -147,10 +146,11 @@
                     </div>
                     <div class="brand-preview-total">
                       <small>Total</small>
-                      <strong>USD 1,250.00</strong>
+                      <strong data-preview-total>USD 1,250.00</strong>
                     </div>
                   </div>
                   <div class="brand-preview-footer">
+                    <span data-preview-footer-copy>Customer document footer</span>
                     <span data-preview-support>Support details</span>
                     <span data-preview-website>Website</span>
                   </div>
@@ -271,61 +271,19 @@
               <p class="fc-form-error span-2" data-availability-message hidden></p>
             </form>
           </div>
-          <div class="panel settings-panel" data-settings-panel="billing" data-required-permission="settings.finance.manage" hidden>
-            <div class="panel-head">
-              <h2>Invoice &amp; Payment Defaults</h2>
-              <span class="badge gray">Solar client billing</span>
-            </div>
-            <form class="form-grid" data-invoice-defaults-form>
-              <div class="field">
-                <label for="invoiceDefaultCurrency">Currency</label>
-                <select id="invoiceDefaultCurrency" name="defaultCurrency" data-finance-field="defaultCurrency">
-                  <option value="USD">USD — US Dollar</option>
-                  <option value="ZAR">ZAR — South African Rand</option>
-                  <option value="ZWG">ZWG — Zimbabwe Gold</option>
-                  <option value="GBP">GBP — Pound Sterling</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="invoicePaymentTermsDays">Default Payment Terms</label>
-                <select id="invoicePaymentTermsDays" name="paymentTermsDays" data-finance-field="paymentTermsDays">
-                  <option value="0">Due on receipt</option>
-                  <option value="7">Net 7</option>
-                  <option value="14">Net 14</option>
-                  <option value="30">Net 30</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="invoiceDefaultPrefix">Invoice Prefix</label>
-                <input id="invoiceDefaultPrefix" name="invoicePrefix" value="INV" data-finance-field="invoicePrefix">
-              </div>
-              <div class="field">
-                <label for="invoiceDefaultTaxRate">Default Tax Rate</label>
-                <input id="invoiceDefaultTaxRate" name="taxRate" type="number" min="0" step="0.01" placeholder="0.00" data-finance-field="taxRate">
-              </div>
-              <div class="field span-2">
-                <label for="invoiceDefaultFooter">Invoice Footer</label>
-                <textarea id="invoiceDefaultFooter" name="invoiceFooter" placeholder="Payment instructions or legal footer." data-finance-field="invoiceFooter"></textarea>
-              </div>
-              <div class="form-actions span-2">
-                <button class="primary-button" type="submit">Save Invoice Defaults</button>
-              </div>
-              <p class="fc-form-error span-2" data-invoice-defaults-message hidden></p>
-            </form>
-          </div>
 
           <div class="panel settings-panel" data-settings-panel="finance" data-required-any-permission="settings.finance.manage,finance.exports.manage" hidden>
             <div class="panel-head">
               <div>
-                <h2>Finance &amp; Exports</h2>
-                <p class="muted">Set how this business invoices customers, accepts customer payments, and exports finance data.</p>
+                <h2>Billing &amp; Documents</h2>
+                <p class="muted">One source of truth for quotes, invoices, receipts, payment terms, tax, and customer-facing documents.</p>
               </div>
-              <span class="badge gray">Solar client finance</span>
+              <span class="badge gray">Current company</span>
             </div>
             <form class="form-grid finance-user-form" data-finance-settings-form data-required-permission="settings.finance.manage">
               <div class="form-section-title span-2">
-                <strong>Tax &amp; Invoice Defaults</strong>
-                <span>Used on quotes, customer invoices, receipts, payment pages, and exports.</span>
+                <strong>Regional billing</strong>
+                <span>These values apply to every quote, invoice, receipt, payment page, preview, PDF, and export for the company currently open.</span>
               </div>
               <div class="field">
                 <label for="financeCountry">Country / Market</label>
@@ -336,7 +294,7 @@
               </div>
               <div class="field">
                 <label for="financeTimezone">Timezone</label>
-                <input id="financeTimezone" name="timezone" maxlength="80" placeholder="Africa/Harare" data-finance-field="timezone">
+                <input id="financeTimezone" name="timezone" maxlength="80" placeholder="Africa/Harare" data-finance-field="timezone" readonly aria-readonly="true">
               </div>
               <div class="field">
                 <label for="financeDefaultCurrency">Default Invoice Currency</label>
@@ -361,6 +319,14 @@
                   <span class="switch-copy">Line item prices already include VAT/tax.</span>
                 </label>
               </div>
+              <div class="form-section-title span-2">
+                <strong>Document numbering</strong>
+                <span>Rev Engine uses these prefixes when it creates customer document numbers.</span>
+              </div>
+              <div class="field">
+                <label for="financeQuotePrefix">Quote Prefix</label>
+                <input id="financeQuotePrefix" name="quotePrefix" maxlength="20" placeholder="Q" data-finance-field="quotePrefix">
+              </div>
               <div class="field">
                 <label for="financeInvoicePrefix">Invoice Prefix</label>
                 <input id="financeInvoicePrefix" name="invoicePrefix" maxlength="20" placeholder="INV" data-finance-field="invoicePrefix">
@@ -369,13 +335,21 @@
                 <label for="financeReceiptPrefix">Receipt Prefix</label>
                 <input id="financeReceiptPrefix" name="receiptPrefix" maxlength="20" placeholder="RCT" data-finance-field="receiptPrefix">
               </div>
-              <div class="field">
-                <label for="financeQuoteExpiryDays">Quote Expiry Days</label>
-                <input id="financeQuoteExpiryDays" name="quoteExpiryDays" type="number" min="1" max="365" data-finance-field="quoteExpiryDays">
+              <div class="form-section-title span-2">
+                <strong>Customer terms</strong>
+                <span>Defaults can be changed for an individual customer or document when there is a clear business reason.</span>
               </div>
               <div class="field">
-                <label for="financePaymentTermsDays">Client Payment Terms Days</label>
-                <input id="financePaymentTermsDays" name="paymentTermsDays" type="number" min="0" max="365" data-finance-field="paymentTermsDays">
+                <label for="financeQuoteExpiryDays">Default quote expiry</label>
+                <select id="financeQuoteExpiryDays" name="quoteExpiryDays" data-finance-field="quoteExpiryDays">
+                  <option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option><option value="60">60 days</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="financePaymentTermsDays">Default invoice payment terms</label>
+                <select id="financePaymentTermsDays" name="paymentTermsDays" data-finance-field="paymentTermsDays">
+                  <option value="0">Due on receipt</option><option value="7">Net 7</option><option value="14">Net 14</option><option value="30">Net 30</option><option value="60">Net 60</option>
+                </select>
               </div>
 
               <div class="form-section-title span-2">
@@ -443,7 +417,7 @@
                 <textarea id="financeInvoiceFooter" name="invoiceFooter" data-finance-field="invoiceFooter" placeholder="Optional legal note shown at the bottom of customer invoices."></textarea>
               </div>
               <div class="form-actions span-2">
-                <button class="primary-button" type="submit">Save Finance Settings</button>
+                <button class="primary-button" type="submit">Save Billing &amp; Document Settings</button>
               </div>
               <p class="fc-form-error span-2" data-finance-message hidden></p>
             </form>
