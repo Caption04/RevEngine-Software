@@ -301,7 +301,7 @@
   }
 
   function renderInvoiceRow(invoice) {
-    return '<article class="profile-list-item"><div><strong>' + escapeHtml(invoice.number || 'Invoice') + '</strong><small>' + escapeHtml([formatDate(invoice.createdAt), invoice.dueDate && 'Due ' + formatDate(invoice.dueDate), money(invoice.total || invoice.amount || 0), 'Balance ' + money(invoice.balanceDue || 0)].filter(Boolean).join(' · ')) + '</small></div>' + badge(invoice.status) + '</article>';
+    return '<article class="profile-list-item"><div><strong>' + escapeHtml(invoice.number || 'Invoice') + '</strong><small>' + escapeHtml([formatDate(invoice.createdAt), invoice.purchaseOrderNumber && 'PO ' + invoice.purchaseOrderNumber, invoice.dueDate && 'Due ' + formatDate(invoice.dueDate), money(invoice.total || invoice.amount || 0), 'Balance ' + money(invoice.balanceDue || 0)].filter(Boolean).join(' · ')) + '</small></div>' + badge(invoice.status) + '</article>';
   }
 
   function renderMoney() {

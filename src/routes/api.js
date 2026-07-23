@@ -40,6 +40,7 @@ const { applyPaymentProviderUpdate: applyPaymentProviderUpdateService, expectedP
 const { verifiedProviderUpdate: verifiedProviderUpdateService } = require('../services/payments/paymentProviderVerification.service');
 const { allocateFinancialNumber } = require('../services/payments/financialNumber.service');
 const { calculateInvoiceLedger, money: paymentMoney, recalculateInvoice: recalculateInvoiceLedger, recalculateInvoiceFinancials, refundableRemaining, syncUnappliedCreditForPayment } = require('../services/payments/invoiceLedger.service');
+const { paymentTermsDays, requirePurchaseOrderNumber, resolveInvoiceBranch } = require('../services/invoicePolicy.service');
 const { reconcilePaymentLink } = require('../services/payments/paymentReconciliation.service');
 const {
   COOKIE_NAME,
@@ -1370,10 +1371,23 @@ async function validateQuoteRelations(req, body) {
   if (body.jobId) await requireJob(req, body.jobId, { assignedOnly: false });
 }
 
-async function validateInvoiceRelations(req, body) {
-  if (body.customerId) await requireCustomer(req, body.customerId);
+async function validateInvoiceRelations(req, body, existingInvoice = null) {
+  const customerId = body.customerId || existingInvoice && existingInvoice.customerId;
+  const jobId = body.jobId !== undefined ? body.jobId : existingInvoice && existingInvoice.jobId;
+  const quoteId = body.quoteId !== undefined ? body.quoteId : existingInvoice && existingInvoice.quoteId;
+  const customer = customerId ? await requireCustomer(req, customerId) : null;
+  const job = jobId ? await requireJob(req, jobId, { assignedOnly: false }) : null;
+  const quote = quoteId ? await requireQuote(req, quoteId) : null;
   if (body.serviceId) await requireService(req, body.serviceId);
-  if (body.jobId) await requireJob(req, body.jobId, { assignedOnly: false });
+  const requestedBranchId = body.branchId !== undefined ? body.branchId : existingInvoice && existingInvoice.branchId;
+  if (requestedBranchId) await requireBranch(req, requestedBranchId);
+  const branchId = resolveInvoiceBranch({ customer, job, quote, requestedBranchId });
+  const purchaseOrderNumber = requirePurchaseOrderNumber(
+    customer,
+    body.purchaseOrderNumber !== undefined ? body.purchaseOrderNumber : existingInvoice && existingInvoice.purchaseOrderNumber,
+    'create'
+  );
+  return { customer, job, quote, branchId, purchaseOrderNumber };
 }
 
 const leadInclude = {
@@ -3491,7 +3505,7 @@ function clientInvoice(invoice, paymentOptions) {
   const total = Number(invoice.total || invoice.amount || 0);
   const due = Math.max(0, Number(invoice.balanceDue || 0));
   const paid = Math.max(0, Math.min(total, total - due));
-  return { id: invoice.id, invoiceNumber: invoice.number, number: invoice.number, status: invoice.status, customerId: invoice.customerId, quoteId: invoice.quoteId, jobId: invoice.jobId, service: invoice.service && { id: invoice.service.id, name: invoice.service.name }, customer: clientCustomer(invoice.customer), quote: invoice.quote && { id: invoice.quote.id, title: invoice.quote.title, status: invoice.quote.status }, job: clientJobSummary(invoice.job), createdAt: invoice.createdAt, updatedAt: invoice.updatedAt, dueDate: invoice.dueDate, subtotal: invoice.subtotal, tax: invoice.taxTotal, discount: invoice.discountTotal, total: invoice.total, amountPaid: paid, amountDue: invoice.balanceDue, balanceDue: invoice.balanceDue, lineItems: (invoice.lineItems || []).map(clientLine), paymentLinks: (invoice.paymentLinks || []).map((link) => ({ id: link.id, status: link.status, statusLabel: customerPaymentStatusLabel(link.status), provider: link.provider, amount: link.amount, currency: link.currency, checkoutUrl: link.checkoutUrl, expiresAt: link.expiresAt })), paymentOptions: paymentOptions || null, payments: (invoice.payments || []).map(clientPayment), receipts: (invoice.receipts || []).map(clientReceipt) };
+  return { id: invoice.id, invoiceNumber: invoice.number, number: invoice.number, purchaseOrderNumber: invoice.purchaseOrderNumber || null, status: invoice.status, customerId: invoice.customerId, quoteId: invoice.quoteId, jobId: invoice.jobId, service: invoice.service && { id: invoice.service.id, name: invoice.service.name }, customer: clientCustomer(invoice.customer), quote: invoice.quote && { id: invoice.quote.id, title: invoice.quote.title, status: invoice.quote.status }, job: clientJobSummary(invoice.job), createdAt: invoice.createdAt, updatedAt: invoice.updatedAt, dueDate: invoice.dueDate, subtotal: invoice.subtotal, tax: invoice.taxTotal, discount: invoice.discountTotal, total: invoice.total, amountPaid: paid, amountDue: invoice.balanceDue, balanceDue: invoice.balanceDue, lineItems: (invoice.lineItems || []).map(clientLine), paymentLinks: (invoice.paymentLinks || []).map((link) => ({ id: link.id, status: link.status, statusLabel: customerPaymentStatusLabel(link.status), provider: link.provider, amount: link.amount, currency: link.currency, checkoutUrl: link.checkoutUrl, expiresAt: link.expiresAt })), paymentOptions: paymentOptions || null, payments: (invoice.payments || []).map(clientPayment), receipts: (invoice.receipts || []).map(clientReceipt) };
 }
 function clientAsset(asset) { return asset && { id: asset.id, customerId: asset.customerId, propertyId: asset.propertyId, serviceId: asset.serviceId, parentAssetId: asset.parentAssetId, name: asset.name, assetType: asset.assetType, assetTag: asset.assetTag, serialNumber: asset.serialNumber, manufacturer: asset.manufacturer, modelNumber: asset.modelNumber, monitoringIdentifier: asset.monitoringIdentifier, locationLabel: asset.locationLabel, dcCapacityKw: asset.dcCapacityKw, acCapacityKw: asset.acCapacityKw, batteryCapacityKwh: asset.batteryCapacityKwh, moduleCount: asset.moduleCount, commissionedAt: asset.commissionedAt, installedAt: asset.installedAt, warrantyStartAt: asset.warrantyStartAt, warrantyEndAt: asset.warrantyEndAt, warrantyStatus: warrantyStatus(asset), status: asset.status, notes: asset.notes, service: asset.service && { id: asset.service.id, name: asset.service.name }, property: asset.property && { id: asset.property.id, label: asset.property.label, address: asset.property.address }, jobHistory: (asset.jobAssets || []).map((item) => clientJobSummary(item.job)).filter(Boolean) }; }
 function clientContract(contract) { return contract && { id: contract.id, customerId: contract.customerId, propertyId: contract.propertyId, contractNumber: contract.contractNumber, name: contract.name, status: contract.status, startDate: contract.startDate, endDate: contract.endDate, currency: contract.currency, responseSlaHours: contract.responseSlaHours, completionSlaHours: contract.completionSlaHours, includedVisits: contract.includedVisits, notes: contract.notes, assets: (contract.assets || []).map((item) => clientAsset(item.asset)).filter(Boolean), serviceLines: (contract.serviceLines || []).map((line) => ({ id: line.id, title: line.title, service: line.service && { id: line.service.id, name: line.service.name }, frequency: line.frequency, interval: line.interval, visitsPerPeriod: line.visitsPerPeriod, nextDueAt: line.nextDueAt, defaultDurationMinutes: line.defaultDurationMinutes, requiresProofPhotos: line.requiresProofPhotos, requiresSignature: line.requiresSignature, requiresLocation: line.requiresLocation })), upcomingDueWork: contractDueItems(contract, new Date()) }; }
@@ -4210,6 +4224,7 @@ const resourcePermissionRules = [
   { method: 'POST', pattern: /^\/leads$/, permission: 'leads.create' },
   { method: 'PATCH', pattern: /^\/leads\/[^/]+$/, permission: 'leads.edit' },
   { method: 'GET', pattern: /^\/dispatch\/board$/, permission: 'schedule.view' },
+  { method: 'GET', pattern: /^\/invoice-customers$/, anyPermissions: ['invoices.view', 'invoices.create'] },
   { method: 'GET', pattern: /^\/customer-profiles\/[^/]+$/, anyPermissions: ['customers.view', 'jobs.view'] },
   { method: 'POST', pattern: /^\/customer-profiles\/[^/]+\/contacts$/, permission: 'customers.edit' },
   { method: 'PATCH', pattern: /^\/customer-profiles\/[^/]+\/contacts\/[^/]+$/, permission: 'customers.edit' },
@@ -4239,6 +4254,14 @@ const resourcePermissionRules = [
   { method: 'GET', pattern: /^\/quotes(?:\/|$)/, permission: 'quotes.view' },
   { method: 'POST', pattern: /^\/quotes$/, permission: 'quotes.create' },
   { method: 'PATCH', pattern: /^\/quotes\//, permission: 'quotes.edit' },
+  { method: 'POST', pattern: /^\/jobs\/[^/]+\/create-invoice$/, permission: 'invoices.create' },
+  { method: 'POST', pattern: /^\/invoices\/[^/]+\/send$/, permission: 'invoices.send' },
+  { method: 'POST', pattern: /^\/invoices\/[^/]+\/void$/, permission: 'invoice.void' },
+  { method: 'POST', pattern: /^\/invoices\/[^/]+\/mark-paid$/, permission: 'payments.manage' },
+  { method: 'POST', pattern: /^\/invoices\/[^/]+\/payments$/, permission: 'payments.manage' },
+  { method: 'POST', pattern: /^\/invoices\/[^/]+\/line-items$/, permission: 'invoices.edit' },
+  { method: 'PATCH', pattern: /^\/invoices\/[^/]+\/line-items\/[^/]+$/, permission: 'invoices.edit' },
+  { method: 'DELETE', pattern: /^\/invoices\/[^/]+\/line-items\/[^/]+$/, permission: 'invoices.edit' },
   { method: 'GET', pattern: /^\/invoices(?:\/|$)/, permission: 'invoices.view' },
   { method: 'POST', pattern: /^\/invoices$/, permission: 'invoices.create' },
   { method: 'PATCH', pattern: /^\/invoices\//, permission: 'invoices.edit' },
@@ -4802,8 +4825,8 @@ router.post('/reconciliation/items/:id/match', requireRole(...adminRoles), valid
 
 router.get('/finance/export/invoices.csv', requireRole(...adminRoles), validate(financeExportQuerySchema, 'query'), asyncHandler(async (req, res) => {
   const invoices = await prisma.invoice.findMany({ where: { companyId: req.companyId, ...financeDateWhere(req.query) }, include: { customer: true, service: true, job: true }, orderBy: { createdAt: 'desc' } });
-  const headers = ['id', 'number', 'customer', 'service', 'status', 'subtotal', 'taxTotal', 'total', 'balanceDue', 'dueDate', 'createdAt'];
-  const rows = invoices.map((item) => ({ id: item.id, number: item.number, customer: item.customer && item.customer.name || '', service: item.service && item.service.name || '', status: item.status, subtotal: item.subtotal || 0, taxTotal: item.taxTotal || 0, total: item.total || item.amount || 0, balanceDue: item.balanceDue || 0, dueDate: item.dueDate || '', createdAt: item.createdAt || '' }));
+  const headers = ['id', 'number', 'purchaseOrderNumber', 'customer', 'service', 'status', 'subtotal', 'taxTotal', 'total', 'balanceDue', 'dueDate', 'createdAt'];
+  const rows = invoices.map((item) => ({ id: item.id, number: item.number, purchaseOrderNumber: item.purchaseOrderNumber || '', customer: item.customer && item.customer.name || '', service: item.service && item.service.name || '', status: item.status, subtotal: item.subtotal || 0, taxTotal: item.taxTotal || 0, total: item.total || item.amount || 0, balanceDue: item.balanceDue || 0, dueDate: item.dueDate || '', createdAt: item.createdAt || '' }));
   return sendFinanceCsv(req, res, 'INVOICES', 'revengine-invoices.csv', headers, rows);
 }));
 
@@ -6747,6 +6770,26 @@ function customerForViewer(customer, options = {}) {
   if (!options.canViewInternalNotes) delete record.internalNotes;
   return record;
 }
+
+router.get('/invoice-customers', asyncHandler(async (req, res) => {
+  const customers = await prisma.customer.findMany({
+    where: { companyId: req.companyId, ...customerScopeWhere(req), status: { not: 'INACTIVE' } },
+    select: {
+      id: true,
+      branchId: true,
+      customerType: true,
+      name: true,
+      companyName: true,
+      billingContactName: true,
+      billingEmail: true,
+      paymentTerms: true,
+      purchaseOrderRequired: true
+    },
+    orderBy: [{ companyName: 'asc' }, { name: 'asc' }],
+    take: 100
+  });
+  sendData(res, normalize(customers));
+}));
 
 router.get('/customers', asyncHandler(async (req, res) => {
   if (req.query.branchId) await requireBranch(req, String(req.query.branchId));
@@ -9865,6 +9908,7 @@ const invoiceSchema = z.object({
   jobId: z.string().optional(),
   quoteId: z.string().optional(),
   number: z.string().optional(),
+  purchaseOrderNumber: optionalText(120),
   dueDate: optionalDate,
   promisedPaymentDate: optionalDate,
   depositRequiredAmount: amount.optional(),
@@ -9890,13 +9934,15 @@ router.get('/invoices', asyncHandler(async (req, res) => {
 }));
 
 router.post('/invoices', validate(invoiceSchema), asyncHandler(async (req, res) => {
-  if (req.body.branchId) await requireBranch(req, req.body.branchId);
-  await validateInvoiceRelations(req, req.body);
-  if (req.body.quoteId) await requireQuote(req, req.body.quoteId);
+  const context = await validateInvoiceRelations(req, req.body);
   const finance = await getCompanyFinanceSettings(req.companyId);
   const data = await prisma.$transaction(async (tx) => {
     const { lineItems, amount: ignoredAmount, ...invoiceData } = req.body;
-    if (!invoiceData.dueDate) invoiceData.dueDate = addDaysFromNow(financeLocalization(finance).paymentTermsDays);
+    invoiceData.branchId = context.branchId;
+    invoiceData.purchaseOrderNumber = context.purchaseOrderNumber;
+    if (!invoiceData.dueDate) {
+      invoiceData.dueDate = addDaysFromNow(paymentTermsDays(context.customer, financeLocalization(finance).paymentTermsDays));
+    }
     const number = invoiceData.number || await nextInvoiceNumber(tx, req.companyId);
     const invoice = await tx.invoice.create({ data: { ...invoiceData, number, companyId: req.companyId, status: 'DRAFT' } });
     for (const [index, item] of fallbackInvoiceLines(req.body).entries()) {
@@ -9906,7 +9952,7 @@ router.post('/invoices', validate(invoiceSchema), asyncHandler(async (req, res) 
     await addInvoiceStatusHistory(tx, req, { ...invoice, status: null }, 'DRAFT', 'Invoice created');
     return recalcInvoice(tx, req.companyId, invoice.id);
   });
-  await audit(req, 'CREATE', 'Invoice', data.id);
+  await audit(req, 'CREATE', 'Invoice', data.id, { customerId: data.customerId, branchId: data.branchId, purchaseOrderNumber: data.purchaseOrderNumber || null });
   sendData(res, normalize(attachLocalization(data, finance)), 201);
 }));
 
@@ -9919,9 +9965,10 @@ router.get('/invoices/:id', validate(idParam, 'params'), asyncHandler(async (req
 router.patch('/invoices/:id', validate(idParam, 'params'), validate(invoiceSchema.partial()), asyncHandler(async (req, res) => {
   const invoice = await requireInvoice(req, req.params.id);
   if (invoice.status === 'PAID' || invoice.status === 'VOID') throw new AppError(409, 'Paid or void invoices cannot be edited');
-  await validateInvoiceRelations(req, req.body);
-  if (req.body.quoteId) await requireQuote(req, req.body.quoteId);
+  const context = await validateInvoiceRelations(req, req.body, invoice);
   const { lineItems, ...invoiceData } = req.body;
+  invoiceData.branchId = context.branchId;
+  invoiceData.purchaseOrderNumber = context.purchaseOrderNumber;
   const data = await prisma.$transaction(async (tx) => {
     await tx.invoice.update({ where: { id: invoice.id }, data: invoiceData });
     if (lineItems) {
@@ -9937,16 +9984,24 @@ router.patch('/invoices/:id', validate(idParam, 'params'), validate(invoiceSchem
   sendData(res, normalize(data));
 }));
 
-router.post('/jobs/:id/create-invoice', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
+const jobInvoiceSchema = z.object({ purchaseOrderNumber: optionalText(120) });
+
+router.post('/jobs/:id/create-invoice', requireRole(...adminRoles), validate(idParam, 'params'), validate(jobInvoiceSchema), asyncHandler(async (req, res) => {
   const job = await requireJob(req, req.params.id, { assignedOnly: false });
   if (job.status !== 'COMPLETED') throw new AppError(409, 'Only completed jobs can be invoiced');
   const existing = await prisma.invoice.findFirst({ where: { companyId: req.companyId, jobId: job.id }, include: invoiceInclude });
   if (existing) return sendData(res, normalize(existing));
-  const quote = await prisma.quote.findFirst({ where: { companyId: req.companyId, jobId: job.id, deletedAt: null }, include: { lineItems: true } });
+  const [quote, customer] = await Promise.all([
+    prisma.quote.findFirst({ where: { companyId: req.companyId, jobId: job.id, deletedAt: null }, include: { lineItems: true } }),
+    requireCustomer(req, job.customerId)
+  ]);
+  const purchaseOrderNumber = requirePurchaseOrderNumber(customer, req.body.purchaseOrderNumber, 'create');
+  const branchId = resolveInvoiceBranch({ customer, job, quote, requestedBranchId: null });
   const data = await prisma.$transaction(async (tx) => {
     const number = await nextInvoiceNumber(tx, req.companyId);
     const finance = await getCompanyFinanceSettings(req.companyId, tx);
-    const invoice = await tx.invoice.create({ data: { companyId: req.companyId, branchId: job.branchId || null, customerId: job.customerId, serviceId: job.serviceId, jobId: job.id, quoteId: quote && quote.id, number, status: 'DRAFT', dueDate: addDaysFromNow(financeLocalization(finance).paymentTermsDays) } });
+    const dueDays = paymentTermsDays(customer, financeLocalization(finance).paymentTermsDays);
+    const invoice = await tx.invoice.create({ data: { companyId: req.companyId, branchId, customerId: job.customerId, serviceId: job.serviceId, jobId: job.id, quoteId: quote && quote.id, purchaseOrderNumber, number, status: 'DRAFT', dueDate: addDaysFromNow(dueDays) } });
     const sourceLines = quote && quote.lineItems && quote.lineItems.length ? quote.lineItems : [{ serviceId: job.serviceId, description: job.title, quantity: 1, unitPrice: job.total || 0, sortOrder: 0 }];
     for (const [index, item] of sourceLines.entries()) {
       await tx.invoiceLineItem.create({ data: { serviceId: item.serviceId, description: item.description || job.title, quantity: item.quantity || 1, unitPrice: item.unitPrice || item.lineTotal || job.total || 0, discountAmount: item.discountAmount || 0, taxAmount: item.taxAmount || 0, ...moneyLine(item), companyId: req.companyId, invoiceId: invoice.id, sortOrder: item.sortOrder ?? index } });
@@ -9970,6 +10025,8 @@ async function transitionInvoice(req, status, stamp, note) {
 
 router.post('/invoices/:id/send', validate(idParam, 'params'), asyncHandler(async (req, res) => {
   const before = await requireInvoice(req, req.params.id);
+  const customer = await requireCustomer(req, before.customerId);
+  requirePurchaseOrderNumber(customer, before.purchaseOrderNumber, 'send');
   const data = await transitionInvoice(req, 'SENT', 'sentAt', 'Invoice sent');
   await audit(req, 'SEND', 'Invoice', data.id);
   if (before.status !== 'SENT') await notify('INVOICE_SENT', { companyId: req.companyId, relatedType: 'Invoice', relatedId: data.id, record: data });

@@ -7050,3 +7050,18 @@ body.modal-open { overflow: hidden; }
     justify-self: start;
   }
 }
+
+
+/* Invoice customer billing rules */
+.invoice-company-note {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid #dbe4f2;
+  border-radius: 16px;
+  background: #f7f9fc;
+}
+.invoice-company-note strong { color: #101b38; font-size: 0.95rem; }
+.invoice-company-note span,
+.field-help { color: #687795; font-size: 0.82rem; line-height: 1.45; }
+[data-invoice-po-field][hidden] { display: none !important; }

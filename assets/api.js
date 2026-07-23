@@ -115,10 +115,10 @@
       row: (item) => [item.title, item.customer && item.customer.name || '-', item.deletedAt ? badge('DELETED') : badge(item.status), money.format(Number(item.total || item.amount || 0)), item.deletedAt ? formatDate(item.deleteExpiresAt) : formatDate(item.validUntil), rowActions('quotes', item)]
     },
     invoices: {
-      columns: ['Invoice', 'Solar Client', 'Status', 'Total', 'Balance', 'Due', 'Actions'],
+      columns: ['Invoice', 'Customer PO', 'Solar Client', 'Status', 'Total', 'Balance', 'Due', 'Actions'],
       emptyTitle: 'No invoices yet',
       emptyText: 'Create your first invoice to start billing.',
-      row: (item) => [item.number, item.customer && item.customer.name || '-', badge(item.status), money.format(Number(item.total || item.amount || 0)), money.format(Number(item.balanceDue || 0)), formatDate(item.dueDate), rowActions('invoices', item)]
+      row: (item) => [item.number, item.purchaseOrderNumber || '-', item.customer && (item.customer.companyName || item.customer.name) || '-', badge(item.status), money.format(Number(item.total || item.amount || 0)), money.format(Number(item.balanceDue || 0)), formatDate(item.dueDate), rowActions('invoices', item)]
     },
     'booking-requests': {
       columns: ['Solar Client', 'Contact', 'Solar Service', 'Preferred', 'Status', 'Created', 'Actions'],
@@ -497,6 +497,7 @@
     if (resource === 'invoices') {
       const status = String(item.status || '').toUpperCase();
       const hasReceipts = Array.isArray(item.receipts) && item.receipts.length > 0;
+      if (status === 'DRAFT') add(item.purchaseOrderNumber ? 'Edit Customer PO' : 'Add Customer PO', 'invoice-po', false, 'invoices.edit');
       if (status === 'DRAFT') add('Send', 'invoice-send', false, 'invoices.send');
       if (status !== 'PAID' && status !== 'VOID') add('Record Payment', 'invoice-pay', false, 'payments.manage');
       if (hasReceipts) add(status === 'PARTIALLY_PAID' || item.receipts.length > 1 ? 'View Receipts' : 'View Receipt', 'invoice-receipts', status === 'PAID', 'payments.view');
@@ -1609,7 +1610,8 @@
 
   async function preloadLookups() {
     const requests = [];
-    if (['leads', 'jobs', 'quotes', 'invoices', 'schedule', 'assets', 'service-contracts'].includes(page)) requests.push(api('/customers').then((d) => state.customers = d).catch(() => []));
+    if (['leads', 'jobs', 'quotes', 'schedule', 'assets', 'service-contracts'].includes(page)) requests.push(api('/customers').then((d) => state.customers = d).catch(() => []));
+    if (page === 'invoices') requests.push(api('/invoice-customers').then((d) => state.customers = d).catch(() => { state.customers = []; }));
     if (page === 'customers') requests.push(api('/branches?limit=100').then((d) => state.branches = d).catch(() => { state.branches = []; }));
     if (['leads', 'jobs', 'quotes', 'invoices', 'assets', 'service-contracts'].includes(page)) requests.push(api('/services').then((d) => state.services = d).catch(() => []));
     if (['jobs', 'schedule'].includes(page)) requests.push(api('/workers').then((d) => state.workers = d).catch(() => []));
@@ -1702,6 +1704,62 @@
     update();
   }
 
+  function invoicePurchaseOrderField() {
+    return '<div class="field span-2" data-invoice-po-field hidden>' +
+      '<label for="fc-purchaseOrderNumber" data-invoice-po-label>Customer PO number</label>' +
+      '<input id="fc-purchaseOrderNumber" name="purchaseOrderNumber" maxlength="120" autocomplete="off" placeholder="Example: PO-2026-0042">' +
+      '<small class="field-help" data-invoice-po-help>This number comes from the customer.</small>' +
+      '</div>';
+  }
+
+  function invoiceCompanyNote() {
+    const companyName = state.profile && state.profile.name || state.user && state.user.company && state.user.company.name || 'the company currently open';
+    const currency = effectiveFinanceSettings().defaultCurrency || 'USD';
+    return '<div class="invoice-company-note span-2"><strong>Issued by ' + escapeHtml(companyName) + '</strong><span>Rev Engine creates the invoice number and uses this company’s ' + escapeHtml(currency) + ' billing settings.</span></div>';
+  }
+
+  function paymentTermsDaysForCustomer(customer) {
+    return { DUE_ON_RECEIPT: 0, NET_7: 7, NET_14: 14, NET_30: 30, NET_60: 60 }[customer && customer.paymentTerms] ?? Number(effectiveFinanceSettings().paymentTermsDays || 0);
+  }
+
+  function dateInputValueAfterDays(days) {
+    const date = new Date();
+    date.setDate(date.getDate() + Math.max(Number(days) || 0, 0));
+    return date.toISOString().slice(0, 10);
+  }
+
+  function bindInvoiceCustomerRules(form) {
+    const customerSelect = form && form.elements.customerId;
+    const jobSelect = form && form.elements.jobId;
+    const poField = form && form.querySelector('[data-invoice-po-field]');
+    const poInput = form && form.elements.purchaseOrderNumber;
+    const poLabel = form && form.querySelector('[data-invoice-po-label]');
+    const poHelp = form && form.querySelector('[data-invoice-po-help]');
+    const dueDate = form && form.elements.dueDate;
+    if (!customerSelect || !poField || !poInput) return;
+
+    const update = () => {
+      const customer = state.customers.find((item) => item.id === customerSelect.value);
+      poField.hidden = !customer;
+      poInput.required = Boolean(customer && customer.purchaseOrderRequired);
+      if (poLabel) poLabel.textContent = customer && customer.purchaseOrderRequired ? 'Customer PO number' : 'Customer PO number (optional)';
+      if (poHelp) poHelp.textContent = customer && customer.purchaseOrderRequired
+        ? 'This customer requires its purchase-order number before an invoice can be created.'
+        : 'Add this only when the customer gave you a purchase-order number.';
+      if (dueDate && customer && !dueDate.dataset.userChanged) dueDate.value = dateInputValueAfterDays(paymentTermsDaysForCustomer(customer));
+      if (jobSelect) {
+        const current = jobSelect.value;
+        const jobs = state.jobs.filter((job) => !customer || job.customerId === customer.id);
+        jobSelect.innerHTML = optionList(jobs, 'No work order');
+        if (jobs.some((job) => job.id === current)) jobSelect.value = current;
+      }
+      if (window.RevEngineFormUX) window.RevEngineFormUX.refresh(form);
+    };
+    customerSelect.addEventListener('change', update);
+    if (dueDate) dueDate.addEventListener('change', () => { dueDate.dataset.userChanged = 'true'; });
+    update();
+  }
+
   function formFor(resource) {
     if (resource === 'leads') return {
       title: 'New Sales Enquiry',
@@ -1763,7 +1821,7 @@
     };
     if (resource === 'service-contracts') return { title: 'New Solar O&M Contract', action: '/service-contracts', fields: field('contractNumber', 'O&M Contract Number', 'text', 'required') + field('name', 'Agreement Name', 'text', 'required') + select('customerId', 'Client', optionList(state.customers, 'Select client'), true) + field('startDate', 'Coverage Starts', 'date', 'required') + field('endDate', 'Coverage Ends', 'date') + field('currency', 'Currency', 'text', 'maxlength="3" value="' + escapeHtml(effectiveFinanceSettings().defaultCurrency || 'USD') + '"') + field('contractValue', 'Contract Value', 'number', 'min="0" step="0.01"') + field('responseSlaHours', 'Fault Response SLA Hours', 'number', 'min="1"') + field('completionSlaHours', 'Resolution SLA Hours', 'number', 'min="1"') + field('includedVisits', 'Included Preventive Visits', 'number', 'min="0"') };
     if (resource === 'quotes') return { title: 'New Quote', action: '/quotes', fields: field('title', 'Title', 'text', 'required') + select('customerId', 'Customer', optionList(state.customers, 'Select customer'), true) + select('serviceId', 'Service', optionList(state.services, 'No service'), false) + field('amount', 'Amount', 'number', 'min="0" step="0.01"') + field('validUntil', 'Valid Until', 'date') };
-    if (resource === 'invoices') return { title: 'New Invoice', action: '/invoices', fields: field('number', 'Number') + select('customerId', 'Customer', optionList(state.customers, 'Select customer'), true) + select('jobId', 'Job', optionList(state.jobs, 'No job'), false) + field('amount', 'Amount', 'number', 'min="0" step="0.01"') + field('dueDate', 'Due Date', 'date') };
+    if (resource === 'invoices') return { title: 'New Invoice', action: '/invoices', fields: invoiceCompanyNote() + select('customerId', 'Customer', optionList(state.customers, 'Select customer'), true, 'data-invoice-customer') + select('jobId', 'Work Order', optionList(state.jobs, 'No work order'), false) + invoicePurchaseOrderField() + field('amount', 'Amount', 'number', 'min="0.01" step="0.01" required') + field('dueDate', 'Due Date', 'date') };
   }
 
   function localDateTimeValue(value) {
@@ -1780,6 +1838,7 @@
     modal.innerHTML = `<div class="fc-dialog"><form novalidate><div class="panel-head"><h3>${escapeHtml(config.title)}</h3><button class="icon-button" type="button" data-close>&times;</button></div><div class="form-grid">${config.fields}</div><div class="fc-form-actions"><button class="secondary-button" type="button" data-close>Cancel</button><button class="primary-button" type="submit">Save</button></div><p class="fc-form-error" hidden></p></form></div>`;
     const form = modal.querySelector('form');
     bindCustomerType(form);
+    if (config.action === '/invoices') bindInvoiceCustomerRules(form);
     if (window.RevEngineFormUX) window.RevEngineFormUX.refresh(form);
     modal.addEventListener('click', (event) => { if (event.target === modal || event.target.closest('[data-close]')) closeModal(); });
     if (config.action) form.addEventListener('submit', async (event) => {
@@ -1801,7 +1860,8 @@
         body.minimumProofPhotos = body.requiresProofPhotos ? 1 : 0;
       }
       if ((config.action === '/quotes' || config.action === '/invoices') && body.amount) {
-        body.lineItems = [{ serviceId: body.serviceId, description: body.title || body.number || 'Service line item', quantity: 1, unitPrice: Number(body.amount), discountAmount: 0, taxAmount: 0 }];
+        const selectedJob = state.jobs.find((job) => job.id === body.jobId);
+        body.lineItems = [{ serviceId: body.serviceId, description: body.title || body.number || selectedJob && selectedJob.title || 'Solar service', quantity: 1, unitPrice: Number(body.amount), discountAmount: 0, taxAmount: 0 }];
         delete body.amount;
       }
       try {
@@ -2787,6 +2847,7 @@
       'quote-restore': 'Quote restored.',
       'job-unschedule': 'Job unscheduled.',
       'job-invoice': 'Invoice created from job.',
+      'invoice-po': 'Customer PO number saved.',
       'invoice-send': 'Invoice sent.',
       'invoice-void': 'Invoice voided.',
       'invoice-pay': 'Payment recorded.'
@@ -2879,7 +2940,21 @@
         return;
       }
       if (action === 'job-unschedule') await api('/jobs/' + id + '/unschedule', { method: 'POST', body: '{}' });
-      if (action === 'job-invoice') await api('/jobs/' + id + '/create-invoice', { method: 'POST', body: '{}' });
+      if (action === 'job-invoice') {
+        const job = state.jobs.find((record) => record.id === id);
+        let purchaseOrderNumber = '';
+        if (job && job.customer && job.customer.purchaseOrderRequired) {
+          purchaseOrderNumber = await openInputModal({ title: 'Customer PO number required', label: 'Customer PO number', name: 'purchaseOrderNumber', type: 'text', attrs: 'maxlength="120" required placeholder="Example: PO-2026-0042"' });
+          if (!purchaseOrderNumber) return;
+        }
+        await api('/jobs/' + id + '/create-invoice', { method: 'POST', body: JSON.stringify(purchaseOrderNumber ? { purchaseOrderNumber } : {}) });
+      }
+      if (action === 'invoice-po') {
+        const invoice = state.invoices.find((record) => record.id === id) || await api('/invoices/' + id);
+        const purchaseOrderNumber = await openInputModal({ title: invoice.purchaseOrderNumber ? 'Edit Customer PO Number' : 'Add Customer PO Number', label: 'Customer PO number', name: 'purchaseOrderNumber', type: 'text', value: invoice.purchaseOrderNumber || '', attrs: 'maxlength="120" placeholder="Example: PO-2026-0042"' });
+        if (purchaseOrderNumber == null) return;
+        await api('/invoices/' + id, { method: 'PATCH', body: JSON.stringify({ purchaseOrderNumber }) });
+      }
       if (action === 'invoice-send') await api('/invoices/' + id + '/send', { method: 'POST', body: '{}' });
       if (action === 'invoice-void') await api('/invoices/' + id + '/void', { method: 'POST', body: '{}' });
       if (action === 'invoice-receipts') {

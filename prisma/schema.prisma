@@ -2329,6 +2329,7 @@ model Invoice {
   serviceId              String?
   jobId                  String?
   number                 String
+  purchaseOrderNumber    String?
   status                 InvoiceStatus             @default(DRAFT)
   amount                 Decimal                   @default(0) @db.Decimal(12, 2)
   subtotal               Decimal                   @default(0) @db.Decimal(12, 2)
@@ -2370,6 +2371,7 @@ model Invoice {
   @@unique([companyId, number])
   @@index([companyId])
   @@index([companyId, branchId])
+  @@index([companyId, purchaseOrderNumber])
 }
 
 model InvoiceLineItem {
