@@ -49,7 +49,8 @@ test('invoice API and UI enforce PO numbers and company-owned relations', () => 
   assert.match(api, /purchaseOrderNumber: invoice\.purchaseOrderNumber \|\| null/);
   assert.match(ui, /data-invoice-po-field/);
   assert.match(ui, /'invoice-po'/);
-  assert.match(ui, /This customer requires its purchase-order number before an invoice can be created/);
+  assert.match(ui, /Required for this customer/);
+  assert.match(ui, /data-invoice-due-help/);
   assert.match(clientPortal, /Purchase order/);
   assert.match(customerProfile, /invoice\.purchaseOrderNumber/);
 });

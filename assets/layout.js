@@ -210,6 +210,50 @@
     root.style.setProperty('--account-brand-shadow', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, .18)`);
   }
 
+
+  function companyBrandInitials(value) {
+    return String(value || 'Company')
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join('')
+      .toUpperCase() || 'CO';
+  }
+
+  function activeCompanyForUser(user) {
+    const organization = user && user.organization;
+    const workspaces = organization && Array.isArray(organization.workspaces) ? organization.workspaces : [];
+    return organization && (organization.activeCompany || workspaces.find((company) => company.id === organization.activeWorkspaceId)) || null;
+  }
+
+  function renderCompanyBrand(user) {
+    const active = activeCompanyForUser(user);
+    if (!active) return;
+    const branding = active.branding || {};
+    const name = branding.brandName || active.name || 'Rev Engine';
+    document.querySelectorAll('.sidebar .brand-name').forEach((node) => { node.textContent = name; });
+    document.querySelectorAll('.sidebar .brand-mark').forEach((node) => {
+      node.replaceChildren();
+      if (branding.logoUrl) {
+        const image = document.createElement('img');
+        image.src = branding.logoUrl;
+        image.alt = `${name} logo`;
+        image.addEventListener('error', () => {
+          node.replaceChildren(document.createTextNode(companyBrandInitials(name)));
+        }, { once: true });
+        node.appendChild(image);
+      } else if (String(name).trim().toLowerCase() === 'rev engine') {
+        const image = document.createElement('img');
+        image.src = 'assets/rev-engine-mark.png';
+        image.alt = 'Rev Engine logo';
+        node.appendChild(image);
+      } else {
+        node.textContent = companyBrandInitials(name);
+      }
+    });
+  }
+
   function renderAccountIdentity(user) {
     if (!user) return;
     document.querySelectorAll('[data-current-user-name]').forEach((node) => {
@@ -232,6 +276,7 @@
     currentPermissionSet = new Set(user && user.effectivePermissions || []);
     if (navNode) navNode.innerHTML = nav(current, role, user && user.effectivePermissions);
     applyAccountBrand(user);
+    renderCompanyBrand(user);
     renderAccountIdentity(user);
     renderCompanyMenu(user);
 

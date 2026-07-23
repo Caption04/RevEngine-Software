@@ -41,6 +41,7 @@ const { verifiedProviderUpdate: verifiedProviderUpdateService } = require('../se
 const { allocateFinancialNumber } = require('../services/payments/financialNumber.service');
 const { calculateInvoiceLedger, money: paymentMoney, recalculateInvoice: recalculateInvoiceLedger, recalculateInvoiceFinancials, refundableRemaining, syncUnappliedCreditForPayment } = require('../services/payments/invoiceLedger.service');
 const { paymentTermsDays, requirePurchaseOrderNumber, resolveInvoiceBranch } = require('../services/invoicePolicy.service');
+const { createBusinessDocumentPdf } = require('../services/businessDocumentPdf.service');
 const { reconcilePaymentLink } = require('../services/payments/paymentReconciliation.service');
 const {
   COOKIE_NAME,
@@ -9760,6 +9761,23 @@ router.get('/quotes/:id', validate(idParam, 'params'), asyncHandler(async (req, 
   sendData(res, normalize(attachLocalization(data, await getCompanyFinanceSettings(req.companyId))));
 }));
 
+router.get('/quotes/:id/pdf', validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  await requireQuote(req, req.params.id);
+  const [record, company, finance] = await Promise.all([
+    prisma.quote.findFirst({ where: { id: req.params.id, companyId: req.companyId, deletedAt: null }, include: quoteInclude }),
+    getCompanyWithBranding(req.companyId),
+    getCompanyFinanceSettings(req.companyId)
+  ]);
+  if (!record || !company) throw notFound('Quote not found');
+  const pdf = createBusinessDocumentPdf({ kind: 'quote', record: normalize(record), company: normalize(company), branding: publicBranding(company), localization: financeLocalization(finance) });
+  const filename = `quote-${String(record.title || record.id).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || record.id}.pdf`;
+  res.status(200)
+    .set('Content-Type', 'application/pdf')
+    .set('Content-Disposition', `inline; filename="${filename}"`)
+    .set('Cache-Control', 'private, no-store')
+    .send(pdf);
+}));
+
 router.patch('/quotes/:id', validate(idParam, 'params'), validate(quoteSchema.partial()), asyncHandler(async (req, res) => {
   const quote = await requireQuote(req, req.params.id);
   if (quote.status !== 'DRAFT') throw new AppError(409, 'Only draft quotes can be edited');
@@ -9960,6 +9978,23 @@ router.get('/invoices/:id', validate(idParam, 'params'), asyncHandler(async (req
   await requireInvoice(req, req.params.id);
   const data = await prisma.invoice.findFirst({ where: { id: req.params.id, companyId: req.companyId }, include: invoiceInclude });
   sendData(res, normalize(safeAdminInvoicePayments(attachLocalization(data, await getCompanyFinanceSettings(req.companyId)))));
+}));
+
+router.get('/invoices/:id/pdf', validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  await requireInvoice(req, req.params.id);
+  const [record, company, finance] = await Promise.all([
+    prisma.invoice.findFirst({ where: { id: req.params.id, companyId: req.companyId }, include: invoiceInclude }),
+    getCompanyWithBranding(req.companyId),
+    getCompanyFinanceSettings(req.companyId)
+  ]);
+  if (!record || !company) throw notFound('Invoice not found');
+  const pdf = createBusinessDocumentPdf({ kind: 'invoice', record: normalize(record), company: normalize(company), branding: publicBranding(company), localization: financeLocalization(finance) });
+  const filename = `invoice-${String(record.number || record.id).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || record.id}.pdf`;
+  res.status(200)
+    .set('Content-Type', 'application/pdf')
+    .set('Content-Disposition', `inline; filename="${filename}"`)
+    .set('Cache-Control', 'private, no-store')
+    .send(pdf);
 }));
 
 router.patch('/invoices/:id', validate(idParam, 'params'), validate(invoiceSchema.partial()), asyncHandler(async (req, res) => {

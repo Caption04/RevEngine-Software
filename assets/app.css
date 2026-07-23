@@ -7065,3 +7065,17 @@ body.modal-open { overflow: hidden; }
 .invoice-company-note span,
 .field-help { color: #687795; font-size: 0.82rem; line-height: 1.45; }
 [data-invoice-po-field][hidden] { display: none !important; }
+
+/* Document-form helper copy stays attached to the field it explains. */
+.field-label-with-help {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.field-label-with-help > small {
+  color: #6d7b94;
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.3;
+}

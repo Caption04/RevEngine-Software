@@ -474,6 +474,7 @@
       if (item.deletedAt) {
         add('Restore', 'quote-restore', true, 'quotes.edit');
       } else {
+        add('View PDF', 'quote-pdf', true, 'quotes.view');
         if (status === 'DRAFT') add('Send', 'quote-send', true, 'quotes.send');
         if (status === 'SENT') add('Accept', 'quote-accept', true, 'quotes.edit');
         if (status === 'SENT') add('Reject', 'quote-reject', false, 'quotes.edit');
@@ -497,6 +498,7 @@
     if (resource === 'invoices') {
       const status = String(item.status || '').toUpperCase();
       const hasReceipts = Array.isArray(item.receipts) && item.receipts.length > 0;
+      add('View PDF', 'invoice-pdf', true, 'invoices.view');
       if (status === 'DRAFT') add(item.purchaseOrderNumber ? 'Edit Customer PO' : 'Add Customer PO', 'invoice-po', false, 'invoices.edit');
       if (status === 'DRAFT') add('Send', 'invoice-send', false, 'invoices.send');
       if (status !== 'PAID' && status !== 'VOID') add('Record Payment', 'invoice-pay', false, 'payments.manage');
@@ -1706,10 +1708,18 @@
 
   function invoicePurchaseOrderField() {
     return '<div class="field span-2" data-invoice-po-field hidden>' +
-      '<label for="fc-purchaseOrderNumber" data-invoice-po-label>Customer PO number</label>' +
+      '<label class="field-label-with-help" for="fc-purchaseOrderNumber"><span data-invoice-po-label>Customer PO number</span><small data-invoice-po-help>Only if the customer gave you one.</small></label>' +
       '<input id="fc-purchaseOrderNumber" name="purchaseOrderNumber" maxlength="120" autocomplete="off" placeholder="Example: PO-2026-0042">' +
-      '<small class="field-help" data-invoice-po-help>This number comes from the customer.</small>' +
       '</div>';
+  }
+
+  function paymentTermsDescription(customer) {
+    const labels = { DUE_ON_RECEIPT: 'due immediately', NET_7: '7-day payment terms', NET_14: '14-day payment terms', NET_30: '30-day payment terms', NET_60: '60-day payment terms' };
+    return labels[customer && customer.paymentTerms] || 'the company default payment terms';
+  }
+
+  function invoiceDueDateField() {
+    return '<div class="field"><label class="field-label-with-help" for="fc-dueDate"><span>Due Date</span><small data-invoice-due-help>Set from the customer’s payment terms. You can change it.</small></label><input id="fc-dueDate" name="dueDate" type="date"></div>';
   }
 
   function invoiceCompanyNote() {
@@ -1736,6 +1746,7 @@
     const poLabel = form && form.querySelector('[data-invoice-po-label]');
     const poHelp = form && form.querySelector('[data-invoice-po-help]');
     const dueDate = form && form.elements.dueDate;
+    const dueHelp = form && form.querySelector('[data-invoice-due-help]');
     if (!customerSelect || !poField || !poInput) return;
 
     const update = () => {
@@ -1744,9 +1755,12 @@
       poInput.required = Boolean(customer && customer.purchaseOrderRequired);
       if (poLabel) poLabel.textContent = customer && customer.purchaseOrderRequired ? 'Customer PO number' : 'Customer PO number (optional)';
       if (poHelp) poHelp.textContent = customer && customer.purchaseOrderRequired
-        ? 'This customer requires its purchase-order number before an invoice can be created.'
-        : 'Add this only when the customer gave you a purchase-order number.';
+        ? 'Required for this customer.'
+        : 'Only if the customer gave you one.';
       if (dueDate && customer && !dueDate.dataset.userChanged) dueDate.value = dateInputValueAfterDays(paymentTermsDaysForCustomer(customer));
+      if (dueHelp) dueHelp.textContent = dueDate && dueDate.dataset.userChanged
+        ? 'Changed manually from the customer’s normal terms.'
+        : 'Set from ' + paymentTermsDescription(customer) + '. You can change it.';
       if (jobSelect) {
         const current = jobSelect.value;
         const jobs = state.jobs.filter((job) => !customer || job.customerId === customer.id);
@@ -1756,7 +1770,10 @@
       if (window.RevEngineFormUX) window.RevEngineFormUX.refresh(form);
     };
     customerSelect.addEventListener('change', update);
-    if (dueDate) dueDate.addEventListener('change', () => { dueDate.dataset.userChanged = 'true'; });
+    if (dueDate) dueDate.addEventListener('change', () => {
+      dueDate.dataset.userChanged = 'true';
+      if (dueHelp) dueHelp.textContent = 'Changed manually from the customer’s normal terms.';
+    });
     update();
   }
 
@@ -1821,7 +1838,7 @@
     };
     if (resource === 'service-contracts') return { title: 'New Solar O&M Contract', action: '/service-contracts', fields: field('contractNumber', 'O&M Contract Number', 'text', 'required') + field('name', 'Agreement Name', 'text', 'required') + select('customerId', 'Client', optionList(state.customers, 'Select client'), true) + field('startDate', 'Coverage Starts', 'date', 'required') + field('endDate', 'Coverage Ends', 'date') + field('currency', 'Currency', 'text', 'maxlength="3" value="' + escapeHtml(effectiveFinanceSettings().defaultCurrency || 'USD') + '"') + field('contractValue', 'Contract Value', 'number', 'min="0" step="0.01"') + field('responseSlaHours', 'Fault Response SLA Hours', 'number', 'min="1"') + field('completionSlaHours', 'Resolution SLA Hours', 'number', 'min="1"') + field('includedVisits', 'Included Preventive Visits', 'number', 'min="0"') };
     if (resource === 'quotes') return { title: 'New Quote', action: '/quotes', fields: field('title', 'Title', 'text', 'required') + select('customerId', 'Customer', optionList(state.customers, 'Select customer'), true) + select('serviceId', 'Service', optionList(state.services, 'No service'), false) + field('amount', 'Amount', 'number', 'min="0" step="0.01"') + field('validUntil', 'Valid Until', 'date') };
-    if (resource === 'invoices') return { title: 'New Invoice', action: '/invoices', fields: invoiceCompanyNote() + select('customerId', 'Customer', optionList(state.customers, 'Select customer'), true, 'data-invoice-customer') + select('jobId', 'Work Order', optionList(state.jobs, 'No work order'), false) + invoicePurchaseOrderField() + field('amount', 'Amount', 'number', 'min="0.01" step="0.01" required') + field('dueDate', 'Due Date', 'date') };
+    if (resource === 'invoices') return { title: 'New Invoice', action: '/invoices', fields: invoiceCompanyNote() + select('customerId', 'Customer', optionList(state.customers, 'Select customer'), true, 'data-invoice-customer') + select('jobId', 'Work Order', optionList(state.jobs, 'No work order'), false) + invoicePurchaseOrderField() + field('amount', 'Amount', 'number', 'min="0.01" step="0.01" required') + invoiceDueDateField() };
   }
 
   function localDateTimeValue(value) {
@@ -2913,6 +2930,10 @@
       }
       if (action === 'booking-convert') await api('/booking-requests/' + id + '/convert', { method: 'POST', body: '{}' });
       if (action === 'booking-quote') await api('/booking-requests/' + id + '/create-quote', { method: 'POST', body: '{}' });
+      if (action === 'quote-pdf') {
+        window.open(API_BASE + '/quotes/' + encodeURIComponent(id) + '/pdf', '_blank', 'noopener');
+        return;
+      }
       if (action === 'quote-send') await api('/quotes/' + id + '/send', { method: 'POST', body: '{}' });
       if (action === 'quote-accept') await api('/quotes/' + id + '/accept', { method: 'POST', body: '{}' });
       if (action === 'quote-reject') await api('/quotes/' + id + '/reject', { method: 'POST', body: '{}' });
@@ -2948,6 +2969,10 @@
           if (!purchaseOrderNumber) return;
         }
         await api('/jobs/' + id + '/create-invoice', { method: 'POST', body: JSON.stringify(purchaseOrderNumber ? { purchaseOrderNumber } : {}) });
+      }
+      if (action === 'invoice-pdf') {
+        window.open(API_BASE + '/invoices/' + encodeURIComponent(id) + '/pdf', '_blank', 'noopener');
+        return;
       }
       if (action === 'invoice-po') {
         const invoice = state.invoices.find((record) => record.id === id) || await api('/invoices/' + id);
