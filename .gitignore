@@ -59,3 +59,6 @@ apps/*/ios/Pods/
 apps/*/ios/.symlinks/
 apps/*/.idea/
 apps/*/.vscode/
+
+# Private imported document references
+private-data/

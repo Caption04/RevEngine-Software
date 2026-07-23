@@ -109,6 +109,14 @@ function customerContact(record) {
 
 function lineItems(record) {
   if (Array.isArray(record.lineItems) && record.lineItems.length) return record.lineItems;
+  if (Array.isArray(record.serviceLines) && record.serviceLines.length) {
+    return record.serviceLines.map((item) => ({
+      description: item.description || item.name || item.service && item.service.name || 'Included service',
+      quantity: item.includedQuantity || item.quantity || 1,
+      unitPrice: item.unitPrice || 0,
+      lineTotal: item.lineTotal || Number(item.includedQuantity || item.quantity || 1) * Number(item.unitPrice || 0)
+    }));
+  }
   return [{ description: record.title || record.number || 'Service', quantity: 1, unitPrice: record.amount || record.total || 0, lineTotal: record.total || record.amount || 0 }];
 }
 
@@ -118,6 +126,13 @@ function initials(value) {
 
 function normalizeTemplate(localization) {
   const input = localization || {};
+  const design = input.documentDesign && typeof input.documentDesign === 'object' ? input.documentDesign : null;
+  const blocks = design && Array.isArray(design.blocks) ? design.blocks : [];
+  const visible = (type, fallback = true) => {
+    const block = blocks.find((item) => item && item.type === type);
+    return block ? block.visible !== false : fallback;
+  };
+  const block = (type) => blocks.find((item) => item && item.type === type) || null;
   const oneOf = (value, allowed, fallback) => allowed.includes(String(value || '').toUpperCase()) ? String(value).toUpperCase() : fallback;
   return {
     template: oneOf(input.documentTemplate, ['MODERN', 'CLASSIC', 'MINIMAL'], 'MODERN'),
@@ -127,15 +142,36 @@ function normalizeTemplate(localization) {
     tableDensity: oneOf(input.documentTableDensity, ['COMPACT', 'COMFORTABLE'], 'COMFORTABLE'),
     quoteLabel: ascii(input.quoteLabel || 'QUOTE').slice(0, 30) || 'QUOTE',
     invoiceLabel: ascii(input.invoiceLabel || 'INVOICE').slice(0, 30) || 'INVOICE',
-    showDocumentLogo: input.showDocumentLogo !== false,
+    contractLabel: ascii(input.contractLabel || 'CONTRACT').slice(0, 30) || 'CONTRACT',
+    showDocumentLogo: design ? design.header && design.header.showLogo !== false : input.showDocumentLogo !== false,
+    showLegalName: input.showLegalName !== false,
+    showRegistrationNumber: input.showRegistrationNumber !== false,
+    showTaxNumber: input.showTaxNumber !== false,
     showCompanyAddress: input.showCompanyAddress !== false,
     showCompanyEmail: input.showCompanyEmail !== false,
     showCompanyPhone: input.showCompanyPhone !== false,
     showCompanyWebsite: input.showCompanyWebsite !== false,
-    showTax: input.showTax !== false,
-    showPurchaseOrder: input.showPurchaseOrder !== false,
-    showNotes: input.showNotes !== false,
-    showPaymentInstructions: input.showPaymentInstructions !== false
+    showCustomerDetails: visible('CUSTOMER_DETAILS', true),
+    showDocumentDetails: visible('DOCUMENT_DETAILS', true),
+    showLineItems: visible('LINE_ITEMS', true),
+    showTotals: visible('TOTALS', true),
+    showTax: design ? visible('TOTALS', true) : input.showTax !== false,
+    showPurchaseOrder: design ? visible('DOCUMENT_DETAILS', true) : input.showPurchaseOrder !== false,
+    showNotes: design ? visible('TERMS', true) : input.showNotes !== false,
+    showPaymentInstructions: design ? visible('PAYMENT_OPTIONS', true) : input.showPaymentInstructions !== false,
+    primaryColor: design && design.theme && design.theme.primaryColor,
+    accentColor: design && design.theme && design.theme.accentColor,
+    tableHeaderColor: design && design.theme && design.theme.tableHeaderColor,
+    borderColor: design && design.theme && design.theme.borderColor,
+    bodySize: design && design.typography && Number(design.typography.bodySize) || 9,
+    blocks,
+    paymentOptions: block('PAYMENT_OPTIONS'),
+    onlinePayment: block('ONLINE_PAYMENT'),
+    terms: block('TERMS'),
+    disclaimer: block('DISCLAIMER'),
+    signatures: block('SIGNATURES'),
+    footer: block('FOOTER'),
+    contractBody: block('CONTRACT_BODY')
   };
 }
 
@@ -289,13 +325,13 @@ function logoDimensions(image, desired) {
 function companyDetails(company, brand, localization, template, companyName) {
   const rows = [];
   const legalName = ascii(company.legalName || '');
-  if (legalName && legalName.toLowerCase() !== ascii(companyName).toLowerCase()) {
+  if (template.showLegalName && legalName && legalName.toLowerCase() !== ascii(companyName).toLowerCase()) {
     rows.push(...wrap(legalName, 52).slice(0, 2));
   }
 
-  const registration = company.registrationNumber ? `Reg No: ${company.registrationNumber}` : null;
+  const registration = template.showRegistrationNumber && company.registrationNumber ? `Reg No: ${company.registrationNumber}` : null;
   const taxLabel = ascii(localization && localization.taxName || 'Tax') || 'Tax';
-  const tax = company.taxNumber ? `${taxLabel} No: ${company.taxNumber}` : null;
+  const tax = template.showTaxNumber && company.taxNumber ? `${taxLabel} No: ${company.taxNumber}` : null;
   if (registration || tax) rows.push([registration, tax].filter(Boolean).join('  |  '));
 
   if (template.showCompanyAddress && company.address) rows.push(...wrap(company.address, 52).slice(0, 2));
@@ -332,11 +368,11 @@ function companyDetailBottom(startY, details, gap = 12) {
 
 function buildHeader({ kind, record, company, branding, localization, template, logoImage }) {
   const brand = branding || {};
-  const primary = hexRgb(brand.primaryColor);
-  const secondary = hexRgb(brand.secondaryColor, '#263ff1');
+  const primary = hexRgb(template.primaryColor || brand.primaryColor);
+  const secondary = hexRgb(template.accentColor || brand.secondaryColor, '#263ff1');
   const companyName = ascii(brand.brandName || company.tradingName || company.name || 'Company');
-  const documentTitle = kind === 'quote' ? template.quoteLabel : template.invoiceLabel;
-  const documentReference = record.number || (kind === 'quote' ? 'Quote' : 'Invoice');
+  const documentTitle = kind === 'quote' ? template.quoteLabel : kind === 'contract' ? template.contractLabel : template.invoiceLabel;
+  const documentReference = record.number || record.contractNumber || (kind === 'quote' ? 'Quote' : kind === 'contract' ? 'Contract' : 'Invoice');
   const logoSize = { SMALL: 34, MEDIUM: 46, LARGE: 60 }[template.logoSize];
   const details = companyDetails(company, brand, localization, template, companyName);
   let output = '';
@@ -408,29 +444,43 @@ function buildPageCommands({ kind, record, company, branding, localization, item
   let output = header.output;
   let y = header.bodyStart - 18;
 
-  output += commandText(LEFT, y, 9, 'BILL TO', true, darken(header.primary, 0.3));
-  output += commandText(LEFT, y - 19, 12, customerName(record), true);
-  wrap(customerContact(record), 62).slice(0, 2).forEach((line, index) => { output += commandText(LEFT, y - 37 - index * 14, 8, line); });
+  if (template.showCustomerDetails) {
+    output += commandText(LEFT, y, 9, kind === 'contract' ? 'CUSTOMER' : 'BILL TO', true, darken(header.primary, 0.3));
+    output += commandText(LEFT, y - 19, 12, customerName(record), true);
+    wrap(customerContact(record), 62).slice(0, 2).forEach((line, index) => { output += commandText(LEFT, y - 37 - index * 14, 8, line); });
+  }
 
   const meta = kind === 'quote'
     ? [['Created', dateLabel(record.createdAt)], ['Valid until', dateLabel(record.validUntil)]]
-    : [['Issued', dateLabel(record.createdAt)], ['Due', dateLabel(record.dueDate)], ...(template.showPurchaseOrder && record.purchaseOrderNumber ? [['Customer PO', record.purchaseOrderNumber]] : [])];
-  meta.forEach(([label, value], index) => {
-    output += commandText(390, y - index * 18, 8, `${label}:`, true);
-    output += commandText(462, y - index * 18, 8, value);
-  });
+    : kind === 'contract'
+      ? [['Starts', dateLabel(record.startDate)], ['Ends', dateLabel(record.endDate)], ['Status', String(record.status || 'DRAFT').replace(/_/g, ' ')]]
+      : [['Issued', dateLabel(record.createdAt)], ['Due', dateLabel(record.dueDate)], ...(template.showPurchaseOrder && record.purchaseOrderNumber ? [['Customer PO', record.purchaseOrderNumber]] : [])];
+  if (template.showDocumentDetails) {
+    meta.forEach(([label, value], index) => {
+      output += commandText(390, y - index * 18, 8, `${label}:`, true);
+      output += commandText(462, y - index * 18, 8, value);
+    });
+  }
 
   y -= 82;
-  const tableHeaderColor = template.template === 'MINIMAL' ? { r: 0.965, g: 0.97, b: 0.98 } : { r: 0.94, g: 0.955, b: 0.98 };
-  output += commandRect(LEFT, y - 18, RIGHT - LEFT, 25, tableHeaderColor);
-  output += commandText(LEFT + 8, y - 11, 8, 'DESCRIPTION', true);
-  output += commandText(355, y - 11, 8, 'QTY', true);
-  output += commandText(407, y - 11, 8, 'UNIT', true);
-  output += commandText(488, y - 11, 8, 'TOTAL', true);
-  y -= 37;
+  if (kind === 'contract' && template.contractBody && template.contractBody.visible !== false && template.contractBody.body) {
+    output += commandText(LEFT, y, 9, template.contractBody.label || 'AGREEMENT', true, darken(header.primary, 0.3));
+    wrap(template.contractBody.body, 94).slice(0, 8).forEach((line, index) => { output += commandText(LEFT, y - 18 - index * 13, template.bodySize - 1, line); });
+    y -= Math.max(50, Math.min(8, wrap(template.contractBody.body, 94).length) * 13 + 30);
+  }
+
+  const tableHeaderColor = template.tableHeaderColor ? hexRgb(template.tableHeaderColor) : template.template === 'MINIMAL' ? { r: 0.965, g: 0.97, b: 0.98 } : { r: 0.94, g: 0.955, b: 0.98 };
+  if (template.showLineItems) {
+    output += commandRect(LEFT, y - 18, RIGHT - LEFT, 25, tableHeaderColor);
+    output += commandText(LEFT + 8, y - 11, 8, kind === 'contract' ? 'SERVICE' : 'DESCRIPTION', true);
+    output += commandText(355, y - 11, 8, 'QTY', true);
+    output += commandText(407, y - 11, 8, 'UNIT', true);
+    output += commandText(488, y - 11, 8, 'TOTAL', true);
+    y -= 37;
+  }
 
   const rowHeight = template.tableDensity === 'COMPACT' ? 22 : 27;
-  items.forEach((item) => {
+  if (template.showLineItems) items.forEach((item) => {
     const description = wrap(item.description || item.service && item.service.name || 'Item', 44)[0] || 'Item';
     output += commandText(LEFT + 8, y, 8.5, description);
     output += commandText(358, y, 8.5, Number(item.quantity || 1).toFixed(2).replace(/\.00$/, ''));
@@ -441,33 +491,144 @@ function buildPageCommands({ kind, record, company, branding, localization, item
   });
 
   if (pageIndex === pageCount - 1) {
-    y = Math.max(y - 8, 202);
-    const totals = [
-      ['Subtotal', record.subtotal != null ? record.subtotal : record.amount || 0],
-      ['Discount', record.discountTotal || 0],
-      ...(template.showTax ? [[localization && localization.taxName || 'Tax', record.taxTotal || 0]] : []),
-      ['Total', record.total != null ? record.total : record.amount || 0]
-    ];
-    totals.forEach(([label, value], index) => {
-      const isTotal = index === totals.length - 1;
-      const lineY = y - index * 20;
-      if (isTotal) output += commandColorLine(392, lineY + 13, RIGHT, lineY + 13, 1.2, header.primary);
-      output += commandText(397, lineY, isTotal ? 11 : 8.5, label, isTotal);
-      output += commandText(482, lineY, isTotal ? 11 : 8.5, money(value, localization), isTotal);
-    });
+    let cursor = Math.max(y - 10, 220);
+    const designedBlocks = Array.isArray(template.blocks) && template.blocks.length
+      ? template.blocks.filter((item) => item && item.visible !== false && ['TOTALS', 'TERMS', 'PAYMENT_OPTIONS', 'ONLINE_PAYMENT', 'DISCLAIMER', 'SIGNATURES', 'FOOTER'].includes(item.type))
+      : [];
+    const fallbackBlocks = [];
+    if (!designedBlocks.length) {
+      if (template.showTotals) fallbackBlocks.push({ type: 'TOTALS', label: 'Summary', visible: true });
+      if (template.showNotes) fallbackBlocks.push({ type: 'TERMS', label: kind === 'quote' ? 'Notes' : 'Terms', body: kind === 'quote' ? record.description : record.paymentPlanNotes, visible: true });
+      if ((kind === 'invoice' || kind === 'contract') && template.showPaymentInstructions) fallbackBlocks.push(template.paymentOptions || { type: 'PAYMENT_OPTIONS', label: 'Payment options', body: localization && localization.paymentInstructions, visible: true });
+      if (kind === 'invoice' && template.onlinePayment) fallbackBlocks.push(template.onlinePayment);
+      if (template.disclaimer) fallbackBlocks.push(template.disclaimer);
+      if (kind === 'contract' && template.signatures) fallbackBlocks.push(template.signatures);
+      fallbackBlocks.push(template.footer || { type: 'FOOTER', body: localization && localization.invoiceFooter || branding && (branding.invoiceFooter || branding.invoiceTerms), visible: true });
+    }
+    const postBlocks = designedBlocks.length ? designedBlocks : fallbackBlocks;
 
-    const note = kind === 'quote' ? record.description : record.paymentPlanNotes;
-    if (template.showNotes && note) {
-      output += commandText(LEFT, 148, 8.5, kind === 'quote' ? 'NOTES' : 'PAYMENT NOTES', true, darken(header.primary, 0.3));
-      wrap(note, 84).slice(0, 3).forEach((line, index) => { output += commandText(LEFT, 133 - index * 13, 7.5, line); });
+    const drawHeading = (heading, atY, size = 8.5) => commandText(LEFT, atY, size, heading, true, darken(header.primary, 0.3));
+    for (const section of postBlocks) {
+      if (!section || section.visible === false || cursor < 68) continue;
+      if (section.type === 'TOTALS') {
+        const totals = [
+          ['Subtotal', record.subtotal != null ? record.subtotal : record.amount || 0],
+          ['Discount', record.discountTotal || 0],
+          ...(template.showTax ? [[localization && localization.taxName || 'Tax', record.taxTotal || 0]] : []),
+          ['Total', record.total != null ? record.total : record.contractValue != null ? record.contractValue : record.amount || 0]
+        ];
+        output += drawHeading(section.label || 'SUMMARY', cursor);
+        cursor -= 20;
+        totals.forEach(([label, value], index) => {
+          const isTotal = index === totals.length - 1;
+          if (isTotal) output += commandColorLine(350, cursor + 12, RIGHT, cursor + 12, 1.2, header.primary);
+          output += commandText(355, cursor, isTotal ? 10.5 : 8.2, label, isTotal);
+          output += commandText(472, cursor, isTotal ? 10.5 : 8.2, money(value, localization), isTotal);
+          cursor -= isTotal ? 25 : 18;
+        });
+        cursor -= 6;
+        continue;
+      }
+
+      if (section.type === 'TERMS') {
+        const body = section.body || (kind === 'quote' ? record.description : kind === 'contract' ? record.description || record.notes : record.paymentPlanNotes);
+        if (!body) continue;
+        output += drawHeading(section.label || (kind === 'quote' ? 'NOTES' : 'TERMS'), cursor);
+        cursor -= 17;
+        const lines = wrap(body, 96).slice(0, 5);
+        lines.forEach((line) => { output += commandText(LEFT, cursor, Math.max(6.8, template.bodySize - 1), line); cursor -= 11; });
+        cursor -= 8;
+        continue;
+      }
+
+      if (section.type === 'PAYMENT_OPTIONS' && (kind === 'invoice' || kind === 'contract')) {
+        const legacyAccount = {
+          label: 'Bank transfer',
+          bankName: section.bankName,
+          accountName: section.accountName,
+          accountNumber: section.accountNumber,
+          branchName: section.branchName,
+          branchCode: section.branchCode,
+          swiftCode: section.swiftCode
+        };
+        const accountHasDetails = (account) => [account.bankName, account.accountName, account.accountNumber, account.branchName, account.branchCode, account.swiftCode].some(Boolean);
+        const configuredAccounts = Array.isArray(section.accounts) ? section.accounts.filter(accountHasDetails) : [];
+        const accounts = configuredAccounts.length ? configuredAccounts : accountHasDetails(legacyAccount) ? [legacyAccount] : (Array.isArray(section.accounts) ? section.accounts : [legacyAccount]);
+        const hasAccountDetails = accounts.some(accountHasDetails);
+        const body = section.body || (!designedBlocks.length && localization && localization.paymentInstructions) || '';
+        if (!hasAccountDetails && !body && !section.referenceRule) continue;
+        output += commandRect(LEFT, cursor - 5, RIGHT - LEFT, 19, template.tableHeaderColor ? hexRgb(template.tableHeaderColor) : { r: 0.93, g: 0.95, b: 0.98 });
+        output += commandText(LEFT + 7, cursor, 8.5, section.label || 'PAYMENT OPTIONS', true, darken(header.primary, 0.25));
+        cursor -= 23;
+        wrap(body, 96).slice(0, 3).forEach((line) => { output += commandText(LEFT, cursor, 7.2, line); cursor -= 10; });
+        for (const account of accounts.slice(0, 4)) {
+          const rows = [
+            ['Bank', account.bankName],
+            ['Account name', account.accountName],
+            ['Account number', account.accountNumber],
+            ['Branch', account.branchName],
+            ['Branch code', account.branchCode],
+            ['SWIFT code', account.swiftCode]
+          ].filter((row) => row[1]);
+          if (!rows.length || cursor < 96) continue;
+          output += commandRect(LEFT, cursor - 4, RIGHT - LEFT, 16, template.accentColor ? hexRgb(template.accentColor) : { r: 0.96, g: 0.89, b: 0.42 });
+          output += commandText(LEFT + 6, cursor, 7.3, account.label || 'Payment option', true, darken(header.primary, 0.25));
+          cursor -= 18;
+          for (const [rowLabel, value] of rows) {
+            if (cursor < 78) break;
+            output += commandStrokeRect(LEFT, cursor - 4, RIGHT - LEFT, 16, template.borderColor ? hexRgb(template.borderColor) : { r: 0.82, g: 0.86, b: 0.91 }, 0.45);
+            output += commandText(LEFT + 6, cursor, 7.2, rowLabel, true);
+            output += commandText(154, cursor, 7.2, value);
+            cursor -= 16;
+          }
+        }
+        if (section.referenceRule && cursor >= 72) {
+          wrap(section.referenceRule, 94).slice(0, 2).forEach((line, index) => {
+            if (cursor < 64) return;
+            output += commandText(LEFT, cursor, 7.2, index === 0 ? `Reference: ${line}` : line, index === 0);
+            cursor -= 10;
+          });
+        }
+        cursor -= 8;
+        continue;
+      }
+
+      if (section.type === 'ONLINE_PAYMENT' && kind === 'invoice') {
+        const paymentUrl = section.urlMode === 'CUSTOM' ? section.customUrl : record.onlinePaymentUrl;
+        if (!paymentUrl) continue;
+        output += drawHeading(section.label || 'PAY ONLINE', cursor);
+        cursor -= 16;
+        wrap(`${section.buttonLabel || 'Make payment online'}: ${paymentUrl}`, 96).slice(0, 2).forEach((line) => { output += commandText(LEFT, cursor, 7.3, line, true, darken(header.primary, 0.15)); cursor -= 10; });
+        cursor -= 8;
+        continue;
+      }
+
+      if (section.type === 'DISCLAIMER') {
+        if (!section.body) continue;
+        output += drawHeading(section.label || 'IMPORTANT', cursor, 7.8);
+        cursor -= 15;
+        wrap(section.body, 105).slice(0, 5).forEach((line) => { output += commandText(LEFT, cursor, 6.5, line); cursor -= 9; });
+        cursor -= 7;
+        continue;
+      }
+
+      if (section.type === 'SIGNATURES' && kind === 'contract') {
+        output += drawHeading(section.label || 'SIGNATURES', cursor);
+        cursor -= 28;
+        output += commandLine(LEFT, cursor, 250, cursor, 0.7, 0.5);
+        output += commandLine(345, cursor, RIGHT, cursor, 0.7, 0.5);
+        output += commandText(LEFT, cursor - 13, 7, section.leftLabel || 'For the company');
+        output += commandText(345, cursor - 13, 7, section.rightLabel || 'For the customer');
+        cursor -= 32;
+        continue;
+      }
+
+      if (section.type === 'FOOTER') {
+        const footer = section.body || localization && localization.invoiceFooter || branding && (branding.invoiceFooter || branding.invoiceTerms);
+        if (!footer) continue;
+        wrap(footer, 100).slice(0, 2).forEach((line) => { output += commandText(LEFT, Math.max(cursor, 42), 7, line, false, { r: 0.34, g: 0.39, b: 0.48 }); cursor -= 10; });
+      }
     }
-    const paymentInstructions = localization && localization.paymentInstructions;
-    if (kind === 'invoice' && template.showPaymentInstructions && paymentInstructions) {
-      output += commandText(LEFT, 102, 8.5, 'PAYMENT INSTRUCTIONS', true, darken(header.primary, 0.3));
-      wrap(paymentInstructions, 84).slice(0, 3).forEach((line, index) => { output += commandText(LEFT, 87 - index * 12, 7.2, line); });
-    }
-    const footer = localization && localization.invoiceFooter || branding && (branding.invoiceFooter || branding.invoiceTerms);
-    if (footer) wrap(footer, 96).slice(0, 2).forEach((line, index) => { output += commandText(LEFT, 45 - index * 11, 7, line, false, { r: 0.34, g: 0.39, b: 0.48 }); });
   }
 
   output += commandText(RIGHT - 54, 27, 7, `Page ${pageIndex + 1} of ${pageCount}`, false, { r: 0.4, g: 0.45, b: 0.54 });
@@ -536,10 +697,11 @@ function assemblePdf(pageCommands, logoImage) {
 }
 
 function createBusinessDocumentPdf({ kind, record, company, branding, localization, logoImage }) {
-  if (!['quote', 'invoice'].includes(kind)) throw new TypeError('Document kind must be quote or invoice.');
+  if (!['quote', 'invoice', 'contract'].includes(kind)) throw new TypeError('Document kind must be quote, invoice, or contract.');
   const allItems = lineItems(record || {});
   const template = normalizeTemplate(localization);
-  const perPage = template.tableDensity === 'COMPACT' ? 13 : 11;
+  const hasDetailedDesign = Array.isArray(template.blocks) && template.blocks.length > 0;
+  const perPage = hasDetailedDesign ? (template.tableDensity === 'COMPACT' ? 7 : 5) : (template.tableDensity === 'COMPACT' ? 13 : 11);
   const chunks = [];
   for (let index = 0; index < allItems.length; index += perPage) chunks.push(allItems.slice(index, index + perPage));
   if (!chunks.length) chunks.push([]);

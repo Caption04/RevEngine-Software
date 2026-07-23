@@ -701,6 +701,8 @@ model Company {
   financeWebhookEvents              FinanceWebhookEvent[]
   externalRecordLinks               ExternalRecordLink[]
   financeExportLogs                 FinanceExportLog[]
+  documentTemplates                 DocumentTemplate[]
+  documentTemplateVersions          DocumentTemplateVersion[]
   workerDevices                     WorkerDevice[]
   offlineActionQueues               OfflineActionQueue[]
   jobChecklistTemplates             JobChecklistTemplate[]
@@ -1629,6 +1631,8 @@ model ServiceContract {
   excludedServices       Json?
   renewalDate            DateTime?
   cancellationNoticeDays Int?
+  documentTemplateId     String?
+  documentTemplateVersion Int?
   autoGenerateJobs       Boolean                @default(true)
   reviewBeforeDispatch   Boolean                @default(true)
   serviceWindowStart     String?
@@ -1652,6 +1656,7 @@ model ServiceContract {
   @@index([companyId, customerId])
   @@index([companyId, status])
   @@index([companyId, branchId])
+  @@index([companyId, documentTemplateId])
 }
 
 model ServiceContractAsset {
@@ -2255,6 +2260,8 @@ model Quote {
   expiredAt              DateTime?
   deletedAt              DateTime?
   deleteExpiresAt        DateTime?
+  documentTemplateId     String?
+  documentTemplateVersion Int?
   createdAt              DateTime             @default(now())
   updatedAt              DateTime             @updatedAt
   company                Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -2271,6 +2278,7 @@ model Quote {
   @@index([companyId])
   @@index([companyId, deletedAt])
   @@index([companyId, branchId])
+  @@index([companyId, documentTemplateId])
 }
 
 model QuoteLineItem {
@@ -2351,6 +2359,8 @@ model Invoice {
   sentAt                 DateTime?
   paidAt                 DateTime?
   voidedAt               DateTime?
+  documentTemplateId     String?
+  documentTemplateVersion Int?
   createdAt              DateTime                  @default(now())
   updatedAt              DateTime                  @updatedAt
   company                Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -2375,6 +2385,7 @@ model Invoice {
   @@index([companyId])
   @@index([companyId, branchId])
   @@index([companyId, purchaseOrderNumber])
+  @@index([companyId, documentTemplateId])
 }
 
 model InvoiceLineItem {
@@ -3145,6 +3156,47 @@ model CompanyFinanceSettings {
   company                             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId])
+}
+
+model DocumentTemplate {
+  id               String                    @id @default(cuid())
+  companyId        String
+  name             String
+  documentType     String
+  sourceType       String                    @default("STARTER")
+  status           String                    @default("DRAFT")
+  isDefault        Boolean                   @default(false)
+  design           Json
+  currentVersion   Int                       @default(0)
+  importFileName   String?
+  importMimeType   String?
+  importSourceUrl  String?
+  importStatus     String?
+  publishedAt      DateTime?
+  archivedAt       DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  company          Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  versions         DocumentTemplateVersion[]
+
+  @@index([companyId, documentType, status])
+  @@index([companyId, documentType, isDefault])
+  @@index([companyId, updatedAt])
+}
+
+model DocumentTemplateVersion {
+  id          String           @id @default(cuid())
+  companyId   String
+  templateId  String
+  version     Int
+  design      Json
+  publishedAt DateTime?
+  createdAt   DateTime         @default(now())
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  template    DocumentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, version])
+  @@index([companyId, templateId, createdAt])
 }
 
 model FinanceIntegration {

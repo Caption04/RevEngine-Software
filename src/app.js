@@ -99,6 +99,7 @@ const staffHtmlPages = new Map([
   ['invoices.html', ['OWNER', 'ADMIN', 'WORKER']],
   ['reports.html', ['OWNER', 'ADMIN', 'WORKER']],
   ['settings.html', ['OWNER', 'ADMIN', 'WORKER']],
+  ['document-templates.html', ['OWNER', 'ADMIN']],
   ['branches.html', ['OWNER', 'ADMIN', 'WORKER']],
   ['workspaces.html', ['OWNER', 'ADMIN']],
   ['approvals.html', ['OWNER', 'ADMIN', 'WORKER']],
@@ -123,6 +124,7 @@ const staffPagePermissions = new Map([
   ['index.html', ['dashboard.operational.view', 'dashboard.financial.view', 'dashboard.executive.view']], ['jobs.html', 'jobs.view'], ['schedule.html', 'schedule.view'], ['map.html', 'workers.location.view'],
   ['customers.html', 'customers.view'], ['members.html', 'members.view'], ['booking-requests.html', 'bookings.view'], ['quotes.html', 'quotes.view'], ['invoices.html', 'invoices.view'],
   ['reports.html', ['reports.money.view', 'reports.work.view', 'reports.workers.view', 'reports.sales.view', 'reports.stock.view']], ['settings.html', ['company.settings.view', 'company.settings.manage', 'company.branding.manage', 'settings.finance.manage', 'finance.exports.manage', 'notifications.view', 'integration.view', 'integration.manage', 'audit.view']], ['branches.html', 'branch.view'], ['approvals.html', 'approval.request.decide'],
+  ['document-templates.html', ['company.settings.manage', 'settings.finance.manage']],
   ['workspaces.html', 'company.settings.view'],
   ['assets.html', 'contract.automation.manage'], ['service-contracts.html', 'contract.automation.manage'], ['contract-automation.html', 'contract.automation.manage'],
   ['inventory.html', 'inventory.view'], ['purchase-requests.html', 'purchaseRequest.create'], ['purchase-orders.html', 'purchaseOrder.manage'], ['procurement-costing.html', 'inventory.manage'],
@@ -135,7 +137,7 @@ const staffPagePriority = [
   'map.html', 'members.html', 'inventory.html', 'purchase-requests.html', 'purchase-orders.html', 'branches.html', 'approvals.html',
   'workspaces.html',
   'assets.html', 'service-contracts.html', 'contract-automation.html', 'procurement-costing.html', 'mobile-sync.html', 'reports.html',
-  'executive-dashboard.html', 'settings.html', 'security-center.html', 'subscription.html'
+  'executive-dashboard.html', 'document-templates.html', 'settings.html', 'security-center.html', 'subscription.html'
 ];
 
 function hasPagePermission(permissions, requirement) {
@@ -300,6 +302,7 @@ app.use('/api/jobs', (req, res, next) => {
 });
 app.use('/api', apiRouter);
 app.use('/uploads', express.static(path.join(rootDir, 'uploads')));
+app.use('/private-data', (_req, res) => res.status(404).send('Not found'));
 app.use(htmlPageAccessGuard);
 app.use(express.static(rootDir, { extensions: ['html'] }));
 

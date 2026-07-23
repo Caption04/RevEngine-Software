@@ -43,6 +43,16 @@ const { calculateInvoiceLedger, money: paymentMoney, recalculateInvoice: recalcu
 const { paymentTermsDays, requirePurchaseOrderNumber, resolveInvoiceBranch } = require('../services/invoicePolicy.service');
 const { createBusinessDocumentPdf } = require('../services/businessDocumentPdf.service');
 const { loadBusinessDocumentLogo } = require('../services/businessDocumentLogo.service');
+const {
+  BLOCK_TYPES: DOCUMENT_BLOCK_TYPES,
+  DOCUMENT_TYPES,
+  findDefaultTemplate,
+  findTemplateVersion,
+  normalizeDesign,
+  rendererLocalization,
+  seedStarterTemplates,
+  starterDesign
+} = require('../services/documentTemplate.service');
 const { reconcilePaymentLink } = require('../services/payments/paymentReconciliation.service');
 const {
   COOKIE_NAME,
@@ -1534,6 +1544,21 @@ const documentPreviewSettingsSchema = z.object({
   showNotes: z.boolean().optional(),
   showPaymentInstructions: z.boolean().optional()
 });
+const documentTemplateCreateSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  documentType: z.enum(DOCUMENT_TYPES),
+  startingPoint: z.enum(['STARTER', 'BLANK']).default('STARTER'),
+  starterVariant: z.enum(['PROFESSIONAL', 'CLASSIC', 'MINIMAL']).optional(),
+  design: z.record(z.any()).optional()
+});
+const documentTemplatePatchSchema = z.object({
+  name: z.string().trim().min(2).max(120).optional(),
+  design: z.record(z.any()).optional()
+});
+const documentTemplatePreviewSchema = z.object({
+  documentType: z.enum(DOCUMENT_TYPES),
+  design: z.record(z.any())
+});
 const financeIntegrationConfigSchema = z.record(z.union([z.string().trim().max(500), z.boolean(), z.number()])).default({});
 const financeIntegrationCreateSchema = z.object({
   provider: z.enum(financeProviderValues),
@@ -2192,10 +2217,12 @@ const uploadDir = path.resolve(__dirname, '../../uploads/logos');
 const proofUploadDir = path.resolve(__dirname, '../../uploads/jobs/proof');
 const signatureUploadDir = path.resolve(__dirname, '../../uploads/jobs/signatures');
 const bookingUploadDir = path.resolve(__dirname, '../../uploads/booking-requests');
+const documentImportDir = path.resolve(__dirname, '../../private-data/document-template-imports');
 fs.mkdirSync(uploadDir, { recursive: true });
 fs.mkdirSync(proofUploadDir, { recursive: true });
 fs.mkdirSync(signatureUploadDir, { recursive: true });
 fs.mkdirSync(bookingUploadDir, { recursive: true });
+fs.mkdirSync(documentImportDir, { recursive: true });
 
 const evidenceImageTypes = ['image/png', 'image/jpeg', 'image/webp'];
 
@@ -2261,6 +2288,31 @@ const csvUpload = multer({
     cb(null, true);
   }
 });
+
+const documentTemplateImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'image/png',
+      'image/jpeg',
+      'image/webp'
+    ];
+    if (!allowed.includes(file.mimetype)) return cb(new AppError(400, 'Import a PDF, Word document, PNG, JPG, or WEBP file.'));
+    cb(null, true);
+  }
+});
+
+function documentTemplateImportMiddleware(req, res, next) {
+  documentTemplateImportUpload.single('file')(req, res, (error) => {
+    if (!error) return next();
+    if (error instanceof AppError) return next(error);
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') return next(new AppError(400, 'The imported document is too large. The maximum size is 12 MB.'));
+    return next(error);
+  });
+}
 
 function csvUploadMiddleware(req, res, next) {
   if (!String(req.headers['content-type'] || '').startsWith('multipart/form-data')) return next();
@@ -3651,6 +3703,22 @@ router.get("/client/service-contracts/:id", requireClientAuth, validate(idParam,
   sendData(res, normalize(clientContract(contract)));
 }));
 
+router.get("/client/service-contracts/:id/pdf", requireClientAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
+  const record = await clientOwnedContract(req.clientAccount, req.params.id);
+  if (!record || !['ACTIVE', 'SUSPENDED', 'EXPIRED'].includes(record.status)) throw notFound("Service contract not found");
+  const [company, finance, template] = await Promise.all([
+    getCompanyWithBranding(req.clientAccount.companyId),
+    getCompanyFinanceSettings(req.clientAccount.companyId),
+    documentTemplateForRecord(req.clientAccount.companyId, 'CONTRACT', record)
+  ]);
+  if (!company) throw notFound("Company not found");
+  const branding = publicBranding(company);
+  const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
+  const pdf = createBusinessDocumentPdf({ kind: 'contract', record: normalize(record), company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage });
+  const filename = `contract-${String(record.contractNumber || record.id).replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80)}.pdf`;
+  res.status(200).set('Content-Type', 'application/pdf').set('Content-Disposition', `inline; filename="${filename}"`).set('Cache-Control', 'private, no-store').send(pdf);
+}));
+
 router.get("/client/quotes", requireClientAuth, asyncHandler(async (req, res) => {
   const where = clientQuoteWhere(req.clientAccount);
   if (!where) return sendData(res, []);
@@ -3667,14 +3735,15 @@ router.get("/client/quotes/:id", requireClientAuth, validate(idParam, "params"),
 router.get("/client/quotes/:id/pdf", requireClientAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
   const record = await clientOwnedQuote(req.clientAccount, req.params.id);
   if (!record) throw notFound("Quote not found");
-  const [company, finance] = await Promise.all([
+  const [company, finance, template] = await Promise.all([
     getCompanyWithBranding(req.clientAccount.companyId),
-    getCompanyFinanceSettings(req.clientAccount.companyId)
+    getCompanyFinanceSettings(req.clientAccount.companyId),
+    documentTemplateForRecord(req.clientAccount.companyId, 'QUOTE', record)
   ]);
   if (!company) throw notFound("Company not found");
   const branding = publicBranding(company);
   const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
-  const pdf = createBusinessDocumentPdf({ kind: 'quote', record: normalize(record), company: normalize(company), branding, localization: financeLocalization(finance), logoImage });
+  const pdf = createBusinessDocumentPdf({ kind: 'quote', record: normalize(record), company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage });
   const filename = `quote-${String(record.number || record.id).replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80)}.pdf`;
   res.status(200).set('Content-Type', 'application/pdf').set('Content-Disposition', `inline; filename="${filename}"`).set('Cache-Control', 'private, no-store').send(pdf);
 }));
@@ -3744,14 +3813,17 @@ router.get("/client/invoices/:id", requireClientAuth, validate(idParam, "params"
 router.get("/client/invoices/:id/pdf", requireClientAuth, validate(idParam, "params"), asyncHandler(async (req, res) => {
   const record = await clientOwnedInvoice(req.clientAccount, req.params.id);
   if (!record) throw notFound("Invoice not found");
-  const [company, finance] = await Promise.all([
+  const [company, finance, template, paymentLink] = await Promise.all([
     getCompanyWithBranding(req.clientAccount.companyId),
-    getCompanyFinanceSettings(req.clientAccount.companyId)
+    getCompanyFinanceSettings(req.clientAccount.companyId),
+    documentTemplateForRecord(req.clientAccount.companyId, 'INVOICE', record),
+    prisma.paymentLink.findFirst({ where: { companyId: req.clientAccount.companyId, invoiceId: record.id, checkoutUrl: { not: null }, status: { in: ['CREATED', 'SENT', 'OPENED', 'PENDING'] } }, orderBy: { createdAt: 'desc' } })
   ]);
   if (!company) throw notFound("Company not found");
   const branding = publicBranding(company);
   const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
-  const pdf = createBusinessDocumentPdf({ kind: 'invoice', record: normalize(record), company: normalize(company), branding, localization: financeLocalization(finance), logoImage });
+  const pdfRecord = normalize({ ...record, onlinePaymentUrl: paymentLink && paymentLink.checkoutUrl || null });
+  const pdf = createBusinessDocumentPdf({ kind: 'invoice', record: pdfRecord, company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage });
   const filename = `invoice-${String(record.number || record.id).replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80)}.pdf`;
   res.status(200).set('Content-Type', 'application/pdf').set('Content-Disposition', `inline; filename="${filename}"`).set('Cache-Control', 'private, no-store').send(pdf);
 }));
@@ -4312,6 +4384,10 @@ const resourcePermissionRules = [
   { method: 'GET', pattern: /^\/admin\/data-export(?:\/|$)/, permission: 'finance.exports.manage' },
   { method: 'GET', pattern: /^\/billing\/(?:catalog|plans|subscription|usage)$/, fullAccessOnly: true },
   { method: 'POST', pattern: /^\/billing\/(?:mock-select|checkout|change-plan|cancel)$/, fullAccessOnly: true },
+  { method: 'GET', pattern: /^\/document-templates(?:\/|$)/, anyPermissions: ['company.settings.view', 'company.settings.manage', 'settings.finance.manage'] },
+  { method: 'POST', pattern: /^\/document-templates(?:\/|$)/, anyPermissions: ['company.settings.manage', 'settings.finance.manage'] },
+  { method: 'PATCH', pattern: /^\/document-templates(?:\/|$)/, anyPermissions: ['company.settings.manage', 'settings.finance.manage'] },
+  { method: 'DELETE', pattern: /^\/document-templates(?:\/|$)/, anyPermissions: ['company.settings.manage', 'settings.finance.manage'] },
 
   { method: 'POST', pattern: /^\/branches(?:\/|$)/, permission: 'branch.manage' },
   { method: 'PATCH', pattern: /^\/branches(?:\/|$)/, permission: 'branch.manage' },
@@ -4631,6 +4707,269 @@ router.post('/company/document-preview.pdf', requireRole(...adminRoles), validat
   res.status(200)
     .set('Content-Type', 'application/pdf')
     .set('Content-Disposition', 'inline; filename="document-preview.pdf"')
+    .set('Cache-Control', 'private, no-store')
+    .send(pdf);
+}));
+
+function safeDocumentTemplate(template) {
+  if (!template) return null;
+  const { importSourceUrl, versions, ...safe } = template;
+  return {
+    ...safe,
+    hasImportSource: Boolean(importSourceUrl),
+    publishedVersions: Array.isArray(versions) ? versions.map((item) => ({ version: item.version, publishedAt: item.publishedAt, createdAt: item.createdAt })) : undefined
+  };
+}
+
+function documentTemplateKind(documentType) {
+  return String(documentType || '').toUpperCase() === 'QUOTE'
+    ? 'quote'
+    : String(documentType || '').toUpperCase() === 'CONTRACT'
+      ? 'contract'
+      : 'invoice';
+}
+
+function documentTemplateSampleRecord(documentType, localization) {
+  const now = new Date();
+  const type = String(documentType || 'INVOICE').toUpperCase();
+  const customer = { customerType: 'BUSINESS', companyName: 'Sample Solar Customer', name: 'Accounts Team', email: 'accounts@example.com', phone: '+263 77 000 0000' };
+  if (type === 'CONTRACT') {
+    return {
+      id: 'contract-preview',
+      contractNumber: 'OM-0001',
+      name: 'Solar operations and maintenance agreement',
+      title: 'Solar operations and maintenance agreement',
+      status: 'DRAFT',
+      startDate: now,
+      endDate: addDaysFromNow(365),
+      contractValue: 7200,
+      customer,
+      serviceLines: [
+        { title: 'Quarterly panel inspection and cleaning', includedQuantity: 4, unitPrice: 900 },
+        { title: 'Inverter and battery performance review', includedQuantity: 2, unitPrice: 1800 }
+      ]
+    };
+  }
+  return {
+    id: 'document-preview',
+    number: type === 'QUOTE' ? `${localization.quotePrefix || 'Q'}-0001` : `${localization.invoicePrefix || 'INV'}-0001`,
+    title: 'Solar system maintenance',
+    description: 'Routine inspection, panel cleaning, and performance checks.',
+    paymentPlanNotes: 'Thank you. Please contact us before the due date if payment arrangements need to change.',
+    status: 'DRAFT',
+    createdAt: now,
+    validUntil: addDaysFromNow(localization.quoteExpiryDays),
+    dueDate: addDaysFromNow(localization.paymentTermsDays),
+    purchaseOrderNumber: 'PO-1042',
+    onlinePaymentUrl: 'https://pay.example.com/invoice/INV-0001',
+    customer,
+    lineItems: [
+      { description: 'Solar panel inspection and cleaning', quantity: 1, unitPrice: 850, lineTotal: 850 },
+      { description: 'Inverter performance test', quantity: 1, unitPrice: 400, lineTotal: 400 }
+    ],
+    subtotal: 1250,
+    discountTotal: 0,
+    taxTotal: 187.5,
+    total: 1437.5
+  };
+}
+
+async function documentTemplateForRecord(companyId, documentType, record) {
+  if (record && record.documentTemplateId && record.documentTemplateVersion) {
+    const locked = await findTemplateVersion(prisma, companyId, record.documentTemplateId, record.documentTemplateVersion);
+    if (locked) return locked;
+  }
+  return findDefaultTemplate(prisma, companyId, documentType);
+}
+
+async function lockDefaultDocumentTemplate(tx, companyId, documentType, entityModel, entityId) {
+  if (!tx || !tx[entityModel] || !tx.documentTemplate) return null;
+  const current = await tx[entityModel].findFirst({ where: { id: entityId, companyId }, select: { id: true, documentTemplateId: true, documentTemplateVersion: true } });
+  if (!current || (current.documentTemplateId && current.documentTemplateVersion)) return current;
+  const template = await findDefaultTemplate(tx, companyId, documentType);
+  if (!template || !template.resolvedVersion) return current;
+  return tx[entityModel].update({
+    where: { id: current.id },
+    data: { documentTemplateId: template.id, documentTemplateVersion: template.resolvedVersion }
+  });
+}
+
+router.get('/document-templates', requireRole(...adminRoles), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.view', 'company.settings.manage', 'settings.finance.manage']);
+  await seedStarterTemplates(prisma, req.companyId);
+  const templates = await prisma.documentTemplate.findMany({
+    where: { companyId: req.companyId, status: { not: 'ARCHIVED' } },
+    include: { versions: { where: { publishedAt: { not: null } }, orderBy: { version: 'desc' }, take: 10 } },
+    orderBy: [{ documentType: 'asc' }, { isDefault: 'desc' }, { updatedAt: 'desc' }]
+  });
+  sendData(res, normalize({
+    blockTypes: DOCUMENT_BLOCK_TYPES,
+    documentTypes: DOCUMENT_TYPES,
+    templates: templates.map(safeDocumentTemplate)
+  }));
+}));
+
+router.get('/document-templates/:id', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.view', 'company.settings.manage', 'settings.finance.manage']);
+  const template = await prisma.documentTemplate.findFirst({
+    where: { id: req.params.id, companyId: req.companyId },
+    include: { versions: { where: { publishedAt: { not: null } }, orderBy: { version: 'desc' }, take: 25 } }
+  });
+  if (!template) throw notFound('Document template not found');
+  sendData(res, normalize(safeDocumentTemplate(template)));
+}));
+
+router.post('/document-templates', requireRole(...adminRoles), validate(documentTemplateCreateSchema), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.manage', 'settings.finance.manage']);
+  const sourceType = req.body.startingPoint === 'BLANK' ? 'BLANK' : 'STARTER';
+  const design = normalizeDesign(
+    req.body.design || starterDesign(req.body.documentType, sourceType === 'BLANK' ? 'BLANK' : req.body.starterVariant || 'PROFESSIONAL'),
+    req.body.documentType
+  );
+  const template = await prisma.documentTemplate.create({
+    data: {
+      companyId: req.companyId,
+      name: req.body.name,
+      documentType: req.body.documentType,
+      sourceType,
+      status: 'DRAFT',
+      isDefault: false,
+      design,
+      currentVersion: 0
+    }
+  });
+  await audit(req, 'CREATE', 'DocumentTemplate', template.id, { documentType: template.documentType, sourceType });
+  sendData(res, normalize(safeDocumentTemplate(template)), 201);
+}));
+
+router.post('/document-templates/import', requireRole(...adminRoles), documentTemplateImportMiddleware, asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.manage', 'settings.finance.manage']);
+  if (!req.file) throw new AppError(400, 'Choose a document to import.');
+  const documentType = String(req.body.documentType || '').toUpperCase();
+  if (!DOCUMENT_TYPES.includes(documentType)) throw new AppError(400, 'Choose whether this is an invoice, quote, or contract.');
+  const name = String(req.body.name || path.parse(req.file.originalname || 'Imported document').name).trim().slice(0, 120);
+  if (name.length < 2) throw new AppError(400, 'Enter a template name.');
+  const extension = path.extname(req.file.originalname || '').toLowerCase().replace(/[^.a-z0-9]/g, '') || '.bin';
+  const storedName = `${req.companyId}-${crypto.randomUUID()}${extension}`;
+  await fs.promises.writeFile(path.join(documentImportDir, storedName), req.file.buffer, { mode: 0o600 });
+  const template = await prisma.documentTemplate.create({
+    data: {
+      companyId: req.companyId,
+      name,
+      documentType,
+      sourceType: 'IMPORTED',
+      status: 'DRAFT',
+      isDefault: false,
+      design: starterDesign(documentType, 'PROFESSIONAL'),
+      currentVersion: 0,
+      importFileName: String(req.file.originalname || 'Imported document').slice(0, 240),
+      importMimeType: req.file.mimetype,
+      importSourceUrl: storedName,
+      importStatus: 'NEEDS_MAPPING'
+    }
+  });
+  await audit(req, 'IMPORT', 'DocumentTemplate', template.id, { documentType, fileName: template.importFileName, mimeType: template.importMimeType });
+  sendData(res, normalize(safeDocumentTemplate(template)), 201);
+}));
+
+router.get('/document-templates/:id/import-source', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.view', 'company.settings.manage', 'settings.finance.manage']);
+  const template = await prisma.documentTemplate.findFirst({ where: { id: req.params.id, companyId: req.companyId } });
+  if (!template || !template.importSourceUrl) throw notFound('Imported source not found');
+  const storedName = path.basename(template.importSourceUrl);
+  const sourcePath = path.join(documentImportDir, storedName);
+  const stat = await fs.promises.stat(sourcePath).catch(() => null);
+  if (!stat || !stat.isFile()) throw notFound('Imported source not found');
+  res.status(200)
+    .set('Content-Type', template.importMimeType || 'application/octet-stream')
+    .set('Content-Disposition', `inline; filename="${String(template.importFileName || 'imported-document').replace(/[\r\n"]/g, '')}"`)
+    .set('Cache-Control', 'private, no-store')
+    .sendFile(sourcePath);
+}));
+
+router.patch('/document-templates/:id', requireRole(...adminRoles), validate(idParam, 'params'), validate(documentTemplatePatchSchema), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.manage', 'settings.finance.manage']);
+  const existing = await prisma.documentTemplate.findFirst({ where: { id: req.params.id, companyId: req.companyId, status: { not: 'ARCHIVED' } } });
+  if (!existing) throw notFound('Document template not found');
+  const data = {};
+  if (req.body.name) data.name = req.body.name;
+  if (req.body.design) {
+    data.design = normalizeDesign(req.body.design, existing.documentType);
+    if (existing.sourceType === 'IMPORTED') data.importStatus = 'MAPPED';
+  }
+  const template = await prisma.documentTemplate.update({ where: { id: existing.id }, data });
+  await audit(req, 'UPDATE', 'DocumentTemplate', template.id, { documentType: template.documentType });
+  sendData(res, normalize(safeDocumentTemplate(template)));
+}));
+
+router.post('/document-templates/:id/duplicate', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.manage', 'settings.finance.manage']);
+  const existing = await prisma.documentTemplate.findFirst({ where: { id: req.params.id, companyId: req.companyId, status: { not: 'ARCHIVED' } } });
+  if (!existing) throw notFound('Document template not found');
+  const template = await prisma.documentTemplate.create({
+    data: {
+      companyId: req.companyId,
+      name: `${existing.name} copy`.slice(0, 120),
+      documentType: existing.documentType,
+      sourceType: 'BLANK',
+      status: 'DRAFT',
+      isDefault: false,
+      design: normalizeDesign(existing.design, existing.documentType),
+      currentVersion: 0
+    }
+  });
+  await audit(req, 'DUPLICATE', 'DocumentTemplate', template.id, { sourceTemplateId: existing.id });
+  sendData(res, normalize(safeDocumentTemplate(template)), 201);
+}));
+
+router.post('/document-templates/:id/publish', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.manage', 'settings.finance.manage']);
+  const template = await prisma.documentTemplate.findFirst({ where: { id: req.params.id, companyId: req.companyId, status: { not: 'ARCHIVED' } } });
+  if (!template) throw notFound('Document template not found');
+  const published = await prisma.$transaction(async (tx) => {
+    await tx.documentTemplate.updateMany({
+      where: { companyId: req.companyId, documentType: template.documentType, isDefault: true, id: { not: template.id } },
+      data: { isDefault: false }
+    });
+    const version = template.currentVersion + 1;
+    const publishedAt = new Date();
+    await tx.documentTemplateVersion.create({
+      data: { companyId: req.companyId, templateId: template.id, version, design: normalizeDesign(template.design, template.documentType), publishedAt }
+    });
+    return tx.documentTemplate.update({
+      where: { id: template.id },
+      data: { status: 'PUBLISHED', isDefault: true, currentVersion: version, publishedAt, archivedAt: null }
+    });
+  });
+  await audit(req, 'PUBLISH', 'DocumentTemplate', published.id, { documentType: published.documentType, version: published.currentVersion, isDefault: true });
+  sendData(res, normalize(safeDocumentTemplate(published)));
+}));
+
+router.delete('/document-templates/:id', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.manage', 'settings.finance.manage']);
+  const template = await prisma.documentTemplate.findFirst({ where: { id: req.params.id, companyId: req.companyId } });
+  if (!template) throw notFound('Document template not found');
+  await prisma.documentTemplate.update({ where: { id: template.id }, data: { status: 'ARCHIVED', isDefault: false, archivedAt: new Date() } });
+  await audit(req, 'ARCHIVE', 'DocumentTemplate', template.id, { documentType: template.documentType });
+  sendData(res, { archived: true });
+}));
+
+router.post('/document-templates/preview.pdf', requireRole(...adminRoles), validate(documentTemplatePreviewSchema), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.view', 'company.settings.manage', 'settings.finance.manage']);
+  const [company, finance] = await Promise.all([
+    getCompanyWithBranding(req.companyId),
+    getCompanyFinanceSettings(req.companyId)
+  ]);
+  if (!company) throw notFound('Company not found');
+  const template = { documentType: req.body.documentType, sourceType: 'BLANK', design: normalizeDesign(req.body.design, req.body.documentType) };
+  const localization = rendererLocalization(financeLocalization(finance), template);
+  const record = documentTemplateSampleRecord(req.body.documentType, localization);
+  const branding = publicBranding(company);
+  const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
+  const pdf = createBusinessDocumentPdf({ kind: documentTemplateKind(req.body.documentType), record, company: normalize(company), branding, localization, logoImage });
+  res.status(200)
+    .set('Content-Type', 'application/pdf')
+    .set('Content-Disposition', 'inline; filename="document-template-preview.pdf"')
     .set('Cache-Control', 'private, no-store')
     .send(pdf);
 }));
@@ -8315,6 +8654,26 @@ router.get('/service-contracts/:id', requireRole(...adminRoles), validate(idPara
   sendData(res, normalize({ ...data, upcomingDueWork: contractDueItems(data, req.query.through || new Date()) }));
 }));
 
+router.get('/service-contracts/:id/pdf', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  await requireServiceContract(req, req.params.id);
+  const [record, company, finance] = await Promise.all([
+    prisma.serviceContract.findFirst({ where: { id: req.params.id, companyId: req.companyId }, include: contractInclude }),
+    getCompanyWithBranding(req.companyId),
+    getCompanyFinanceSettings(req.companyId)
+  ]);
+  if (!record || !company) throw notFound('Service contract not found');
+  const template = await documentTemplateForRecord(req.companyId, 'CONTRACT', record);
+  const branding = publicBranding(company);
+  const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
+  const pdf = createBusinessDocumentPdf({ kind: 'contract', record: normalize(record), company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage });
+  const filename = `contract-${String(record.contractNumber || record.id).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || record.id}.pdf`;
+  res.status(200)
+    .set('Content-Type', 'application/pdf')
+    .set('Content-Disposition', `inline; filename="${filename}"`)
+    .set('Cache-Control', 'private, no-store')
+    .send(pdf);
+}));
+
 router.patch('/service-contracts/:id', requireRole(...adminRoles), validate(idParam, 'params'), validate(contractSchema.partial()), asyncHandler(async (req, res) => {
   const existing = await requireServiceContract(req, req.params.id);
   const body = { ...req.body, customerId: req.body.customerId || existing.customerId };
@@ -8330,6 +8689,7 @@ router.patch('/service-contracts/:id', requireRole(...adminRoles), validate(idPa
 async function setContractStatus(req, status, action) {
   const existing = await requireServiceContract(req, req.params.id);
   const data = await prisma.$transaction(async (tx) => {
+    if (status === 'ACTIVE') await lockDefaultDocumentTemplate(tx, req.companyId, 'CONTRACT', 'serviceContract', existing.id);
     const contract = await tx.serviceContract.update({ where: { id: existing.id }, data: { status }, include: contractInclude });
     await addAuditLog(tx, req, action, 'ServiceContract', contract.id, { fromStatus: existing.status, toStatus: status });
     return contract;
@@ -9938,9 +10298,10 @@ router.get('/quotes/:id/pdf', validate(idParam, 'params'), asyncHandler(async (r
     getCompanyFinanceSettings(req.companyId)
   ]);
   if (!record || !company) throw notFound('Quote not found');
+  const template = await documentTemplateForRecord(req.companyId, 'QUOTE', record);
   const branding = publicBranding(company);
   const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
-  const pdf = createBusinessDocumentPdf({ kind: 'quote', record: normalize(record), company: normalize(company), branding, localization: financeLocalization(finance), logoImage });
+  const pdf = createBusinessDocumentPdf({ kind: 'quote', record: normalize(record), company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage });
   const filename = `quote-${String(record.number || record.id).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || record.id}.pdf`;
   res.status(200)
     .set('Content-Type', 'application/pdf')
@@ -9975,6 +10336,7 @@ async function transitionQuote(req, status, stamp, note) {
   const allowed = { SENT: ['DRAFT'], ACCEPTED: ['SENT'], REJECTED: ['SENT'], EXPIRED: ['SENT'] };
   if (!allowed[status].includes(quote.status)) throw new AppError(409, 'Quote cannot transition from ' + quote.status + ' to ' + status);
   return prisma.$transaction(async (tx) => {
+    if (status === 'SENT') await lockDefaultDocumentTemplate(tx, req.companyId, 'QUOTE', 'quote', quote.id);
     await addQuoteStatusHistory(tx, req, quote, status, note);
     return tx.quote.update({ where: { id: quote.id }, data: { status, [stamp]: new Date() }, include: quoteInclude });
   });
@@ -10158,15 +10520,18 @@ router.get('/invoices/:id', validate(idParam, 'params'), asyncHandler(async (req
 
 router.get('/invoices/:id/pdf', validate(idParam, 'params'), asyncHandler(async (req, res) => {
   await requireInvoice(req, req.params.id);
-  const [record, company, finance] = await Promise.all([
+  const [record, company, finance, paymentLink] = await Promise.all([
     prisma.invoice.findFirst({ where: { id: req.params.id, companyId: req.companyId }, include: invoiceInclude }),
     getCompanyWithBranding(req.companyId),
-    getCompanyFinanceSettings(req.companyId)
+    getCompanyFinanceSettings(req.companyId),
+    prisma.paymentLink.findFirst({ where: { companyId: req.companyId, invoiceId: req.params.id, checkoutUrl: { not: null }, status: { in: ['CREATED', 'SENT', 'OPENED', 'PENDING'] } }, orderBy: { createdAt: 'desc' } })
   ]);
   if (!record || !company) throw notFound('Invoice not found');
+  const template = await documentTemplateForRecord(req.companyId, 'INVOICE', record);
   const branding = publicBranding(company);
   const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
-  const pdf = createBusinessDocumentPdf({ kind: 'invoice', record: normalize(record), company: normalize(company), branding, localization: financeLocalization(finance), logoImage });
+  const pdfRecord = normalize({ ...record, onlinePaymentUrl: paymentLink && paymentLink.checkoutUrl || null });
+  const pdf = createBusinessDocumentPdf({ kind: 'invoice', record: pdfRecord, company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage });
   const filename = `invoice-${String(record.number || record.id).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || record.id}.pdf`;
   res.status(200)
     .set('Content-Type', 'application/pdf')
@@ -10231,6 +10596,7 @@ async function transitionInvoice(req, status, stamp, note) {
   if (invoice.status === status) return prisma.invoice.findFirst({ where: { id: invoice.id, companyId: req.companyId }, include: invoiceInclude });
   if (invoice.status === 'VOID' || invoice.status === 'PAID') throw new AppError(409, 'Paid or void invoices cannot change status');
   return prisma.$transaction(async (tx) => {
+    if (status === 'SENT') await lockDefaultDocumentTemplate(tx, req.companyId, 'INVOICE', 'invoice', invoice.id);
     await addInvoiceStatusHistory(tx, req, invoice, status, note);
     return tx.invoice.update({ where: { id: invoice.id }, data: { status, [stamp]: new Date() }, include: invoiceInclude });
   });
