@@ -318,8 +318,9 @@ function logoDimensions(image, desired) {
   const maxWidth = desired * 1.7;
   const maxHeight = desired;
   const ratio = image && image.width && image.height ? image.width / image.height : 1;
-  if (ratio >= 1) return { width: maxWidth, height: Math.min(maxHeight, maxWidth / ratio) };
-  return { height: maxHeight, width: Math.min(maxWidth, maxHeight * ratio) };
+  const boxRatio = maxWidth / maxHeight;
+  if (ratio >= boxRatio) return { width: maxWidth, height: maxWidth / ratio };
+  return { width: maxHeight * ratio, height: maxHeight };
 }
 
 function companyDetails(company, brand, localization, template, companyName) {
@@ -346,15 +347,18 @@ function companyDetails(company, brand, localization, template, companyName) {
   return rows.filter(Boolean);
 }
 
-function drawLogoOrInitials({ x, y, size, companyName, primary, logoImage, showLogo }) {
+function drawLogoOrInitials({ x, y, size, companyName, primary, logoImage, showLogo, logoPosition }) {
   if (!showLogo) return '';
+  const boxWidth = size * 1.7;
   if (logoImage) {
     const dims = logoDimensions(logoImage, size);
-    return commandImage(x, y + (size - dims.height) / 2, dims.width, dims.height);
+    const imageX = logoPosition === 'RIGHT' ? x + boxWidth - dims.width : x;
+    return commandImage(imageX, y + (size - dims.height) / 2, dims.width, dims.height);
   }
   const square = size;
-  let output = commandRect(x, y, square, square, primary);
-  output += commandText(x + square * 0.18, y + square * 0.36, Math.max(9, square * 0.28), initials(companyName), true, { r: 1, g: 1, b: 1 });
+  const squareX = logoPosition === 'RIGHT' ? x + boxWidth - square : x;
+  let output = commandRect(squareX, y, square, square, primary);
+  output += commandText(squareX + square * 0.18, y + square * 0.36, Math.max(9, square * 0.28), initials(companyName), true, { r: 1, g: 1, b: 1 });
   return output;
 }
 
@@ -384,7 +388,7 @@ function buildHeader({ kind, record, company, branding, localization, template, 
       const logoX = template.logoPosition === 'RIGHT' ? RIGHT - logoSize * 1.7 : LEFT;
       const nameY = TOP - logoSize - 12;
       const detailStartY = nameY - 18;
-      output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 4, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo });
+      output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 4, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
       output += commandText(LEFT, nameY, 18, companyName, true);
       output += renderCompanyDetailLines(LEFT, detailStartY, details);
       const stackedMetaX = template.logoPosition === 'RIGHT' ? 315 : 390;
@@ -396,7 +400,7 @@ function buildHeader({ kind, record, company, branding, localization, template, 
       const logoX = template.logoPosition === 'RIGHT' ? RIGHT - logoSize * 1.7 : LEFT;
       const identityX = template.logoPosition === 'RIGHT' ? LEFT : LEFT + (template.showDocumentLogo ? logoSize * 1.7 + 12 : 0);
       const detailStartY = TOP - 21;
-      output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 4, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo });
+      output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 4, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
       output += commandText(identityX, TOP - 2, template.headerStyle === 'COMPACT' ? 16 : 19, companyName, true);
       output += renderCompanyDetailLines(identityX, detailStartY, details, template.headerStyle === 'COMPACT' ? 7.5 : 8);
       const metaX = template.logoPosition === 'RIGHT' ? 315 : 400;
@@ -412,7 +416,7 @@ function buildHeader({ kind, record, company, branding, localization, template, 
     const logoX = template.logoPosition === 'RIGHT' ? RIGHT - logoSize * 1.7 : LEFT;
     const identityX = template.logoPosition === 'RIGHT' ? LEFT : LEFT + (template.showDocumentLogo ? logoSize * 1.7 + 12 : 0);
     const detailStartY = TOP - 21;
-    output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 2, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo });
+    output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 2, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
     output += commandText(identityX, TOP - 1, 18, companyName, true, darken(primary));
     output += renderCompanyDetailLines(identityX, detailStartY, details);
     const classicMetaX = template.logoPosition === 'RIGHT' ? 315 : 405;
@@ -425,7 +429,7 @@ function buildHeader({ kind, record, company, branding, localization, template, 
     const logoX = template.logoPosition === 'RIGHT' ? RIGHT - logoSize * 1.7 : LEFT;
     const identityX = template.logoPosition === 'RIGHT' ? LEFT : LEFT + (template.showDocumentLogo ? logoSize * 1.7 + 12 : 0);
     const detailStartY = TOP - 21;
-    output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 2, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo });
+    output += drawLogoOrInitials({ x: logoX, y: TOP - logoSize + 2, size: logoSize, companyName, primary, logoImage, showLogo: template.showDocumentLogo, logoPosition: template.logoPosition });
     output += commandText(identityX, TOP - 1, 17, companyName, true);
     output += renderCompanyDetailLines(identityX, detailStartY, details, 7.5);
     const minimalMetaX = template.logoPosition === 'RIGHT' ? 320 : 410;

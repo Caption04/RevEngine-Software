@@ -7439,6 +7439,22 @@ body.modal-open { overflow: hidden; }
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 13px;
+  align-items: start;
+}
+.document-style-grid > .field {
+  align-self: start;
+  grid-template-rows: 18px 48px;
+  gap: 8px;
+}
+.document-style-grid > .field > label {
+  min-height: 18px;
+  align-items: center;
+}
+.document-style-grid > .field > input,
+.document-style-grid > .field > select {
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
 }
 .document-logo-toggle {
   grid-column: 1 / -1;
