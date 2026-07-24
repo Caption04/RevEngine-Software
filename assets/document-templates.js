@@ -446,7 +446,10 @@
     if (!importedContextbar) return;
     const match = selectedImportedText();
     const logoSelected = state.selectedImportedLogo && exactImportedCanvas() && exactImportedCanvas().logo;
-    importedContextbar.hidden = !match && !logoSelected;
+    const hasSelection = Boolean(match || logoSelected);
+    importedContextbar.hidden = !hasSelection;
+    if (!hasSelection) importedContextbar.removeAttribute('open');
+    else if (importedContextbar.matches('details')) importedContextbar.setAttribute('open', '');
     if (importedTextContextControls) importedTextContextControls.hidden = !match;
     if (importedLogoContextControls) importedLogoContextControls.hidden = !logoSelected;
     const title = importedContextbar.querySelector('[data-imported-context-title]');
@@ -1318,6 +1321,9 @@
     document.querySelectorAll('[data-imported-editor-menu][open]').forEach((menu) => {
       if (!openEditorMenu || menu !== openEditorMenu || event.target.closest('.imported-file-menu-item')) menu.removeAttribute('open');
     });
+    if (importedContextbar && importedContextbar.open && !event.target.closest('[data-imported-contextbar]')) {
+      importedContextbar.removeAttribute('open');
+    }
     const open = event.target.closest('[data-template-open]');
     const duplicate = event.target.closest('[data-template-duplicate]');
     const restore = event.target.closest('[data-template-restore]');

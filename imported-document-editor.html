@@ -38,6 +38,47 @@
 <span data-editor-type="">Invoice template</span>
 <span class="badge gray" data-editor-status="">Draft</span>
 </div>
+<details class="imported-editor-format-menu" data-imported-contextbar="" hidden="">
+<summary class="imported-ribbon-tab">Format</summary>
+<div class="imported-format-menu-panel">
+<div class="imported-format-menu-copy">
+<strong data-imported-context-title="">Selection</strong>
+<span data-imported-context-copy="">Choose how this part of the document should look.</span>
+</div>
+<div class="imported-context-controls" data-imported-text-context-controls="">
+<label>
+<span>Live data</span>
+<select data-imported-inline-binding=""></select>
+</label>
+<div class="imported-format-button-row">
+<button aria-label="Bold" class="icon-button" data-imported-inline-bold="" title="Bold" type="button"><strong>B</strong></button>
+<button aria-label="Align left" class="icon-button" data-imported-inline-align="LEFT" title="Align left" type="button">≡</button>
+<button aria-label="Align centre" class="icon-button" data-imported-inline-align="CENTER" title="Align centre" type="button">≣</button>
+<button aria-label="Align right" class="icon-button" data-imported-inline-align="RIGHT" title="Align right" type="button">≡</button>
+<label class="imported-context-colour" title="Text colour">
+<span>Colour</span>
+<input data-imported-inline-colour="" type="color"/>
+</label>
+</div>
+<div class="imported-format-menu-actions">
+<button class="secondary-button compact" data-imported-inline-insert-field="" type="button">Insert field</button>
+<button class="text-button" data-imported-inline-reset="" type="button">Reset</button>
+<button class="text-button danger-text" data-imported-inline-hide="" type="button">Hide</button>
+</div>
+</div>
+<div class="imported-context-controls" data-imported-logo-context-controls="" hidden="">
+<label>
+<span>Logo</span>
+<select data-imported-inline-logo-mode="">
+<option value="ORIGINAL">Keep original</option>
+<option value="COMPANY">Use company logo</option>
+<option value="HIDDEN">Hide logo</option>
+</select>
+</label>
+<button class="secondary-button compact" data-adjust-import-logo="" type="button">Adjust logo area</button>
+</div>
+</div>
+</details>
 <div aria-label="Editor mode" class="imported-editor-mode-switch imported-ribbon-mode" role="tablist">
 <button class="active" data-imported-editor-mode="EDIT" type="button">Edit</button>
 <button data-imported-editor-mode="PREVIEW" type="button">Preview</button>
@@ -63,40 +104,6 @@
 <div class="imported-editor-guidance" data-imported-editor-guidance="" hidden>
 <strong>Edit the document itself.</strong>
 <span>Click any text and type. The page structure stays locked so the design cannot be accidentally broken.</span>
-</div>
-<div class="imported-inline-contextbar" data-imported-contextbar="" hidden="">
-<div class="imported-context-copy">
-<strong data-imported-context-title="">Text selected</strong>
-<span data-imported-context-copy="">Type directly on the page or connect this text to live Rev Engine data.</span>
-</div>
-<div class="imported-context-controls" data-imported-text-context-controls="">
-<label>
-<span>Live data</span>
-<select data-imported-inline-binding=""></select>
-</label>
-<button aria-label="Bold" class="icon-button" data-imported-inline-bold="" title="Bold" type="button"><strong>B</strong></button>
-<button aria-label="Align left" class="icon-button" data-imported-inline-align="LEFT" title="Align left" type="button">≡</button>
-<button aria-label="Align centre" class="icon-button" data-imported-inline-align="CENTER" title="Align centre" type="button">≣</button>
-<button aria-label="Align right" class="icon-button" data-imported-inline-align="RIGHT" title="Align right" type="button">≡</button>
-<label class="imported-context-colour" title="Text colour">
-<span>Colour</span>
-<input data-imported-inline-colour="" type="color"/>
-</label>
-<button class="secondary-button compact" data-imported-inline-insert-field="" type="button">Insert field</button>
-<button class="text-button" data-imported-inline-reset="" type="button">Reset</button>
-<button class="text-button danger-text" data-imported-inline-hide="" type="button">Hide</button>
-</div>
-<div class="imported-context-controls" data-imported-logo-context-controls="" hidden="">
-<label>
-<span>Logo</span>
-<select data-imported-inline-logo-mode="">
-<option value="ORIGINAL">Keep original</option>
-<option value="COMPANY">Use company logo</option>
-<option value="HIDDEN">Hide logo</option>
-</select>
-</label>
-<button class="secondary-button compact" data-adjust-import-logo="" type="button">Adjust logo area</button>
-</div>
 </div>
 <div class="imported-document-stage" data-imported-document-stage="">
 <div class="imported-document-pages" data-imported-document-pages=""></div>
