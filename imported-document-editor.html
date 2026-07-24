@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rev Engine Imported Document Editor</title>
+    <link rel="stylesheet" href="assets/app.css">
+    <script defer src="assets/ui-feedback.js"></script>
+    <script defer src="assets/layout.js"></script>
+    <script defer src="assets/document-templates.js"></script>
+  </head>
+  <body data-page="document-templates" data-title="Document Editor" data-page-search="off" data-document-editor-route="true">
+    <section class="page document-studio-page document-editor-route-page">
+      <div data-template-library-view hidden>
+        <span data-template-status></span>
+        <section data-template-grid></section>
+      </div>
+      <section class="document-template-editor" data-template-editor="" hidden="">
+<div class="document-editor-heading">
+<button class="text-button document-editor-back" data-back-to-templates="" type="button">← Back to templates</button>
+<div class="document-editor-summary">
+<div>
+<p class="eyebrow" data-editor-type="">Invoice template</p>
+<h2 data-editor-title="">Template</h2>
+</div>
+<span class="badge gray" data-editor-status="">Draft</span>
+</div>
+<div class="document-editor-actions">
+<button class="secondary-button" data-save-template="" type="button">Save draft</button>
+<button class="primary-button" data-publish-template="" type="button">Publish as default</button>
+</div>
+</div>
+<div class="document-import-banner" data-import-banner="" hidden="">
+<div>
+<strong data-import-heading="">Your document was converted into editable sections.</strong>
+<span data-import-copy="">Preview the original beside the live PDF, then review each section before publishing.</span>
+</div>
+<div class="document-import-actions">
+<button class="secondary-button compact" data-view-import-source="" type="button">Preview original</button>
+<button class="secondary-button compact" data-reconvert-import-source="" type="button">Convert again</button>
+<button class="text-button danger-text" data-remove-import-source="" type="button">Remove original file</button>
+</div>
+</div>
+<section class="imported-inline-editor" data-imported-inline-editor="" hidden="">
+<div class="imported-editor-commandbar">
+<div aria-label="Imported document editor mode" class="imported-editor-mode-switch" role="tablist">
+<button class="active" data-imported-editor-mode="EDIT" type="button">Edit design</button>
+<button data-imported-editor-mode="PREVIEW" type="button">Preview with data</button>
+</div>
+<div class="imported-editor-command-actions">
+<div aria-label="Document zoom" class="imported-editor-zoom">
+<button aria-label="Zoom out" class="icon-button" data-imported-zoom="out" type="button">−</button>
+<button class="text-button imported-zoom-value" data-imported-zoom="fit" type="button">100%</button>
+<button aria-label="Zoom in" class="icon-button" data-imported-zoom="in" type="button">+</button>
+</div>
+<button class="secondary-button compact" data-view-import-source="" type="button">Original PDF</button>
+<details class="imported-editor-more">
+<summary aria-label="More template actions" class="secondary-button compact">More</summary>
+<div class="imported-editor-more-menu">
+<button class="text-button" data-reconvert-import-source="" type="button">Convert original again</button>
+<button class="text-button" data-duplicate-template="" type="button">Duplicate template</button>
+<button class="text-button" data-archive-template="" type="button">Archive template</button>
+<button class="text-button danger-text" data-remove-import-source="" type="button">Remove original file</button>
+<button class="text-button danger-text" data-delete-template="" type="button">Delete template</button>
+</div>
+</details>
+</div>
+</div>
+<div class="imported-editor-guidance" data-imported-editor-guidance="">
+<strong>Edit the document itself.</strong>
+<span>Click any text and type. The page structure stays locked so the design cannot be accidentally broken.</span>
+</div>
+<div class="imported-inline-contextbar" data-imported-contextbar="" hidden="">
+<div class="imported-context-copy">
+<strong data-imported-context-title="">Text selected</strong>
+<span data-imported-context-copy="">Type directly on the page or connect this text to live Rev Engine data.</span>
+</div>
+<div class="imported-context-controls" data-imported-text-context-controls="">
+<label>
+<span>Live data</span>
+<select data-imported-inline-binding=""></select>
+</label>
+<button aria-label="Bold" class="icon-button" data-imported-inline-bold="" title="Bold" type="button"><strong>B</strong></button>
+<button aria-label="Align left" class="icon-button" data-imported-inline-align="LEFT" title="Align left" type="button">≡</button>
+<button aria-label="Align centre" class="icon-button" data-imported-inline-align="CENTER" title="Align centre" type="button">≣</button>
+<button aria-label="Align right" class="icon-button" data-imported-inline-align="RIGHT" title="Align right" type="button">≡</button>
+<label class="imported-context-colour" title="Text colour">
+<span>Colour</span>
+<input data-imported-inline-colour="" type="color"/>
+</label>
+<button class="secondary-button compact" data-imported-inline-insert-field="" type="button">Insert field</button>
+<button class="text-button" data-imported-inline-reset="" type="button">Reset</button>
+<button class="text-button danger-text" data-imported-inline-hide="" type="button">Hide</button>
+</div>
+<div class="imported-context-controls" data-imported-logo-context-controls="" hidden="">
+<label>
+<span>Logo</span>
+<select data-imported-inline-logo-mode="">
+<option value="ORIGINAL">Keep original</option>
+<option value="COMPANY">Use company logo</option>
+<option value="HIDDEN">Hide logo</option>
+</select>
+</label>
+<button class="secondary-button compact" data-adjust-import-logo="" type="button">Adjust logo area</button>
+</div>
+</div>
+<div class="imported-document-stage" data-imported-document-stage="">
+<div class="imported-document-pages" data-imported-document-pages=""></div>
+</div>
+<section class="card imported-data-preview" data-imported-data-preview="" hidden="">
+<div class="document-preview-heading">
+<div><strong>Preview with sample data</strong><span>This is the PDF customers will receive.</span></div>
+<span data-imported-preview-status="">Waiting for preview…</span>
+</div>
+<iframe data-imported-preview-frame="" title="Imported template data preview"></iframe>
+</section>
+</section>
+<div class="document-studio-workspace" data-structured-workspace="">
+<aside class="document-designer-panel">
+<section class="card document-control-card">
+<div class="document-control-heading">
+<div><strong>Template details</strong><span>Name this template so your team can recognise it.</span></div>
+</div>
+<div class="field">
+<label for="documentTemplateName">Template name</label>
+<input data-template-name="" id="documentTemplateName" maxlength="120"/>
+</div>
+</section>
+<section class="card document-control-card imported-document-canvas-card" data-imported-canvas-controls="" hidden="">
+<div class="document-control-heading">
+<div><strong>Imported document canvas</strong><span>The uploaded PDF remains the design. Edit only the text or logo that needs to change.</span></div>
+</div>
+<div class="imported-canvas-notice" data-imported-canvas-notice=""></div>
+<div class="document-modal-grid imported-logo-controls">
+<div class="field">
+<label for="importedLogoMode">Logo shown on the document</label>
+<select data-import-logo-mode="" id="importedLogoMode">
+<option value="ORIGINAL">Keep the original PDF logo</option>
+<option value="COMPANY">Replace it with the company logo</option>
+<option value="HIDDEN">Hide the logo</option>
+</select>
+</div>
+<div class="field imported-logo-adjust-field">
+<label>Original logo area</label>
+<button class="secondary-button" data-adjust-import-logo="" type="button">Adjust logo area</button>
+</div>
+</div>
+<div class="imported-text-toolbar">
+<div class="field">
+<label for="importedTextSearch">Find text</label>
+<input data-imported-text-search="" id="importedTextSearch" placeholder="Search the imported document" type="search"/>
+</div>
+<div class="field">
+<label for="importedPageFilter">Page</label>
+<select data-imported-page-filter="" id="importedPageFilter"></select>
+</div>
+</div>
+<div class="imported-text-summary" data-imported-text-summary=""></div>
+<div class="imported-text-list" data-imported-text-list=""></div>
+</section>
+<section class="card document-control-card" data-structured-design-controls="">
+<div class="document-control-heading">
+<div><strong>Page and brand style</strong><span>Set the basic look used across every page.</span></div>
+</div>
+<div class="document-style-grid">
+<div class="field"><label for="documentPrimaryColor">Main colour</label><input data-design-path="theme.primaryColor" id="documentPrimaryColor" type="color"/></div>
+<div class="field"><label for="documentAccentColor">Accent colour</label><input data-design-path="theme.accentColor" id="documentAccentColor" type="color"/></div>
+<div class="field"><label for="documentTextColor">Text colour</label><input data-design-path="theme.textColor" id="documentTextColor" type="color"/></div>
+<div class="field"><label for="documentTableColor">Table heading</label><input data-design-path="theme.tableHeaderColor" id="documentTableColor" type="color"/></div>
+<div class="field"><label for="documentHeaderLayout">Header layout</label><select data-design-path="header.layout" data-header-dependent="" id="documentHeaderLayout"><option value="SPLIT">Split</option><option value="STACKED">Stacked</option><option value="COMPACT">Compact</option></select></div>
+<div class="field"><label for="documentLogoPosition">Logo position</label><select data-design-path="header.logoPosition" data-header-dependent="" id="documentLogoPosition"><option value="LEFT">Left</option><option value="RIGHT">Right</option></select></div>
+<div class="field"><label for="documentLogoSize">Logo size</label><select data-design-path="header.logoSize" data-header-dependent="" id="documentLogoSize"><option value="SMALL">Small</option><option value="MEDIUM">Medium</option><option value="LARGE">Large</option></select></div>
+<div class="field"><label for="documentBodySize">Text size</label><select data-design-path="typography.bodySize" id="documentBodySize"><option value="8">Small</option><option value="9">Normal</option><option value="10">Large</option><option value="11">Extra large</option></select></div>
+<div class="field"><label for="documentPageMargin">Page margin</label><select data-design-path="page.margin" id="documentPageMargin"><option value="30">Narrow</option><option value="42">Normal</option><option value="56">Wide</option></select></div>
+<label class="document-logo-toggle"><input data-design-path="header.visible" type="checkbox"/><span><strong>Show document header</strong><small>Displays company identity and the document number.</small></span></label>
+<label class="document-logo-toggle"><input data-design-path="header.showLogo" data-header-dependent="" type="checkbox"/><span><strong>Show company logo</strong><small>Uses the logo saved in Company Details.</small></span></label>
+<label class="document-logo-toggle"><input data-design-path="page.showPageNumbers" type="checkbox"/><span><strong>Show page numbers</strong><small>Adds a page count in the footer.</small></span></label>
+<div class="document-detail-options" data-header-dependent-group="">
+<label><input data-design-path="header.showLegalName" data-header-dependent="" type="checkbox"/><span>Legal company name</span></label>
+<label><input data-design-path="header.showRegistrationNumber" data-header-dependent="" type="checkbox"/><span>Registration number</span></label>
+<label><input data-design-path="header.showTaxNumber" data-header-dependent="" type="checkbox"/><span>Tax or VAT number</span></label>
+<label><input data-design-path="header.showAddress" data-header-dependent="" type="checkbox"/><span>Company address</span></label>
+<label><input data-design-path="header.showEmail" data-header-dependent="" type="checkbox"/><span>Company email</span></label>
+<label><input data-design-path="header.showPhone" data-header-dependent="" type="checkbox"/><span>Company phone</span></label>
+<label><input data-design-path="header.showWebsite" data-header-dependent="" type="checkbox"/><span>Company website</span></label>
+</div>
+</div>
+</section>
+<section class="card document-control-card" data-structured-design-controls="">
+<div class="document-control-heading split-heading">
+<div><strong>Document sections</strong><span>Show, hide, edit, and arrange the parts of this document.</span></div>
+<button class="secondary-button compact" data-add-block="" type="button">+ Add section</button>
+</div>
+<div class="document-block-list" data-block-list=""></div>
+</section>
+<section class="document-template-management" data-template-management="">
+<div>
+<strong>Template management</strong>
+<span data-template-management-copy="">Keep active templates tidy without changing documents already issued.</span>
+</div>
+<div class="document-template-management-actions" data-template-management-actions="">
+<button class="secondary-button compact" data-duplicate-template="" type="button">Duplicate</button>
+<button class="text-button" data-archive-template="" type="button">Archive</button>
+<button class="text-button danger-text" data-delete-template="" type="button">Delete</button>
+</div>
+</section>
+</aside>
+<section class="card document-preview-panel">
+<div class="document-preview-heading">
+<div><strong>Live PDF preview</strong><span>Uses sample customer data. The same renderer creates real documents.</span></div>
+<span data-preview-status="">Waiting for changes…</span>
+</div>
+<iframe data-template-preview-frame="" title="Document template preview"></iframe>
+</section>
+</div>
+</section>
+    </section>
+    <div class="modal-backdrop" data-template-modal="" hidden="">
+<section aria-labelledby="documentTemplateModalTitle" aria-modal="true" class="modal-card document-template-modal-card" role="dialog">
+<div class="modal-header">
+<div><h3 data-template-modal-title="" id="documentTemplateModalTitle">New template</h3><p data-template-modal-copy=""></p></div>
+<button aria-label="Close" class="icon-button" data-close-template-modal="" type="button">×</button>
+</div>
+<form data-template-modal-form=""></form>
+</section>
+</div>
+  </body>
+</html>

@@ -2,6 +2,11 @@
   if (document.body.dataset.page !== 'document-templates') return;
 
   const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:3000/api' : '/api';
+  const routeParams = new URLSearchParams(window.location.search);
+  const editorRoute = document.body.dataset.documentEditorRoute === 'true';
+  const routeTemplateId = String(routeParams.get('template') || '').trim();
+  const requestedFilter = String(routeParams.get('type') || '').toUpperCase();
+  const initialFilter = ['INVOICE', 'QUOTE', 'CONTRACT'].includes(requestedFilter) ? requestedFilter : 'INVOICE';
   const state = {
     templates: [],
     blockTypes: [],
@@ -24,6 +29,8 @@
     selectedImportedLogo: false,
     importedCaretOffset: null
   };
+
+  state.filter = initialFilter;
 
   const BLOCK_LABELS = {
     CUSTOMER_DETAILS: 'Customer details',
@@ -229,7 +236,24 @@
     document.dispatchEvent(new Event('revengine:section-search-refresh'));
   }
 
+  function templateLibraryUrl(documentType) {
+    const type = String(documentType || state.filter || 'INVOICE').toUpperCase();
+    return `document-templates.html?type=${encodeURIComponent(type)}`;
+  }
+
+  function importedEditorUrl(template) {
+    return `imported-document-editor.html?template=${encodeURIComponent(template.id)}&type=${encodeURIComponent(template.documentType || state.filter || 'INVOICE')}`;
+  }
+
+  function returnToTemplateLibrary() {
+    window.location.href = templateLibraryUrl(state.selected && state.selected.documentType);
+  }
+
   function showLibrary() {
+    if (editorRoute) {
+      returnToTemplateLibrary();
+      return;
+    }
     state.selected = null;
     state.design = null;
     state.selectedImportedElementId = null;
@@ -389,8 +413,9 @@
     const canvas = exactImportedCanvas();
     if (!canvas || !importedDocumentStage || !canvas.pages.length) return;
     const widest = Math.max(...canvas.pages.map((page) => Number(page.width || 595)));
-    const available = Math.max(320, importedDocumentStage.clientWidth - 72);
-    state.importedZoom = Math.max(0.55, Math.min(1.35, available / widest));
+    const available = Math.max(320, importedDocumentStage.clientWidth - (editorRoute ? 40 : 72));
+    const maximumZoom = editorRoute ? 1.75 : 1.35;
+    state.importedZoom = Math.max(0.55, Math.min(maximumZoom, available / widest));
     renderImportedInlineEditor({ preserveScroll: true });
   }
 
@@ -768,9 +793,18 @@
     document.querySelector('[data-editor-title]').textContent = template.name;
     document.querySelector('[data-editor-status]').textContent = template.isDefault ? 'Published default' : template.isSystem ? 'System template' : label(template.status);
     document.querySelector('[data-editor-status]').className = `badge ${templateTone(template)}`;
+    if (editorRoute) {
+      const backButton = document.querySelector('[data-back-to-templates]');
+      if (backButton) backButton.textContent = '← Templates';
+      document.title = `${template.name} · Rev Engine Document Editor`;
+    }
 
     const canvas = exactImportedCanvas();
     const exactImport = Boolean(canvas);
+    if (editorRoute && !exactImport) {
+      window.location.replace(templateLibraryUrl(template.documentType));
+      return;
+    }
     state.importedTextSearch = '';
     state.importedPage = 'ALL';
     state.importedMode = 'EDIT';
@@ -831,7 +865,13 @@
     renderLibrary();
     if (selectId) {
       const selected = state.templates.find((template) => template.id === selectId);
-      if (selected) openEditor(selected);
+      if (selected && selected.design && selected.design.importedCanvas && !editorRoute) {
+        window.location.href = importedEditorUrl(selected);
+      } else if (selected) {
+        openEditor(selected);
+      } else if (editorRoute) {
+        window.location.replace(templateLibraryUrl(state.filter));
+      }
     }
   }
 
@@ -1306,7 +1346,11 @@
       if (state.importedMode === 'EDIT' && event.target.closest('[data-imported-document-stage]') && !event.target.closest('[data-imported-contextbar]')) clearImportedSelection();
       if (open) {
         const template = state.templates.find((item) => item.id === open.dataset.templateOpen);
-        if (template) openEditor(template);
+        if (template && template.design && template.design.importedCanvas && !editorRoute) {
+          window.location.href = importedEditorUrl(template);
+        } else if (template) {
+          openEditor(template);
+        }
         return;
       }
       if (duplicate) { await duplicateTemplate(duplicate.dataset.templateDuplicate); return; }
@@ -1320,7 +1364,7 @@
       if (event.target.closest('[data-import-template]')) { importTemplateModal(); return; }
       if (event.target.closest('[data-create-blank]')) { createTemplateModal(true); return; }
       if (event.target.closest('[data-create-starter]')) { createTemplateModal(false); return; }
-      if (event.target.closest('[data-back-to-templates]')) { showLibrary(); return; }
+      if (event.target.closest('[data-back-to-templates]')) { editorRoute ? returnToTemplateLibrary() : showLibrary(); return; }
       if (event.target.closest('[data-add-block]')) { addBlockModal(); return; }
       if (event.target.closest('[data-save-template]')) { await saveTemplate(); return; }
       if (event.target.closest('[data-publish-template]')) { await publishTemplate(); return; }
@@ -1480,7 +1524,16 @@
     if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
   });
 
-  loadTemplates().catch((error) => {
+  document.querySelectorAll('[data-document-filter]').forEach((button) => {
+    button.classList.toggle('active', button.dataset.documentFilter === state.filter);
+  });
+
+  if (editorRoute && !routeTemplateId) {
+    window.location.replace(templateLibraryUrl(state.filter));
+    return;
+  }
+
+  loadTemplates(editorRoute ? routeTemplateId : null).catch((error) => {
     statusNode.textContent = 'Templates could not be loaded';
     grid.innerHTML = '<div class="empty-state"><div><strong>Document Studio is unavailable</strong><span>Refresh the page or check your connection.</span></div></div>';
     notify(error.message || 'Document templates could not be loaded.', false);
