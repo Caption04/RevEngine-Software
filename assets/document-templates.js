@@ -14,7 +14,9 @@
     previewRequest: 0,
     previewController: null,
     modalPreviewUrl: null,
-    saving: false
+    saving: false,
+    importedTextSearch: '',
+    importedPage: 'ALL'
   };
 
   const BLOCK_LABELS = {
@@ -31,6 +33,33 @@
     CONTRACT_BODY: 'Contract body'
   };
   const CORE_BLOCKS = new Set(['CUSTOMER_DETAILS', 'DOCUMENT_DETAILS', 'LINE_ITEMS', 'CONTRACT_BODY']);
+  const IMPORTED_BINDING_GROUPS = [
+    ['Typed text', [['STATIC', 'Use the text entered here']]],
+    ['Company', [
+      ['COMPANY_NAME', 'Trading name'], ['COMPANY_LEGAL_NAME', 'Legal company name'], ['COMPANY_ADDRESS', 'Company address'],
+      ['COMPANY_EMAIL', 'Company email'], ['COMPANY_PHONE', 'Company phone'], ['COMPANY_WEBSITE', 'Company website'],
+      ['COMPANY_REGISTRATION', 'Registration number'], ['COMPANY_TAX', 'Tax or VAT number']
+    ]],
+    ['Customer', [
+      ['CUSTOMER_NAME', 'Customer name'], ['CUSTOMER_CONTACT', 'Customer contact'], ['CUSTOMER_EMAIL', 'Customer email'],
+      ['CUSTOMER_PHONE', 'Customer phone'], ['CUSTOMER_ADDRESS', 'Customer address']
+    ]],
+    ['Document', [
+      ['DOCUMENT_TITLE', 'Document title'], ['DOCUMENT_NUMBER', 'Document number'], ['DOCUMENT_STATUS', 'Status'],
+      ['DOCUMENT_ISSUE_DATE', 'Issue date'], ['DOCUMENT_DUE_DATE', 'Due or valid-until date'], ['DOCUMENT_PO', 'Customer purchase order']
+    ]],
+    ['Totals', [
+      ['TOTAL_SUBTOTAL', 'Subtotal'], ['TOTAL_DISCOUNT', 'Discount'], ['TOTAL_TAX', 'Tax'], ['TOTAL_TOTAL', 'Total'],
+      ['PAYMENT_REFERENCE', 'Payment reference']
+    ]],
+    ['Line items', Array.from({ length: 8 }, (_, index) => [
+      [`ITEM_${index + 1}_DESCRIPTION`, `Item ${index + 1} description`],
+      [`ITEM_${index + 1}_QTY`, `Item ${index + 1} quantity`],
+      [`ITEM_${index + 1}_UNIT`, `Item ${index + 1} unit price`],
+      [`ITEM_${index + 1}_TOTAL`, `Item ${index + 1} total`]
+    ]).flat()]
+  ];
+  const IMPORTED_BINDING_LABELS = Object.fromEntries(IMPORTED_BINDING_GROUPS.flatMap((group) => group[1]));
 
   const libraryNodes = Array.from(document.querySelectorAll('[data-template-library-view]'));
   const editor = document.querySelector('[data-template-editor]');
@@ -43,6 +72,12 @@
   const modalForm = document.querySelector('[data-template-modal-form]');
   const modalTitle = document.querySelector('[data-template-modal-title]');
   const modalCopy = document.querySelector('[data-template-modal-copy]');
+  const importedCanvasControls = document.querySelector('[data-imported-canvas-controls]');
+  const importedTextList = document.querySelector('[data-imported-text-list]');
+  const importedTextSummary = document.querySelector('[data-imported-text-summary]');
+  const importedPageFilter = document.querySelector('[data-imported-page-filter]');
+  const importedTextSearch = document.querySelector('[data-imported-text-search]');
+  const importedLogoMode = document.querySelector('[data-import-logo-mode]');
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
@@ -150,7 +185,7 @@
     }
     grid.innerHTML = visible.map((template) => {
       const sourceFormat = template.design && template.design.importAnalysis && template.design.importAnalysis.sourceFormat;
-      const source = template.isSystem ? 'System template' : template.sourceType === 'IMPORTED' && template.hasImportSource ? `Converted ${sourceFormat || 'document'}` : template.sourceType === 'BLANK' ? 'Built from scratch' : 'Ready-made template';
+      const source = template.isSystem ? 'System template' : template.design && template.design.importedCanvas ? 'Imported PDF layout' : template.sourceType === 'IMPORTED' && template.hasImportSource ? `Imported ${sourceFormat || 'document'}` : template.sourceType === 'BLANK' ? 'Built from scratch' : 'Ready-made template';
       const version = template.currentVersion ? `Version ${template.currentVersion}` : 'Not published yet';
       const variant = templateVariant(template);
       const activeActions = `<button class="secondary-button compact" type="button" data-template-open="${escapeHtml(template.id)}">Edit template</button><button class="text-button" type="button" data-template-duplicate="${escapeHtml(template.id)}">Duplicate</button>`;
@@ -226,6 +261,178 @@
     }).join('');
   }
 
+  function exactImportedCanvas() {
+    const canvas = state.design && state.design.importedCanvas;
+    return canvas && canvas.mode === 'EXACT_PDF' && Array.isArray(canvas.pages) ? canvas : null;
+  }
+
+  function importedTextElements() {
+    const canvas = exactImportedCanvas();
+    if (!canvas) return [];
+    return canvas.pages.flatMap((page) => (page.textElements || []).map((element) => ({ page, element })));
+  }
+
+  function importedBindingOptions(selected, includeStatic = true) {
+    return IMPORTED_BINDING_GROUPS.map(([group, options]) => {
+      const visible = includeStatic ? options : options.filter(([value]) => value !== 'STATIC');
+      if (!visible.length) return '';
+      return `<optgroup label="${escapeHtml(group)}">${visible.map(([value, text]) => `<option value="${escapeHtml(value)}"${value === selected ? ' selected' : ''}>${escapeHtml(text)}</option>`).join('')}</optgroup>`;
+    }).join('');
+  }
+
+  function importedMergeToken(binding) {
+    return `{{${String(binding || '').toUpperCase()}}}`;
+  }
+
+  function renderImportedCanvasControls() {
+    const canvas = exactImportedCanvas();
+    if (!canvas) return;
+    const pages = canvas.pages || [];
+    const logo = canvas.logo;
+    const notice = document.querySelector('[data-imported-canvas-notice]');
+    if (notice) notice.innerHTML = canvas.textEditable === false
+      ? '<strong>Visual layout preserved, but the text is not editable.</strong><span>This appears to be a scan. Use a searchable PDF or DOCX for an editable import.</span>'
+      : '<strong>The original PDF is the template.</strong><span>Its pages, colours, spacing, text, and logo stay untouched until you deliberately edit or map something.</span>';
+    if (importedLogoMode) {
+      importedLogoMode.value = logo && logo.mode || 'ORIGINAL';
+      importedLogoMode.disabled = !logo;
+    }
+    const adjustLogo = document.querySelector('[data-adjust-import-logo]');
+    if (adjustLogo) {
+      adjustLogo.disabled = !pages.length;
+      adjustLogo.textContent = logo ? 'Adjust logo area' : 'Mark logo area';
+    }
+    if (importedPageFilter) {
+      const previous = state.importedPage;
+      importedPageFilter.innerHTML = `<option value="ALL">All pages</option>${pages.map((page) => `<option value="${page.pageNumber}">Page ${page.pageNumber}</option>`).join('')}`;
+      importedPageFilter.value = pages.some((page) => String(page.pageNumber) === String(previous)) ? String(previous) : 'ALL';
+      state.importedPage = importedPageFilter.value;
+    }
+    if (importedTextSearch) importedTextSearch.value = state.importedTextSearch;
+    const query = state.importedTextSearch.trim().toLowerCase();
+    const all = importedTextElements();
+    const filtered = all.filter(({ page, element }) => {
+      if (state.importedPage !== 'ALL' && String(page.pageNumber) !== String(state.importedPage)) return false;
+      const haystack = `${element.originalText || ''} ${element.text || ''} ${IMPORTED_BINDING_LABELS[element.binding] || ''}`.toLowerCase();
+      return !query || haystack.includes(query);
+    });
+    if (importedTextSummary) importedTextSummary.textContent = canvas.textEditable === false
+      ? `${pages.length} ${pages.length === 1 ? 'page' : 'pages'} preserved · no searchable text layer`
+      : `${all.length} editable text ${all.length === 1 ? 'line' : 'lines'} · showing ${filtered.length}`;
+    if (!importedTextList) return;
+    if (!filtered.length) {
+      importedTextList.innerHTML = `<div class="empty-state compact-empty"><div><strong>${canvas.textEditable === false ? 'No editable text found' : 'No matching text'}</strong><span>${canvas.textEditable === false ? 'The original pages still remain visible in the PDF preview.' : 'Try another search or page.'}</span></div></div>`;
+      return;
+    }
+    importedTextList.innerHTML = filtered.slice(0, 140).map(({ page, element }) => {
+      const binding = String(element.binding || 'STATIC').toUpperCase();
+      const current = binding === 'STATIC' ? (element.text == null ? element.originalText : element.text) : IMPORTED_BINDING_LABELS[binding] || label(binding);
+      const changed = binding !== 'STATIC' || String(element.text || '') !== String(element.originalText || '') || element.hidden;
+      const suggestion = binding === 'STATIC' && element.suggestedBinding && element.suggestedBinding !== 'STATIC'
+        ? `<span class="imported-text-suggestion">Possible field: ${escapeHtml(IMPORTED_BINDING_LABELS[element.suggestedBinding] || label(element.suggestedBinding))}</span>`
+        : '';
+      return `<article class="imported-text-row${changed ? ' is-edited' : ''}${element.hidden ? ' is-hidden' : ''}">
+        <span class="imported-text-page">Page ${page.pageNumber}</span>
+        <div class="imported-text-copy"><strong>${escapeHtml(current || '(blank)')}</strong><span>${binding === 'STATIC' ? 'Editable text' : `Uses ${escapeHtml(IMPORTED_BINDING_LABELS[binding] || label(binding))}`}</span>${suggestion}</div>
+        <button class="secondary-button compact" type="button" data-edit-imported-text="${escapeHtml(element.id)}">Edit</button>
+      </article>`;
+    }).join('') + (filtered.length > 140 ? '<p class="imported-text-limit">Refine the search to see the remaining text.</p>' : '');
+  }
+
+  function findImportedTextElement(id) {
+    const match = importedTextElements().find(({ element }) => element.id === id);
+    return match || null;
+  }
+
+  function editImportedText(id) {
+    const match = findImportedTextElement(id);
+    if (!match) return;
+    const element = match.element;
+    const currentBinding = String(element.binding || 'STATIC').toUpperCase();
+    const suggested = element.suggestedBinding && element.suggestedBinding !== 'STATIC'
+      ? `Rev Engine noticed this may be ${IMPORTED_BINDING_LABELS[element.suggestedBinding] || label(element.suggestedBinding)}, but it will not map it unless you choose that field.`
+      : 'Keep the wording fixed, map the whole line to live data, or insert live fields inside your own wording.';
+    openModal({
+      title: `Edit text on page ${match.page.pageNumber}`,
+      copy: suggested,
+      submitLabel: 'Apply change',
+      wide: true,
+      body: `<div class="field"><label for="importedTextValue">Text</label><textarea id="importedTextValue" name="text" rows="4">${escapeHtml(element.text == null ? element.originalText : element.text)}</textarea><small class="field-help">Original: ${escapeHtml(element.originalText || '(blank)')}</small></div>
+        <div class="imported-merge-field-row"><div class="field"><label for="importedMergeField">Insert a live field into the text</label><select id="importedMergeField" name="mergeField"><option value="">Choose a field</option>${importedBindingOptions('', false)}</select></div><button class="secondary-button" type="button" data-insert-imported-field>Insert field</button></div>
+        <div class="document-modal-grid">
+          <div class="field"><label for="importedTextBinding">Use live data</label><select id="importedTextBinding" name="binding">${importedBindingOptions(currentBinding)}</select></div>
+          <div class="field"><label for="importedTextAlign">Alignment</label><select id="importedTextAlign" name="align"><option value="LEFT"${element.align === 'LEFT' ? ' selected' : ''}>Left</option><option value="CENTER"${element.align === 'CENTER' ? ' selected' : ''}>Centre</option><option value="RIGHT"${element.align === 'RIGHT' ? ' selected' : ''}>Right</option></select></div>
+          <div class="field"><label for="importedTextSize">Text size</label><input id="importedTextSize" name="fontSize" type="number" min="4" max="42" step="0.5" value="${escapeHtml(element.fontSize || 9)}"></div>
+          <div class="field"><label for="importedTextColor">Text colour</label><input id="importedTextColor" name="textColor" type="color" value="${escapeHtml(element.textColor || '#111827')}"></div>
+        </div>
+        <div class="document-detail-options imported-text-options"><label><input type="checkbox" name="bold"${element.bold ? ' checked' : ''}><span>Bold</span></label><label><input type="checkbox" name="hidden"${element.hidden ? ' checked' : ''}><span>Hide this text</span></label></div>`,
+      onSubmit: async (data) => {
+        element.text = String(data.get('text') || '');
+        element.binding = String(data.get('binding') || 'STATIC');
+        element.align = String(data.get('align') || 'LEFT');
+        element.fontSize = Math.max(4, Math.min(42, Number(data.get('fontSize')) || 9));
+        element.textColor = String(data.get('textColor') || '#111827');
+        element.bold = data.get('bold') === 'on';
+        element.hidden = data.get('hidden') === 'on';
+        renderImportedCanvasControls();
+        schedulePreview(80);
+      },
+      afterOpen: (form) => {
+        const binding = form.querySelector('[name="binding"]');
+        const text = form.querySelector('[name="text"]');
+        const insertField = form.querySelector('[name="mergeField"]');
+        const insertButton = form.querySelector('[data-insert-imported-field]');
+        const sync = () => { text.disabled = binding.value !== 'STATIC'; };
+        binding.addEventListener('change', sync);
+        if (insertButton) insertButton.addEventListener('click', () => {
+          if (!insertField.value) return;
+          binding.value = 'STATIC';
+          sync();
+          const token = importedMergeToken(insertField.value);
+          const start = Number.isFinite(text.selectionStart) ? text.selectionStart : text.value.length;
+          const end = Number.isFinite(text.selectionEnd) ? text.selectionEnd : start;
+          text.value = `${text.value.slice(0, start)}${token}${text.value.slice(end)}`;
+          text.focus();
+          text.setSelectionRange(start + token.length, start + token.length);
+          insertField.value = '';
+        });
+        sync();
+      }
+    });
+  }
+
+  function adjustImportedLogo() {
+    const canvas = exactImportedCanvas();
+    if (!canvas || !canvas.pages.length) return;
+    const page = canvas.pages[0];
+    const logo = canvas.logo || { page: 1, x: 24, y: 24, width: Math.min(180, page.width / 3), height: 80, mode: 'ORIGINAL', backgroundColor: '#FFFFFF' };
+    openModal({
+      title: canvas.logo ? 'Adjust original logo area' : 'Mark the original logo area',
+      copy: 'These measurements identify the logo on the imported first page. The original remains unchanged until you replace or hide it.',
+      submitLabel: 'Save logo area',
+      body: `<div class="document-modal-grid">
+        ${modalField('x', 'Left position', `<input id="templateModal-x" name="x" type="number" min="0" max="${page.width}" step="1" value="${logo.x}">`)}
+        ${modalField('y', 'Top position', `<input id="templateModal-y" name="y" type="number" min="0" max="${page.height}" step="1" value="${logo.y}">`)}
+        ${modalField('width', 'Width', `<input id="templateModal-width" name="width" type="number" min="8" max="${page.width}" step="1" value="${logo.width}">`)}
+        ${modalField('height', 'Height', `<input id="templateModal-height" name="height" type="number" min="8" max="${page.height}" step="1" value="${logo.height}">`)}
+        ${modalField('backgroundColor', 'Background colour', `<input id="templateModal-backgroundColor" name="backgroundColor" type="color" value="${logo.backgroundColor || '#FFFFFF'}">`)}
+      </div>`,
+      onSubmit: async (data) => {
+        canvas.logo = {
+          page: 1,
+          x: Math.max(0, Number(data.get('x')) || 0),
+          y: Math.max(0, Number(data.get('y')) || 0),
+          width: Math.max(8, Number(data.get('width')) || 80),
+          height: Math.max(8, Number(data.get('height')) || 40),
+          mode: importedLogoMode && importedLogoMode.value || logo.mode || 'ORIGINAL',
+          backgroundColor: String(data.get('backgroundColor') || '#FFFFFF')
+        };
+        renderImportedCanvasControls();
+        schedulePreview(80);
+      }
+    });
+  }
+
   function openEditor(template) {
     state.selected = deepClone(template);
     state.design = deepClone(template.design || {});
@@ -237,6 +444,12 @@
     document.querySelector('[data-editor-status]').textContent = template.isDefault ? 'Published default' : template.isSystem ? 'System template' : label(template.status);
     document.querySelector('[data-editor-status]').className = `badge ${templateTone(template)}`;
 
+    const canvas = exactImportedCanvas();
+    const exactImport = Boolean(canvas);
+    state.importedTextSearch = '';
+    state.importedPage = 'ALL';
+    document.querySelectorAll('[data-structured-design-controls]').forEach((node) => { node.hidden = exactImport; });
+    if (importedCanvasControls) importedCanvasControls.hidden = !exactImport;
     const importBanner = document.querySelector('[data-import-banner]');
     importBanner.hidden = !template.hasImportSource;
     const viewImport = document.querySelector('[data-view-import-source]');
@@ -244,12 +457,14 @@
     const importHeading = document.querySelector('[data-import-heading]');
     const importCopy = document.querySelector('[data-import-copy]');
     const analysis = template.design && template.design.importAnalysis || {};
-    if (importHeading) importHeading.textContent = template.importStatus === 'NEEDS_REVIEW'
-      ? 'This file needs manual rebuilding.'
-      : 'Your document was converted into editable sections.';
+    if (importHeading) importHeading.textContent = exactImport
+      ? 'Original PDF layout preserved'
+      : template.importStatus === 'NEEDS_REVIEW' ? 'This file needs manual rebuilding.' : 'Imported content is ready to review.';
     if (importCopy) {
       const warning = Array.isArray(analysis.warnings) && analysis.warnings[0];
-      importCopy.textContent = warning || 'Preview the original beside the live PDF, then review each editable section before publishing.';
+      importCopy.textContent = exactImport
+        ? 'Rev Engine has not added its own header, logo, or sections. Edit the imported text and replace the original logo only when needed.'
+        : warning || 'Preview the original beside the live PDF, then review the editable content before publishing.';
     }
 
     const management = document.querySelector('[data-template-management]');
@@ -262,7 +477,8 @@
       : 'Archive it temporarily or delete it from your library. Issued documents keep their saved version.';
 
     syncControlValues();
-    renderBlocks();
+    if (exactImport) renderImportedCanvasControls();
+    else renderBlocks();
     schedulePreview(80);
     document.querySelector('[data-template-name]').focus({ preventScroll: true });
   }
@@ -344,8 +560,8 @@
   function importTemplateModal() {
     openModal({
       title: 'Import an existing document',
-      copy: 'Rev Engine converts readable content into editable sections and keeps the original available for comparison.',
-      submitLabel: 'Convert document',
+      copy: 'A searchable PDF keeps its original pages, logo, colours, spacing, and text. You can then edit the text or map it to live customer and document data.',
+      submitLabel: 'Import document',
       wide: true,
       body: `<div class="document-import-recommendation"><strong>Best results: searchable PDF or DOCX</strong><span>Images and scanned documents are not recommended. They do not have a reliable editable text layer and may need to be rebuilt manually.</span></div><div class="document-modal-grid">${modalField('name', 'Template name', '<input id="templateModal-name" name="name" minlength="2" maxlength="120" required placeholder="Example: Existing company invoice">')}${modalField('documentType', 'Document type', '<select id="templateModal-documentType" name="documentType" required><option value="INVOICE">Invoice</option><option value="QUOTE">Quote</option><option value="CONTRACT">Contract</option></select>')}</div>${modalField('file', 'Document file', '<input id="templateModal-file" name="file" type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp" required>', 'Maximum 12 MB. Choose a searchable PDF or DOCX whenever possible.')}<div class="document-import-file-warning" data-import-file-warning hidden></div><section class="document-upload-preview" data-upload-preview><div class="document-upload-preview-empty"><strong>Document preview</strong><span>Select a file to check it before conversion.</span></div></section>`,
       afterOpen: (form) => {
@@ -381,7 +597,7 @@
         const created = await api('/document-templates/import', { method: 'POST', body: data });
         state.showArchived = false;
         await loadTemplates(created.id);
-        notify(created.importStatus === 'NEEDS_REVIEW' ? 'File added. It needs manual rebuilding before publishing.' : 'Document converted. Review the editable sections before publishing.');
+        notify(created.importStatus === 'NEEDS_REVIEW' ? 'Document imported, but no editable text layer was found.' : 'Document imported with its original PDF layout preserved.');
       }
     });
   }
@@ -568,7 +784,8 @@
       if (index >= 0) state.templates[index] = saved;
       renderLibrary();
       document.querySelector('[data-editor-title]').textContent = saved.name;
-      renderBlocks();
+      if (exactImportedCanvas()) renderImportedCanvasControls();
+      else renderBlocks();
       if (showNotice) notify('Draft saved.');
       return saved;
     } finally {
@@ -653,7 +870,7 @@
     if (!state.selected || !state.selected.hasImportSource) return;
     const accepted = !window.RevEngineUI || await window.RevEngineUI.confirm({
       title: 'Remove imported file?',
-      message: 'The converted editable template stays. Only the original uploaded file is removed.',
+      message: 'The editable imported canvas stays. Only the separate original upload used for comparison is removed.',
       confirmLabel: 'Remove file',
       danger: true
     });
@@ -664,20 +881,20 @@
     if (index >= 0) state.templates[index] = updated;
     document.querySelector('[data-import-banner]').hidden = true;
     renderLibrary();
-    notify('Imported file removed.');
+    notify('Original comparison file removed. The imported layout remains.');
   }
 
   async function reconvertImportedSource() {
     if (!state.selected || !state.selected.hasImportSource) return;
     const accepted = !window.RevEngineUI || await window.RevEngineUI.confirm({
       title: 'Convert the original again?',
-      message: 'This replaces the current working design with a fresh conversion from the uploaded file. Published versions and issued documents will not change.',
+      message: 'This restores the original PDF pages and rebuilds the editable text layer. Your current working edits will be replaced. Published versions and issued documents will not change.',
       confirmLabel: 'Convert again'
     });
     if (!accepted) return;
     const updated = await api(`/document-templates/${encodeURIComponent(state.selected.id)}/reconvert`, { method: 'POST' });
     await loadTemplates(updated.id);
-    notify(updated.importStatus === 'NEEDS_REVIEW' ? 'No reliable text layer was found. Rebuild this template manually.' : 'Original document converted again. Review the editable sections.');
+    notify(updated.importStatus === 'NEEDS_REVIEW' ? 'The pages were preserved, but no reliable editable text layer was found.' : 'Original PDF layout restored with editable text.');
   }
 
   function schedulePreview(delay = 450) {
@@ -748,6 +965,9 @@
       if (event.target.closest('[data-view-import-source]')) { viewImportedSource(); return; }
       if (event.target.closest('[data-reconvert-import-source]')) { await reconvertImportedSource(); return; }
       if (event.target.closest('[data-remove-import-source]')) { await removeImportedSource(); return; }
+      const importedTextEdit = event.target.closest('[data-edit-imported-text]');
+      if (importedTextEdit) { editImportedText(importedTextEdit.dataset.editImportedText); return; }
+      if (event.target.closest('[data-adjust-import-logo]')) { adjustImportedLogo(); return; }
       if (event.target.closest('[data-close-template-modal]')) { closeModal(); return; }
       const edit = event.target.closest('[data-block-edit]');
       if (edit) { editBlock(edit.dataset.blockEdit); return; }
@@ -775,6 +995,23 @@
       schedulePreview();
     };
     control.addEventListener(control.type === 'color' ? 'input' : 'change', update);
+  });
+
+  if (importedLogoMode) importedLogoMode.addEventListener('change', () => {
+    const canvas = exactImportedCanvas();
+    if (!canvas || !canvas.logo) return;
+    canvas.logo.mode = importedLogoMode.value;
+    schedulePreview(80);
+  });
+
+  if (importedTextSearch) importedTextSearch.addEventListener('input', () => {
+    state.importedTextSearch = importedTextSearch.value;
+    renderImportedCanvasControls();
+  });
+
+  if (importedPageFilter) importedPageFilter.addEventListener('change', () => {
+    state.importedPage = importedPageFilter.value;
+    renderImportedCanvasControls();
   });
 
   document.querySelector('[data-template-name]').addEventListener('input', (event) => {

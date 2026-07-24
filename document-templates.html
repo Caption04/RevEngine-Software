@@ -81,7 +81,40 @@
               </div>
             </section>
 
-            <section class="card document-control-card">
+            <section class="card document-control-card imported-document-canvas-card" data-imported-canvas-controls hidden>
+              <div class="document-control-heading">
+                <div><strong>Imported document canvas</strong><span>The uploaded PDF remains the design. Edit only the text or logo that needs to change.</span></div>
+              </div>
+              <div class="imported-canvas-notice" data-imported-canvas-notice></div>
+              <div class="document-modal-grid imported-logo-controls">
+                <div class="field">
+                  <label for="importedLogoMode">Logo shown on the document</label>
+                  <select id="importedLogoMode" data-import-logo-mode>
+                    <option value="ORIGINAL">Keep the original PDF logo</option>
+                    <option value="COMPANY">Replace it with the company logo</option>
+                    <option value="HIDDEN">Hide the logo</option>
+                  </select>
+                </div>
+                <div class="field imported-logo-adjust-field">
+                  <label>Original logo area</label>
+                  <button class="secondary-button" type="button" data-adjust-import-logo>Adjust logo area</button>
+                </div>
+              </div>
+              <div class="imported-text-toolbar">
+                <div class="field">
+                  <label for="importedTextSearch">Find text</label>
+                  <input id="importedTextSearch" type="search" placeholder="Search the imported document" data-imported-text-search>
+                </div>
+                <div class="field">
+                  <label for="importedPageFilter">Page</label>
+                  <select id="importedPageFilter" data-imported-page-filter></select>
+                </div>
+              </div>
+              <div class="imported-text-summary" data-imported-text-summary></div>
+              <div class="imported-text-list" data-imported-text-list></div>
+            </section>
+
+            <section class="card document-control-card" data-structured-design-controls>
               <div class="document-control-heading">
                 <div><strong>Page and brand style</strong><span>Set the basic look used across every page.</span></div>
               </div>
@@ -110,7 +143,7 @@
               </div>
             </section>
 
-            <section class="card document-control-card">
+            <section class="card document-control-card" data-structured-design-controls>
               <div class="document-control-heading split-heading">
                 <div><strong>Document sections</strong><span>Show, hide, edit, and arrange the parts of this document.</span></div>
                 <button class="secondary-button compact" type="button" data-add-block>+ Add section</button>
