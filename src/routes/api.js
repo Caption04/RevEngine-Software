@@ -45,6 +45,7 @@ const { createBusinessDocumentPdf } = require('../services/businessDocumentPdf.s
 const { cleanImportedPageAsset } = require('../services/importedDocumentRaster.service');
 const { loadBusinessDocumentLogo } = require('../services/businessDocumentLogo.service');
 const { convertImportedDocument, DOCX_TYPE } = require('../services/documentImportConversion.service');
+const { mergeImportedCanvasEdits } = require('../services/importedDocumentCanvas.service');
 const {
   BLOCK_TYPES: DOCUMENT_BLOCK_TYPES,
   DOCUMENT_TYPES,
@@ -5039,9 +5040,14 @@ router.post('/document-templates/:id/reconvert', requireRole(...adminRoles), val
     throw new AppError(400, error && error.message || 'The document could not be converted. Try a searchable PDF or DOCX file.');
   }
   await writeDocumentTemplateAssets(conversion.assets);
+  const freshDesign = normalizeDesign(conversion.design, template.documentType);
+  const existingDesign = normalizeDesign(template.design, template.documentType);
+  if (freshDesign.importedCanvas && existingDesign.importedCanvas) {
+    freshDesign.importedCanvas = mergeImportedCanvasEdits(freshDesign.importedCanvas, existingDesign.importedCanvas);
+  }
   const updated = await prisma.documentTemplate.update({
     where: { id: template.id },
-    data: { design: normalizeDesign(conversion.design, template.documentType), importStatus: conversion.status }
+    data: { design: freshDesign, importStatus: conversion.status }
   });
   await audit(req, 'RECONVERT', 'DocumentTemplate', template.id, { documentType: template.documentType, conversionStatus: conversion.status, warnings: conversion.warnings });
   sendData(res, normalize(safeDocumentTemplate(updated)));

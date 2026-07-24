@@ -9,6 +9,7 @@ const LEFT = 48;
 const RIGHT = 547;
 const TOP = 794;
 const BOTTOM = 52;
+const IMPORTED_LINK_COLOR = '#1155CC';
 
 function ascii(value) {
   return String(value == null ? '' : value)
@@ -974,6 +975,14 @@ function fittedImportedFontSize(value, width, preferred) {
   return Math.max(4, Math.min(preferred, width / Math.max(1, text.length * 0.52)));
 }
 
+function importedElementBold(element) {
+  return Boolean(element && (element.bold === true || element.originalBold === true));
+}
+
+function importedElementColor(element) {
+  return element && safeExternalLink(element.linkUrl) ? IMPORTED_LINK_COLOR : String(element && element.textColor || '#111827');
+}
+
 function createImportedCanvasPdf({ kind, record, company, branding, localization, logoImage, importedAssets, template }) {
   const canvas = template.importedCanvas;
   const preparedLogo = prepareLogoImage(logoImage);
@@ -1016,14 +1025,14 @@ function createImportedCanvasPdf({ kind, record, company, branding, localization
         baseline,
         size,
         value,
-        element.bold === true,
-        hexRgb(element.textColor, '#111827'),
+        importedElementBold(element),
+        hexRgb(importedElementColor(element), '#111827'),
         { fontFamily: element.fontFamily, italic: element.italic === true }
       );
       if (element.underline === true) {
         const underlineY = Math.max(0, baseline - Math.max(0.8, size * 0.12));
         const underlineWidth = Math.min(boxWidth, estimateTextWidth(value, size));
-        output += commandColorLine(drawX, underlineY, drawX + underlineWidth, underlineY, Math.max(0.6, size * 0.05), hexRgb(element.textColor, '#111827'));
+        output += commandColorLine(drawX, underlineY, drawX + underlineWidth, underlineY, Math.max(0.6, size * 0.05), hexRgb(importedElementColor(element), '#111827'));
       }
       const linkUrl = safeExternalLink(element.linkUrl);
       if (linkUrl) annotations.push({ x, y, width: boxWidth, height: boxHeight, url: linkUrl });

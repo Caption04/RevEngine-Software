@@ -187,3 +187,38 @@ test('generated imported PDFs clip oversized logos and contain clickable link an
   assert.match(source, /\/URI \(https:\/\/example\.com\/pay\)/);
   assert.match(source, /\/Annots \[/);
 });
+
+
+test('linked imported text always renders in standard dark blue with underline', () => {
+  const frontend = read('assets/document-templates.js');
+  const css = read('assets/app.css');
+  const canvasService = read('src/services/importedDocumentCanvas.service.js');
+  const pdf = read('src/services/businessDocumentPdf.service.js');
+  assert.match(frontend, /const IMPORTED_LINK_COLOR = '#1155CC'/);
+  assert.match(frontend, /function importedTextColour\(/);
+  assert.match(css, /\.imported-inline-text\.is-linkish\s*\{[\s\S]*?color:\s*var\(--imported-link-color, #1155CC\) !important/);
+  assert.match(canvasService, /textColor: linkUrl \? IMPORTED_LINK_COLOR/);
+  assert.match(pdf, /function importedElementColor\(/);
+});
+
+test('refreshing original formatting preserves edits while restoring source font metadata', () => {
+  const routes = read('src/routes/api.js');
+  const frontend = read('assets/document-templates.js');
+  const canvasService = read('src/services/importedDocumentCanvas.service.js');
+  assert.match(routes, /mergeImportedCanvasEdits\(freshDesign\.importedCanvas, existingDesign\.importedCanvas\)/);
+  assert.match(canvasService, /function mergeImportedCanvasEdits\(/);
+  assert.match(canvasService, /styleMetadataVersion: 2/);
+  assert.match(frontend, /Refresh the original formatting/);
+  assert.match(frontend, /keeping your current text edits/);
+});
+
+test('original bold metadata remains effective until the user explicitly toggles it', () => {
+  const frontend = read('assets/document-templates.js');
+  const pdf = read('src/services/businessDocumentPdf.service.js');
+  const canvasService = read('src/services/importedDocumentCanvas.service.js');
+  assert.match(frontend, /function importedTextIsBold\(/);
+  assert.match(frontend, /element\.bold === true \|\| element\.originalBold === true/);
+  assert.match(pdf, /function importedElementBold\(/);
+  assert.match(canvasService, /\['b', 'strong'\]/);
+  assert.match(canvasService, /font-weight\\s\*:/);
+});

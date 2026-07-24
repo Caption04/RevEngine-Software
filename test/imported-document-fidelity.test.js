@@ -88,3 +88,20 @@ test('clean page raster removes original glyphs while preserving table borders',
   assert.deepEqual(pixel(14, 11), [255, 255, 255]);
   assert.deepEqual(pixel(14, 17), [180, 205, 235]);
 });
+
+
+test('strong and CSS font-weight metadata are treated as bold and links use standard blue', () => {
+  const pages = parsePdfXml(`<?xml version="1.0"?>
+    <pdf2xml>
+      <fontspec id="0" size="10" family="Helvetica" color="#000000"/>
+      <page number="1" width="612" height="792">
+        <text top="20" left="20" width="100" height="10" font="0"><strong>Strong heading</strong></text>
+        <text top="40" left="20" width="100" height="10" font="0"><span style="font-weight:700">CSS heading</span></text>
+        <text top="60" left="20" width="100" height="10" font="0"><a href="https://example.com">Open link</a></text>
+      </page>
+    </pdf2xml>`);
+  assert.equal(pages[0].lines[0].bold, true);
+  assert.equal(pages[0].lines[1].bold, true);
+  assert.equal(pages[0].lines[2].textColor, '#1155CC');
+  assert.equal(pages[0].lines[2].underline, true);
+});

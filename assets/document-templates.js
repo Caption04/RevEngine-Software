@@ -442,6 +442,8 @@
     return `{{${String(binding || '').toUpperCase()}}}`;
   }
 
+  const IMPORTED_LINK_COLOR = '#1155CC';
+
   const IMPORTED_SAMPLE_VALUES = {
     COMPANY_NAME: 'Rev Engine Zimbabwe Demo',
     COMPANY_LEGAL_NAME: 'Rev Engine Zimbabwe (Private) Limited',
@@ -481,6 +483,14 @@
 
   function interpolateImportedSample(value) {
     return String(value || '').replace(/\{\{\s*([A-Z0-9_]+)\s*\}\}/gi, (token, binding) => importedSampleValue(binding) || token);
+  }
+
+  function importedTextIsBold(element) {
+    return Boolean(element && (element.bold === true || element.originalBold === true));
+  }
+
+  function importedTextColour(element) {
+    return element && element.linkUrl ? IMPORTED_LINK_COLOR : String(element && element.textColor || '#111827');
   }
 
   function importedElementDisplayValue(element) {
@@ -608,14 +618,18 @@
       importedInlineBinding.innerHTML = importedBindingOptions(String(element.binding || 'STATIC').toUpperCase());
       importedInlineBinding.value = String(element.binding || 'STATIC').toUpperCase();
     }
-    if (importedInlineColour) importedInlineColour.value = element.textColor || '#111827';
+    if (importedInlineColour) {
+      importedInlineColour.value = importedTextColour(element);
+      importedInlineColour.disabled = Boolean(element.linkUrl);
+      importedInlineColour.title = element.linkUrl ? 'Linked text uses the standard link blue.' : 'Text colour';
+    }
     if (importedInlineLinkButton) {
       importedInlineLinkButton.classList.toggle('is-active', Boolean(element.linkUrl));
       importedInlineLinkButton.textContent = element.linkUrl ? 'Edit link' : 'Link';
     }
     if (importedInlineOpenLinkButton) importedInlineOpenLinkButton.hidden = !element.linkUrl;
     const bold = importedContextbar.querySelector('[data-imported-inline-bold]');
-    if (bold) bold.classList.toggle('is-active', element.bold === true);
+    if (bold) bold.classList.toggle('is-active', importedTextIsBold(element));
     importedContextbar.querySelectorAll('[data-imported-inline-align]').forEach((button) => {
       button.classList.toggle('is-active', button.dataset.importedInlineAlign === String(element.align || 'LEFT').toUpperCase());
     });
@@ -707,10 +721,11 @@
           'padding:0',
           `font-size:${Math.max(4, Number(element.fontSize || 9) * zoom)}px`,
           `font-family:${escapeHtml(element.fontFamily || 'Arial, Helvetica, sans-serif')}`,
-          `font-weight:${element.bold ? '700' : '400'}`, `font-style:${element.italic ? 'italic' : 'normal'}`,
+          `font-weight:${importedTextIsBold(element) ? '700' : '400'}`, `font-style:${element.italic ? 'italic' : 'normal'}`,
           `line-height:${Math.max(.8, Math.min(2, Number(element.lineHeight || 1)))}`,
           `text-align:${String(element.align || 'LEFT').toLowerCase()}`,
-          `--imported-text:${escapeHtml(element.textColor || '#111827')}`
+          `--imported-text:${escapeHtml(importedTextColour(element))}`,
+          `--imported-link-color:${IMPORTED_LINK_COLOR}`
         ].join(';');
         const title = element.linkUrl ? ` title="${escapeHtml(element.linkUrl)}" data-link-url="${escapeHtml(element.linkUrl)}"` : '';
         return `<div class="${classes}" style="${style}" data-imported-inline-text="${escapeHtml(element.id)}" data-binding="${escapeHtml(binding)}" contenteditable="${canType ? 'plaintext-only' : 'false'}" spellcheck="false" role="textbox" aria-label="Editable text on page ${page.pageNumber}"${title}>${escapeHtml(display)}</div>`;
@@ -801,9 +816,6 @@
         rememberImportedChange();
         element.linkUrl = nextUrl;
         element.underline = Boolean(nextUrl) ? true : Boolean(element.originalUnderline);
-        if (nextUrl && !previousUrl && /^#?(?:000000|111827)$/i.test(String(element.textColor || '').replace('#', ''))) {
-          element.textColor = '#1155CC';
-        }
         refreshImportedInlineEditor();
         schedulePreview(250);
       },
@@ -819,7 +831,7 @@
     if (!match) return;
     rememberImportedChange();
     const element = match.element;
-    if (action === 'bold') element.bold = !element.bold;
+    if (action === 'bold') element.bold = !importedTextIsBold(element);
     if (action === 'align') element.align = value;
     if (action === 'colour') element.textColor = value;
     if (action === 'hide') element.hidden = !element.hidden;
@@ -1505,14 +1517,14 @@
   async function reconvertImportedSource() {
     if (!state.selected || !state.selected.hasImportSource) return;
     const accepted = !window.RevEngineUI || await window.RevEngineUI.confirm({
-      title: 'Convert the original again?',
-      message: 'This restores the original PDF pages and rebuilds the editable text layer. Your current working edits will be replaced. Published versions and issued documents will not change.',
-      confirmLabel: 'Convert again'
+      title: 'Refresh the original formatting?',
+      message: 'This re-reads the original PDF font weight, italics, colours, and links while keeping your current text edits, live fields, links, and logo adjustments. Published versions and issued documents will not change.',
+      confirmLabel: 'Refresh formatting'
     });
     if (!accepted) return;
     const updated = await api(`/document-templates/${encodeURIComponent(state.selected.id)}/reconvert`, { method: 'POST' });
     await loadTemplates(updated.id);
-    notify(updated.importStatus === 'NEEDS_REVIEW' ? 'The pages were preserved, but no reliable editable text layer was found.' : 'Original PDF layout restored with editable text.');
+    notify(updated.importStatus === 'NEEDS_REVIEW' ? 'The pages were preserved, but no reliable editable text layer was found.' : 'Original font styles, colours, and links refreshed without removing your edits.');
   }
 
   function schedulePreview(delay = 450) {

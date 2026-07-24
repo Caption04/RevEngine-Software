@@ -283,7 +283,8 @@ function normalizeImportedCanvas(input) {
     pages,
     logos,
     logo: logos[0] || null,
-    textEditable: bool(input.textEditable, pages.some((page) => page.textElements.length > 0))
+    textEditable: bool(input.textEditable, pages.some((page) => page.textElements.length > 0)),
+    styleMetadataVersion: number(input.styleMetadataVersion, 1, 1, 20)
   };
 }
 

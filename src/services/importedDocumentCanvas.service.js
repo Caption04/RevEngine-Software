@@ -9,6 +9,7 @@ const { starterDesign, normalizeDesign } = require('./documentTemplate.service')
 
 const MAX_PAGES = 20;
 const MAX_TEXT_ELEMENTS = 900;
+const IMPORTED_LINK_COLOR = '#1155CC';
 
 function clean(value) {
   return String(value == null ? '' : value)
@@ -101,6 +102,7 @@ function applyFallbackLinks(pages, links) {
       if (!match) continue;
       line.linkUrl = match.href;
       line.underline = true;
+      line.textColor = IMPORTED_LINK_COLOR;
       match.used = true;
     }
   }
@@ -128,13 +130,16 @@ function fontTraits(value) {
 }
 
 function styledShare(body, tagName, totalLength) {
-  const pattern = new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'gi');
-  let match;
+  const aliases = tagName === 'b' ? ['b', 'strong'] : tagName === 'i' ? ['i', 'em'] : [tagName];
   let length = 0;
-  while ((match = pattern.exec(String(body || '')))) {
-    length += clean(xmlDecode(match[1].replace(/<[^>]+>/g, ''))).length;
-  }
-  return totalLength > 0 ? length / totalLength : 0;
+  aliases.forEach((alias) => {
+    const pattern = new RegExp(`<${alias}\\b[^>]*>([\\s\\S]*?)<\\/${alias}>`, 'gi');
+    let match;
+    while ((match = pattern.exec(String(body || '')))) {
+      length += clean(xmlDecode(match[1].replace(/<[^>]+>/g, ''))).length;
+    }
+  });
+  return totalLength > 0 ? Math.min(1, length / totalLength) : 0;
 }
 
 function parsePdfXml(xml) {
@@ -180,6 +185,8 @@ function parsePdfXml(xml) {
       const fontSize = Math.max(4, Math.min(72, Number(font.size || lineHeight)));
       const linkUrl = linkUrlFromMarkup(body);
       const hasUnderlineTag = /<(?:u|underline)\b/i.test(body);
+      const inlineBold = /font-weight\s*:\s*(?:bold|[6-9]00)/i.test(body);
+      const inlineItalic = /font-style\s*:\s*(?:italic|oblique)/i.test(body);
       lines.push({
         text,
         x,
@@ -188,12 +195,12 @@ function parsePdfXml(xml) {
         height: lineHeight,
         fontSize,
         fontFamily: font.family || 'Arial, Helvetica, sans-serif',
-        bold: font.bold === true || styledShare(body, 'b', text.length) >= 0.55,
-        italic: font.italic === true || styledShare(body, 'i', text.length) >= 0.55,
+        bold: font.bold === true || inlineBold || styledShare(body, 'b', text.length) >= 0.55,
+        italic: font.italic === true || inlineItalic || styledShare(body, 'i', text.length) >= 0.55,
         ...(hasUnderlineTag || linkUrl ? { underline: true } : {}),
         ...(linkUrl ? { linkUrl } : {}),
         lineHeight: Math.max(0.8, Math.min(2, lineHeight / fontSize)),
-        textColor: /^#[0-9a-f]{6}$/i.test(font.color || '') ? font.color : '#111827'
+        textColor: linkUrl ? IMPORTED_LINK_COLOR : (/^#[0-9a-f]{6}$/i.test(font.color || '') ? font.color : '#111827')
       });
     }
     pages.push({ pageNumber: pages.length + 1, width, height, lines });
@@ -345,6 +352,94 @@ function parseSvgLogo(svg, page, raster) {
   return { ...padded, mode: 'ORIGINAL', backgroundColor: colors.backgroundColor };
 }
 
+
+function normalizedTextKey(value) {
+  return clean(value).toLowerCase();
+}
+
+function closestExistingText(freshElement, existingElements, used) {
+  const key = normalizedTextKey(freshElement.originalText || freshElement.text);
+  let best = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  existingElements.forEach((candidate, index) => {
+    if (used.has(index)) return;
+    const candidateKey = normalizedTextKey(candidate.originalText || candidate.text);
+    if (!key || candidateKey !== key) return;
+    const score = Math.abs(Number(candidate.x || 0) - Number(freshElement.x || 0))
+      + Math.abs(Number(candidate.y || 0) - Number(freshElement.y || 0));
+    if (score < bestScore) {
+      best = { candidate, index };
+      bestScore = score;
+    }
+  });
+  return best;
+}
+
+function styleWasChanged(element, property, originalProperty) {
+  if (!Object.prototype.hasOwnProperty.call(element || {}, originalProperty)) return false;
+  return element[property] !== element[originalProperty];
+}
+
+function mergeImportedCanvasEdits(freshCanvas, existingCanvas) {
+  if (!freshCanvas || !existingCanvas || freshCanvas.mode !== 'EXACT_PDF' || existingCanvas.mode !== 'EXACT_PDF') return freshCanvas;
+  const existingPages = new Map((existingCanvas.pages || []).map((page) => [Number(page.pageNumber || 1), page]));
+  const pages = (freshCanvas.pages || []).map((freshPage) => {
+    const existingPage = existingPages.get(Number(freshPage.pageNumber || 1));
+    if (!existingPage) return freshPage;
+    const existingElements = Array.isArray(existingPage.textElements) ? existingPage.textElements : [];
+    const used = new Set();
+    const textElements = (freshPage.textElements || []).map((freshElement) => {
+      const match = closestExistingText(freshElement, existingElements, used);
+      if (!match) return freshElement;
+      used.add(match.index);
+      const old = match.candidate;
+      const merged = {
+        ...freshElement,
+        text: old.text == null ? freshElement.text : old.text,
+        binding: old.binding || freshElement.binding,
+        hidden: old.hidden === true,
+        align: old.align || freshElement.align
+      };
+      if (styleWasChanged(old, 'bold', 'originalBold')) merged.bold = old.bold === true;
+      if (styleWasChanged(old, 'italic', 'originalItalic')) merged.italic = old.italic === true;
+      if (styleWasChanged(old, 'textColor', 'originalTextColor')) merged.textColor = old.textColor;
+      if (styleWasChanged(old, 'underline', 'originalUnderline')) merged.underline = old.underline === true;
+      if (styleWasChanged(old, 'linkUrl', 'originalLinkUrl') || (old.linkUrl && !freshElement.linkUrl)) merged.linkUrl = old.linkUrl;
+      if (merged.linkUrl) {
+        merged.underline = true;
+        merged.textColor = IMPORTED_LINK_COLOR;
+      }
+      return merged;
+    });
+    return { ...freshPage, textElements };
+  });
+  const oldLogos = Array.isArray(existingCanvas.logos) ? existingCanvas.logos : [];
+  const logos = (freshCanvas.logos || []).map((logo, index) => {
+    const old = oldLogos.find((candidate) => Number(candidate.page || 1) === Number(logo.page || 1)) || oldLogos[index];
+    if (!old) return logo;
+    return {
+      ...logo,
+      x: old.x == null ? logo.x : old.x,
+      y: old.y == null ? logo.y : old.y,
+      width: old.width == null ? logo.width : old.width,
+      height: old.height == null ? logo.height : old.height,
+      mode: old.mode || logo.mode,
+      backgroundColor: old.backgroundColor || logo.backgroundColor,
+      imageScale: old.imageScale == null ? logo.imageScale : old.imageScale,
+      imageOffsetX: old.imageOffsetX == null ? logo.imageOffsetX : old.imageOffsetX,
+      imageOffsetY: old.imageOffsetY == null ? logo.imageOffsetY : old.imageOffsetY,
+      imagePadding: old.imagePadding == null ? logo.imagePadding : old.imagePadding
+    };
+  });
+  return {
+    ...freshCanvas,
+    pages,
+    logos,
+    logo: logos[0] || null,
+    styleMetadataVersion: 2
+  };
+}
+
 function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
   const stableAssetKey = clean(assetKey).replace(/[^a-zA-Z0-9_-]/g, '') || `import-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'revengine-import-'));
@@ -457,7 +552,8 @@ function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
       pages: canvasPages,
       logos,
       logo: logos[0] || null,
-      textEditable: searchable
+      textEditable: searchable,
+      styleMetadataVersion: 2
     };
     design.importAnalysis = {
       sourceFormat: 'PDF',
@@ -485,6 +581,7 @@ function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
 
 module.exports = {
   exactCanvasDesign,
+  mergeImportedCanvasEdits,
   parseBboxLayout,
   parsePdfXml,
   parseHtmlLinks,

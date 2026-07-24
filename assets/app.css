@@ -8634,6 +8634,7 @@ body.document-inline-editing .content {
 }
 
 .imported-inline-text.is-linkish {
+  color: var(--imported-link-color, #1155CC) !important;
   cursor: pointer;
 }
 
@@ -9655,6 +9656,7 @@ body[data-document-editor-route="true"] .imported-inline-editor {
 }
 
 .imported-inline-text.is-linkish {
+  color: var(--imported-link-color, #1155CC) !important;
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.08em;
