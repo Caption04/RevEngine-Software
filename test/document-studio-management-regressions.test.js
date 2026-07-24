@@ -48,7 +48,9 @@ test('converted source files can be previewed and removed without deleting the e
   assert.match(frontend, /Original document/);
   assert.match(routes, /router\.get\('\/document-templates\/:id\/import-preview'/);
   assert.match(routes, /router\.delete\('\/document-templates\/:id\/import-source'/);
-  assert.match(routes, /sourceType: 'BLANK', importFileName: null/);
+  assert.match(routes, /data: \{ importFileName: null, importMimeType: null, importSourceUrl: null \}/);
+  assert.doesNotMatch(routes, /data: \{ sourceType: 'BLANK', importFileName: null/);
+  assert.match(frontend, /The editable imported canvas stays/);
 });
 
 test('blank templates render as genuinely blank documents', () => {

@@ -4,12 +4,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const {
   DOCX_TYPE,
   convertImportedDocument,
-  extractDocx,
-  extractPdf
+  extractDocx
 } = require('../src/services/documentImportConversion.service');
+const { createBusinessDocumentPdf } = require('../src/services/businessDocumentPdf.service');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -53,43 +54,77 @@ function storedZip(fileName, body) {
   return Buffer.concat([local, name, data, central, name, end]);
 }
 
-function textPdf(textCommands) {
-  const stream = Buffer.from(textCommands, 'latin1');
-  return Buffer.from(`%PDF-1.4\n1 0 obj\n<< /Length ${stream.length} >>\nstream\n${textCommands}\nendstream\nendobj\n2 0 obj << /Type /Page >> endobj\n%%EOF`, 'latin1');
+function popplerAvailable() {
+  return ['pdftotext', 'pdftoppm'].every((command) => {
+    const result = spawnSync(command, ['-v'], { encoding: 'utf8' });
+    return !result.error;
+  });
 }
 
-test('searchable PDFs are converted into editable billing sections instead of a generic reference', () => {
-  const source = textPdf([
-    '0.09 0.21 0.36 rg',
-    'BT /F1 18 Tf 1 0 0 1 360 780 Tm (Fee Statement) Tj ET',
-    'BT /F1 12 Tf 1 0 0 1 50 650 Tm (Summary) Tj ET',
-    'BT /F1 12 Tf 1 0 0 1 50 500 Tm (Payment Options) Tj ET',
-    'BT /F1 10 Tf 1 0 0 1 50 480 Tm (Self-funded Payments) Tj ET',
-    'BT /F1 10 Tf 1 0 0 1 50 460 Tm (Banking Details: First National Bank) Tj ET',
-    'BT /F1 10 Tf 1 0 0 1 50 440 Tm (Account Number: 622 7055 1015) Tj ET',
-    'BT /F1 10 Tf 1 0 0 1 50 420 Tm (Branch Code: 210 554) Tj ET',
-    'BT /F1 10 Tf 1 0 0 1 50 400 Tm (SWIFT Code: FIRNZAJJ) Tj ET',
-    'BT /F1 10 Tf 1 0 0 1 50 380 Tm (Reference Number: 2552204) Tj ET',
-    'BT /F1 10 Tf 1 0 0 1 50 350 Tm (Online Payments) Tj ET',
-    'BT /F1 10 Tf 1 0 0 1 50 330 Tm (Make an Online Payment https://pay.example.com) Tj ET',
-    'BT /F1 9 Tf 1 0 0 1 50 280 Tm (Given the rise in cybercrime, before making any payment verify the bank account issued by the company.) Tj ET'
-  ].join('\n'));
+test('searchable PDFs keep their exact pages and expose editable text without system sections', { skip: !popplerAvailable() }, () => {
+  const source = createBusinessDocumentPdf({
+    kind: 'invoice',
+    logoImage: { type: 'png', buffer: fs.readFileSync(path.join(root, 'assets/rev-engine-mark.png')) },
+    company: { name: 'Source Company', legalName: 'Source Company (Private) Limited', address: 'Harare' },
+    branding: { brandName: 'Source Company', supportEmail: 'billing@example.com' },
+    localization: { defaultCurrency: 'USD', numberFormat: 'en-US' },
+    record: {
+      number: 'SOURCE-INV-0042',
+      status: 'DRAFT',
+      createdAt: new Date('2026-07-24T00:00:00Z'),
+      dueDate: new Date('2026-08-07T00:00:00Z'),
+      customer: { name: 'Original Customer', email: 'customer@example.com' },
+      lineItems: [{ description: 'Original service', quantity: 1, unitPrice: 850, lineTotal: 850 }],
+      subtotal: 850,
+      taxTotal: 127.5,
+      total: 977.5
+    }
+  });
 
-  const extracted = extractPdf(source);
-  assert.match(extracted.text, /Payment Options/);
-  const converted = convertImportedDocument({ buffer: source, mimeType: 'application/pdf', fileName: 'fee-statement.pdf', documentType: 'INVOICE' });
-  assert.equal(converted.status, 'CONVERTED_WITH_WARNINGS');
+  const converted = convertImportedDocument({
+    buffer: source,
+    mimeType: 'application/pdf',
+    fileName: 'existing-invoice.pdf',
+    documentType: 'INVOICE',
+    assetKey: 'exact-layout-test'
+  });
+
+  assert.equal(converted.status, 'EXACT_LAYOUT');
   assert.equal(converted.design.importAnalysis.sourceFormat, 'PDF');
-  assert.ok(converted.design.importAnalysis.detectedFields.includes('payment.reference'));
-  const payment = converted.design.blocks.find((block) => block.type === 'PAYMENT_OPTIONS');
-  const disclaimer = converted.design.blocks.find((block) => block.type === 'DISCLAIMER');
-  const online = converted.design.blocks.find((block) => block.type === 'ONLINE_PAYMENT');
-  assert.equal(payment.accounts[0].accountNumber, '622 7055 1015');
-  assert.equal(payment.accounts[0].swiftCode, 'FIRNZAJJ');
-  assert.equal(payment.accountLayout, 'STACKED');
-  assert.match(disclaimer.body, /rise in cybercrime/i);
-  assert.equal(online.customUrl, 'https://pay.example.com');
-  assert.match(online.body, /Make an Online Payment/);
+  assert.equal(converted.design.importedCanvas.mode, 'EXACT_PDF');
+  assert.equal(converted.design.blocks.length, 0);
+  assert.ok(converted.design.importedCanvas.pages.length >= 1);
+  assert.equal(converted.assets.length, converted.design.importedCanvas.pages.length);
+  const textElements = converted.design.importedCanvas.pages.flatMap((page) => page.textElements);
+  assert.ok(textElements.length > 5);
+  assert.ok(textElements.some((element) => /SOURCE-INV-0042/.test(element.originalText)));
+  assert.ok(textElements.every((element) => element.binding === 'STATIC'));
+  assert.equal(converted.design.importedCanvas.logo && converted.design.importedCanvas.logo.mode, 'ORIGINAL');
+
+  const importedAssets = Object.fromEntries(converted.assets.map((asset) => [asset.fileName, { type: 'png', buffer: asset.buffer }]));
+  const exactPdf = createBusinessDocumentPdf({
+    kind: 'invoice',
+    company: { name: 'Different Company' },
+    branding: { brandName: 'Different Company' },
+    localization: { defaultCurrency: 'USD', numberFormat: 'en-US', documentDesign: converted.design },
+    importedAssets,
+    record: { number: 'NEW-INV-1', customer: { name: 'Different Customer' }, total: 10 }
+  });
+  assert.ok(exactPdf.subarray(0, 5).equals(Buffer.from('%PDF-')));
+  assert.ok(exactPdf.length > source.length / 2);
+
+  const numberElement = textElements.find((element) => /SOURCE-INV-0042/.test(element.originalText));
+  numberElement.binding = 'STATIC';
+  numberElement.text = 'Invoice: {{DOCUMENT_NUMBER}}';
+  const mappedPdf = createBusinessDocumentPdf({
+    kind: 'invoice',
+    company: { name: 'Different Company' },
+    branding: { brandName: 'Different Company' },
+    localization: { defaultCurrency: 'USD', numberFormat: 'en-US', documentDesign: converted.design },
+    importedAssets,
+    record: { number: 'NEW-INV-1', customer: { name: 'Different Customer' }, total: 10 }
+  });
+  assert.notDeepEqual(mappedPdf, exactPdf);
 });
 
 test('DOCX paragraphs become editable contract content', () => {
@@ -121,12 +156,21 @@ test('the import interface previews chosen files and warns against images and sc
   assert.match(frontend, /data-upload-preview/);
   assert.match(frontend, /\/import-preview/);
   assert.match(frontend, /reconvertImportedSource/);
+  assert.match(frontend, /The original PDF is the template/);
+  assert.match(frontend, /data-edit-imported-text/);
+  assert.match(frontend, /data-insert-imported-field/);
+  assert.match(frontend, /importedMergeToken/);
+  assert.match(html, /Keep the original PDF logo/);
   assert.doesNotMatch(frontend, /window\.open\(url, '_blank'\)/);
   assert.match(html, /data-import-heading/);
   assert.match(html, /Preview original/);
   assert.match(html, /data-reconvert-import-source/);
+  assert.match(html, /data-imported-canvas-controls/);
+  assert.match(html, /data-import-logo-mode/);
   assert.match(routes, /convertImportedDocument/);
   assert.match(routes, /router\.get\('\/document-templates\/:id\/import-preview'/);
   assert.match(routes, /router\.post\('\/document-templates\/:id\/reconvert'/);
   assert.match(routes, /conversionStatus: conversion\.status/);
+  assert.match(routes, /writeDocumentTemplateAssets\(conversion\.assets\)/);
+  assert.match(routes, /loadImportedCanvasAssets/);
 });
