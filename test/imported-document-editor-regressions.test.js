@@ -22,19 +22,23 @@ test('format controls stay in a permanent ribbon row instead of opening a popup'
   assert.match(css, /\.imported-permanent-toolbar\s*\{[\s\S]*?display:\s*flex/);
 });
 
-test('all imported text is covered and redrawn so the original PDF text cannot show behind edits', () => {
+test('imported text is removed from the page raster and redrawn without rectangular covers', () => {
   const frontend = read('assets/document-templates.js');
   const pdf = read('src/services/businessDocumentPdf.service.js');
+  const raster = read('src/services/importedDocumentRaster.service.js');
   const css = read('assets/app.css');
 
-  assert.match(frontend, /'is-rendered-text'/);
-  assert.match(frontend, /const coverX = Math\.max\(0, Number\(element\.x \|\| 0\) - 1\.75\)/);
+  assert.match(frontend, /canvas-assets\/\$\{encodeURIComponent\(page\.backgroundAsset\)\}\?clean=1/);
+  assert.match(frontend, /const textX = Math\.max\(0, Number\(element\.x \|\| 0\)\)/);
+  assert.doesNotMatch(frontend, /const coverX =/);
   assert.match(frontend, /font-family:\$\{escapeHtml\(element\.fontFamily \|\| 'Arial, Helvetica, sans-serif'\)\}/);
-  assert.match(css, /\.imported-inline-text\.is-rendered-text\s*\{[\s\S]*?background:\s*var\(--imported-cover\)/);
-  assert.doesNotMatch(pdf, /if \(!changed\) continue/);
-  assert.match(pdf, /commandRect\(Math\.max\(0, x - 1\.75\)/);
-  assert.match(pdf, /const size = Math\.max\(4, Number\(element\.fontSize \|\| 9\)\)/);
-  assert.doesNotMatch(pdf, /fittedImportedFontSize\(value, boxWidth/);
+  assert.match(frontend, /font-style:\$\{element\.italic \? 'italic' : 'normal'\}/);
+  assert.match(css, /\.imported-inline-text\.is-rendered-text\s*\{[\s\S]*?background:\s*transparent/);
+  assert.match(raster, /stableLineSegments/);
+  assert.match(raster, /const edgePadding = 0\.6/);
+  assert.match(pdf, /cleanImportedPageAsset\(asset\.buffer, page\)/);
+  assert.doesNotMatch(pdf, /commandRect\(Math\.max\(0, x - 1\.75\)/);
+  assert.match(pdf, /fontFamily: element\.fontFamily, italic: element\.italic === true/);
 });
 
 test('legacy one-logo imports become selectable on every page', () => {

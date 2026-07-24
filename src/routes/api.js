@@ -42,6 +42,7 @@ const { allocateFinancialNumber } = require('../services/payments/financialNumbe
 const { calculateInvoiceLedger, money: paymentMoney, recalculateInvoice: recalculateInvoiceLedger, recalculateInvoiceFinancials, refundableRemaining, syncUnappliedCreditForPayment } = require('../services/payments/invoiceLedger.service');
 const { paymentTermsDays, requirePurchaseOrderNumber, resolveInvoiceBranch } = require('../services/invoicePolicy.service');
 const { createBusinessDocumentPdf } = require('../services/businessDocumentPdf.service');
+const { cleanImportedPageAsset } = require('../services/importedDocumentRaster.service');
 const { loadBusinessDocumentLogo } = require('../services/businessDocumentLogo.service');
 const { convertImportedDocument, DOCX_TYPE } = require('../services/documentImportConversion.service');
 const {
@@ -4873,11 +4874,24 @@ router.get('/document-templates/:id/canvas-assets/:assetName', requireRole(...ad
   if (!template) throw notFound('Document template not found');
   const assetName = safeDocumentTemplateAssetName(req.params.assetName);
   const canvas = template.design && typeof template.design === 'object' ? template.design.importedCanvas : null;
-  const allowed = canvas && Array.isArray(canvas.pages) && canvas.pages.some((page) => page && page.backgroundAsset === assetName);
-  if (!allowed) throw notFound('Imported document page not found');
+  const page = canvas && Array.isArray(canvas.pages)
+    ? canvas.pages.find((item) => item && item.backgroundAsset === assetName)
+    : null;
+  if (!page) throw notFound('Imported document page not found');
   const assetPath = path.join(documentTemplateAssetDir, assetName);
   const stat = await fs.promises.stat(assetPath).catch(() => null);
   if (!stat || !stat.isFile()) throw notFound('Imported document page not found');
+  const cleanTextLayer = String(req.query.clean || '') === '1';
+  if (cleanTextLayer) {
+    const original = await fs.promises.readFile(assetPath);
+    const cleaned = cleanImportedPageAsset(original, page);
+    res.status(200)
+      .set('Content-Type', 'image/png')
+      .set('Content-Disposition', `inline; filename="${assetName}"`)
+      .set('Cache-Control', 'private, no-store')
+      .send(cleaned);
+    return;
+  }
   res.status(200)
     .set('Content-Type', 'image/png')
     .set('Content-Disposition', `inline; filename="${assetName}"`)

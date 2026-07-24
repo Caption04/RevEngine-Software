@@ -1,6 +1,7 @@
 'use strict';
 
 const zlib = require('node:zlib');
+const { cleanImportedPageAsset } = require('./importedDocumentRaster.service');
 
 const PAGE_WIDTH = 595;
 const PAGE_HEIGHT = 842;
@@ -35,8 +36,18 @@ function darken(color, amount = 0.18) {
   return { r: Math.max(0, color.r * (1 - amount)), g: Math.max(0, color.g * (1 - amount)), b: Math.max(0, color.b * (1 - amount)) };
 }
 
-function commandText(x, y, size, value, bold = false, color = { r: 0.055, g: 0.102, b: 0.184 }) {
-  return `${color.r.toFixed(3)} ${color.g.toFixed(3)} ${color.b.toFixed(3)} rg BT /${bold ? 'F2' : 'F1'} ${size} Tf ${x} ${y} Td (${pdfEscape(value)}) Tj ET\n`;
+function pdfFontResource(fontFamily, bold, italic) {
+  const family = String(fontFamily || '').toLowerCase();
+  const isSans = /helvetica|arial|calibri|segoe|sans-serif/.test(family);
+  const base = /courier|mono/.test(family) ? 'COURIER' : !isSans && /times|cambria|georgia|serif/.test(family) ? 'TIMES' : 'HELVETICA';
+  if (base === 'TIMES') return bold && italic ? 'F8' : italic ? 'F7' : bold ? 'F6' : 'F5';
+  if (base === 'COURIER') return bold && italic ? 'F12' : italic ? 'F11' : bold ? 'F10' : 'F9';
+  return bold && italic ? 'F4' : italic ? 'F3' : bold ? 'F2' : 'F1';
+}
+
+function commandText(x, y, size, value, bold = false, color = { r: 0.055, g: 0.102, b: 0.184 }, options = {}) {
+  const font = pdfFontResource(options.fontFamily, bold, options.italic === true);
+  return `${color.r.toFixed(3)} ${color.g.toFixed(3)} ${color.b.toFixed(3)} rg BT /${font} ${size} Tf ${x} ${y} Td (${pdfEscape(value)}) Tj ET\n`;
 }
 
 function commandLine(x1, y1, x2, y2, width = 1, gray = 0.84) {
@@ -768,10 +779,14 @@ function streamObject(dictionary, data) {
 function assemblePdf(pageCommands, logoImage, options = {}) {
   const objects = new Map();
   objects.set(1, Buffer.from('<< /Type /Catalog /Pages 2 0 R >>', 'ascii'));
-  objects.set(3, Buffer.from('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', 'ascii'));
-  objects.set(4, Buffer.from('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>', 'ascii'));
+  const fonts = [
+    'Helvetica', 'Helvetica-Bold', 'Helvetica-Oblique', 'Helvetica-BoldOblique',
+    'Times-Roman', 'Times-Bold', 'Times-Italic', 'Times-BoldItalic',
+    'Courier', 'Courier-Bold', 'Courier-Oblique', 'Courier-BoldOblique'
+  ];
+  fonts.forEach((font, index) => objects.set(index + 3, Buffer.from(`<< /Type /Font /Subtype /Type1 /BaseFont /${font} >>`, 'ascii')));
 
-  let nextId = 5;
+  let nextId = 15;
   const imageObjects = new Map();
   const addImage = (name, image) => {
     if (!image || imageObjects.has(name)) return;
@@ -800,7 +815,8 @@ function assemblePdf(pageCommands, logoImage, options = {}) {
     const xObject = imageObjects.size
       ? ` /XObject << ${Array.from(imageObjects.entries()).map(([name, id]) => `/${name} ${id} 0 R`).join(' ')} >>`
       : '';
-    objects.set(pageObjectIds[index], Buffer.from(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageSpec.width} ${pageSpec.height}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >>${xObject} >> /Contents ${contentObjectIds[index]} 0 R >>`, 'ascii'));
+    const fontResources = fonts.map((font, fontIndex) => `/F${fontIndex + 1} ${fontIndex + 3} 0 R`).join(' ');
+    objects.set(pageObjectIds[index], Buffer.from(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageSpec.width} ${pageSpec.height}] /Resources << /Font << ${fontResources} >>${xObject} >> /Contents ${contentObjectIds[index]} 0 R >>`, 'ascii'));
     objects.set(contentObjectIds[index], streamObject('', Buffer.from(commands, 'ascii')));
   });
 
@@ -900,7 +916,10 @@ function createImportedCanvasPdf({ kind, record, company, branding, localization
   const assetMap = importedAssets && typeof importedAssets === 'object' ? importedAssets : {};
   for (const [index, page] of canvas.pages.entries()) {
     const asset = assetMap[page.backgroundAsset];
-    const prepared = asset && asset.buffer ? prepareLogoImage(asset) : null;
+    const cleanedAsset = asset && asset.buffer
+      ? { ...asset, buffer: cleanImportedPageAsset(asset.buffer, page) }
+      : null;
+    const prepared = cleanedAsset ? prepareLogoImage(cleanedAsset) : null;
     if (!prepared) throw new Error('An imported document page is missing. Convert the original document again.');
     const imageName = `BG${index + 1}`;
     extraImages.push({ name: imageName, image: prepared });
@@ -913,7 +932,6 @@ function createImportedCanvasPdf({ kind, record, company, branding, localization
       const boxWidth = Number(element.width || 1);
       const boxHeight = Number(element.height || 1);
       const y = page.height - top - boxHeight;
-      output += commandRect(Math.max(0, x - 1.75), Math.max(0, y - 1.35), boxWidth + 3.5, boxHeight + 2.7, hexRgb(element.backgroundColor, '#FFFFFF'));
       if (element.hidden) continue;
       const context = { kind, record, company, branding, localization };
       const value = binding === 'STATIC' ? interpolateImportedText(element.text, context) : importedBindingValue(binding, context);
@@ -923,7 +941,15 @@ function createImportedCanvasPdf({ kind, record, company, branding, localization
       const align = String(element.align || 'LEFT').toUpperCase();
       const textX = align === 'RIGHT' ? x + boxWidth - estimatedWidth : align === 'CENTER' ? x + (boxWidth - estimatedWidth) / 2 : x;
       const baseline = y + Math.max(1, (boxHeight - size) * 0.42);
-      output += commandText(Math.max(0, textX), baseline, size, value, element.bold === true, hexRgb(element.textColor, '#111827'));
+      output += commandText(
+        Math.max(0, textX),
+        baseline,
+        size,
+        value,
+        element.bold === true,
+        hexRgb(element.textColor, '#111827'),
+        { fontFamily: element.fontFamily, italic: element.italic === true }
+      );
     }
     const pageLogos = (Array.isArray(canvas.logos) && canvas.logos.length ? canvas.logos : canvas.logo ? [canvas.logo] : [])
       .filter((logo) => Number(logo.page || 1) === Number(page.pageNumber));

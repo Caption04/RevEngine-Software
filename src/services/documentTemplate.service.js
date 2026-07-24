@@ -208,6 +208,8 @@ function normalizeImportedTextElement(input, pageNumber, index) {
     fontSize: number(source.fontSize, 9, 4, 72),
     fontFamily: text(source.fontFamily, 120) || 'Arial, Helvetica, sans-serif',
     bold: bool(source.bold, false),
+    italic: bool(source.italic, false),
+    lineHeight: number(source.lineHeight, 1, 0.8, 2),
     align: oneOf(source.align, ['LEFT', 'CENTER', 'RIGHT'], 'LEFT'),
     textColor: color(source.textColor, '#111827'),
     backgroundColor: color(source.backgroundColor, '#FFFFFF'),

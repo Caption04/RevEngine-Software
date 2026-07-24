@@ -24,7 +24,7 @@ test('exact PDF imports open as a full-width click-to-edit document instead of a
   assert.match(html, /Click any text and type/);
   assert.match(css, /\.imported-document-stage\s*\{[\s\S]*?min-height:\s*calc\(100vh - 290px\)/);
   assert.match(frontend, /'is-rendered-text'/);
-  assert.match(css, /\.imported-inline-text\.is-rendered-text\s*\{[\s\S]*?background:\s*var\(--imported-cover\)/);
+  assert.match(css, /\.imported-inline-text\.is-rendered-text\s*\{[\s\S]*?background:\s*transparent/);
 });
 
 test('inline text editing keeps page geometry rigid while changing content and live-data mappings', () => {
@@ -41,7 +41,8 @@ test('imported PDF page images are served only through a tenant-scoped template 
   const routes = read('src/routes/api.js');
   assert.match(routes, /router\.get\('\/document-templates\/:id\/canvas-assets\/:assetName'/);
   assert.match(routes, /companyId:\s*req\.companyId/);
-  assert.match(routes, /canvas\.pages\.some\(\(page\) => page && page\.backgroundAsset === assetName\)/);
+  assert.match(routes, /canvas\.pages\.find\(\(item\) => item && item\.backgroundAsset === assetName\)/);
+  assert.match(routes, /cleanImportedPageAsset\(original, page\)/);
   assert.match(routes, /Content-Type', 'image\/png'/);
   assert.match(routes, /Cache-Control', 'private, no-store'/);
 });

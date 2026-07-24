@@ -492,7 +492,7 @@
 
   function importedCanvasAssetUrl(page) {
     if (!state.selected || !page || !page.backgroundAsset) return '';
-    return `${API_BASE}/document-templates/${encodeURIComponent(state.selected.id)}/canvas-assets/${encodeURIComponent(page.backgroundAsset)}`;
+    return `${API_BASE}/document-templates/${encodeURIComponent(state.selected.id)}/canvas-assets/${encodeURIComponent(page.backgroundAsset)}?clean=1`;
   }
 
   function selectedImportedText() {
@@ -647,10 +647,10 @@
         const changed = importedElementChanged(element);
         const display = element.hidden ? 'Hidden text' : importedElementDisplayValue(element);
         const canType = editable && !element.hidden && binding === 'STATIC';
-        const coverX = Math.max(0, Number(element.x || 0) - 1.75);
-        const coverY = Math.max(0, Number(element.y || 0) - 1.35);
-        const coverWidth = Number(element.width || 1) + 3.5;
-        const coverHeight = Number(element.height || 1) + 2.7;
+        const textX = Math.max(0, Number(element.x || 0));
+        const textY = Math.max(0, Number(element.y || 0));
+        const textWidth = Number(element.width || 1);
+        const textHeight = Number(element.height || 1);
         const classes = [
           'imported-inline-text',
           'is-rendered-text',
@@ -660,13 +660,15 @@
           state.selectedImportedElementId === element.id ? 'is-selected' : ''
         ].filter(Boolean).join(' ');
         const style = [
-          `left:${coverX * zoom}px`, `top:${coverY * zoom}px`,
-          `width:${Math.max(4, coverWidth * zoom)}px`, `height:${Math.max(4, coverHeight * zoom)}px`,
-          `padding:${Math.max(.5, 1.35 * zoom)}px ${Math.max(.5, 1.75 * zoom)}px`,
+          `left:${textX * zoom}px`, `top:${textY * zoom}px`,
+          `width:${Math.max(4, textWidth * zoom)}px`, `height:${Math.max(4, textHeight * zoom)}px`,
+          'padding:0',
           `font-size:${Math.max(4, Number(element.fontSize || 9) * zoom)}px`,
           `font-family:${escapeHtml(element.fontFamily || 'Arial, Helvetica, sans-serif')}`,
-          `font-weight:${element.bold ? '700' : '400'}`, `text-align:${String(element.align || 'LEFT').toLowerCase()}`,
-          `--imported-text:${escapeHtml(element.textColor || '#111827')}`, `--imported-cover:${escapeHtml(element.backgroundColor || '#FFFFFF')}`
+          `font-weight:${element.bold ? '700' : '400'}`, `font-style:${element.italic ? 'italic' : 'normal'}`,
+          `line-height:${Math.max(.8, Math.min(2, Number(element.lineHeight || 1)))}`,
+          `text-align:${String(element.align || 'LEFT').toLowerCase()}`,
+          `--imported-text:${escapeHtml(element.textColor || '#111827')}`
         ].join(';');
         return `<div class="${classes}" style="${style}" data-imported-inline-text="${escapeHtml(element.id)}" data-binding="${escapeHtml(binding)}" contenteditable="${canType ? 'plaintext-only' : 'false'}" spellcheck="false" role="textbox" aria-label="Editable text on page ${page.pageNumber}">${escapeHtml(display)}</div>`;
       }).join('');

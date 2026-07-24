@@ -8526,9 +8526,9 @@ body.document-inline-editing .content {
   z-index: 3;
   display: block;
   overflow: hidden;
-  padding: 0 1px;
+  padding: 0;
   border: 0;
-  border-radius: 2px;
+  border-radius: 0;
   outline: 0;
   line-height: 1.05;
   white-space: nowrap;
@@ -8551,7 +8551,7 @@ body.document-inline-editing .content {
 .imported-inline-text.is-active,
 .imported-inline-text.is-replacement {
   color: var(--imported-text);
-  background: var(--imported-cover);
+  background: transparent;
 }
 
 .imported-inline-text.is-active {
@@ -9534,14 +9534,15 @@ body[data-document-editor-route="true"] .imported-inline-editor {
 
 .imported-inline-text.is-rendered-text {
   color: var(--imported-text);
-  background: var(--imported-cover);
+  background: transparent;
   font-synthesis: none;
-  line-height: 1;
+  font-kerning: normal;
+  font-variant-ligatures: common-ligatures;
 }
 
 .imported-inline-text.is-rendered-text.is-active {
   color: var(--imported-text);
-  background: var(--imported-cover);
+  background: transparent;
 }
 
 .imported-inline-logo.mode-company {

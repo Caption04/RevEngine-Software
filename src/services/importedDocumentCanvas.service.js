@@ -68,6 +68,90 @@ function parseBboxLayout(xml) {
   return pages;
 }
 
+
+function attribute(tag, name, fallback = '') {
+  const match = String(tag || '').match(new RegExp(`${name}="([^"]*)"`, 'i'));
+  return match ? xmlDecode(match[1]) : fallback;
+}
+
+function importedFontStack(value) {
+  const family = clean(value).replace(/["']/g, '');
+  if (!family) return 'Arial, Helvetica, sans-serif';
+  if (/helvetica/i.test(family)) return '"Helvetica Neue", Helvetica, Arial, sans-serif';
+  if (/arial/i.test(family)) return 'Arial, Helvetica, sans-serif';
+  if (/calibri/i.test(family)) return 'Calibri, "Segoe UI", Arial, sans-serif';
+  if (/cambria/i.test(family)) return 'Cambria, Georgia, "Times New Roman", serif';
+  if (/times|serif/i.test(family)) return '"Times New Roman", Times, serif';
+  if (/courier|mono/i.test(family)) return '"Courier New", Courier, monospace';
+  return `"${family}", Arial, Helvetica, sans-serif`;
+}
+
+function styledShare(body, tagName, totalLength) {
+  const pattern = new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'gi');
+  let match;
+  let length = 0;
+  while ((match = pattern.exec(String(body || '')))) {
+    length += clean(xmlDecode(match[1].replace(/<[^>]+>/g, ''))).length;
+  }
+  return totalLength > 0 ? length / totalLength : 0;
+}
+
+function parsePdfXml(xml) {
+  const source = String(xml || '');
+  const fonts = new Map();
+  const fontPattern = /<fontspec\b([^>]*)\/>/gi;
+  let fontMatch;
+  while ((fontMatch = fontPattern.exec(source))) {
+    const attrs = fontMatch[1];
+    const id = attribute(attrs, 'id');
+    if (!id) continue;
+    fonts.set(id, {
+      size: numericAttribute(attrs, 'size', 0),
+      family: importedFontStack(attribute(attrs, 'family')),
+      color: attribute(attrs, 'color', '#111827').toUpperCase()
+    });
+  }
+  const pages = [];
+  const pagePattern = /<page\b([^>]*)>([\s\S]*?)<\/page>/gi;
+  let pageMatch;
+  while ((pageMatch = pagePattern.exec(source)) && pages.length < MAX_PAGES) {
+    const pageTag = pageMatch[1];
+    const width = numericAttribute(pageTag, 'width', 595);
+    const height = numericAttribute(pageTag, 'height', 842);
+    const lines = [];
+    const textPattern = /<text\b([^>]*)>([\s\S]*?)<\/text>/gi;
+    let textMatch;
+    while ((textMatch = textPattern.exec(pageMatch[2]))) {
+      const attrs = textMatch[1];
+      const body = textMatch[2];
+      const text = clean(xmlDecode(body.replace(/<br\s*\/?\s*>/gi, ' ').replace(/<[^>]+>/g, '')));
+      if (!text) continue;
+      const font = fonts.get(attribute(attrs, 'font')) || {};
+      const x = numericAttribute(attrs, 'left');
+      const y = numericAttribute(attrs, 'top');
+      const lineWidth = numericAttribute(attrs, 'width', 1);
+      const lineHeight = numericAttribute(attrs, 'height', font.size || 1);
+      if (![x, y, lineWidth, lineHeight].every(Number.isFinite) || lineWidth <= 0 || lineHeight <= 0) continue;
+      const fontSize = Math.max(4, Math.min(72, Number(font.size || lineHeight)));
+      lines.push({
+        text,
+        x,
+        y,
+        width: lineWidth,
+        height: lineHeight,
+        fontSize,
+        fontFamily: font.family || 'Arial, Helvetica, sans-serif',
+        bold: styledShare(body, 'b', text.length) >= 0.55,
+        italic: styledShare(body, 'i', text.length) >= 0.55,
+        lineHeight: Math.max(0.8, Math.min(2, lineHeight / fontSize)),
+        textColor: /^#[0-9a-f]{6}$/i.test(font.color || '') ? font.color : '#111827'
+      });
+    }
+    pages.push({ pageNumber: pages.length + 1, width, height, lines });
+  }
+  return pages;
+}
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     encoding: options.encoding,
@@ -218,8 +302,15 @@ function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
   const inputPath = path.join(tempDir, 'source.pdf');
   fs.writeFileSync(inputPath, buffer);
   try {
-    const bbox = run('pdftotext', ['-bbox-layout', inputPath, '-'], { encoding: 'utf8', timeout: 20000 });
-    const pages = parseBboxLayout(bbox.stdout);
+    let pages = [];
+    const xmlPath = path.join(tempDir, 'layout.xml');
+    try {
+      run('pdftohtml', ['-xml', '-hidden', '-nodrm', '-zoom', '1', inputPath, xmlPath], { encoding: 'utf8', timeout: 30000 });
+      pages = parsePdfXml(fs.readFileSync(xmlPath, 'utf8'));
+    } catch {
+      const bbox = run('pdftotext', ['-bbox-layout', inputPath, '-'], { encoding: 'utf8', timeout: 20000 });
+      pages = parseBboxLayout(bbox.stdout);
+    }
     if (!pages.length) throw new Error('The PDF did not contain readable pages.');
     const outputPrefix = path.join(tempDir, 'page');
     run('pdftoppm', ['-png', '-r', '144', '-f', '1', '-l', String(Math.min(MAX_PAGES, pages.length)), inputPath, outputPrefix], { timeout: 60000 });
@@ -237,8 +328,8 @@ function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
       const textElements = [];
       for (const line of page.lines) {
         if (totalElements >= MAX_TEXT_ELEMENTS) break;
-        const colors = sampleElementColors(raster, page, line);
-        const fontSize = Math.max(5.5, Math.min(30, line.height * 0.78));
+        const sampledColors = sampleElementColors(raster, page, line);
+        const fontSize = Math.max(4, Math.min(72, Number(line.fontSize || line.height * 0.78)));
         textElements.push({
           id: `imported-text-${page.pageNumber}-${textElements.length + 1}`,
           page: page.pageNumber,
@@ -251,11 +342,13 @@ function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
           binding: 'STATIC',
           suggestedBinding: suggestedBinding(line.text),
           fontSize,
-          fontFamily: 'Arial, Helvetica, sans-serif',
-          bold: inferBold(line.text, line.height),
+          fontFamily: line.fontFamily || 'Arial, Helvetica, sans-serif',
+          bold: typeof line.bold === 'boolean' ? line.bold : inferBold(line.text, line.height),
+          italic: line.italic === true,
+          lineHeight: Number(line.lineHeight || Math.max(0.8, Math.min(2, line.height / fontSize))),
           align: line.x + line.width > page.width * 0.86 ? 'RIGHT' : 'LEFT',
-          textColor: colors.textColor,
-          backgroundColor: colors.backgroundColor,
+          textColor: line.textColor || sampledColors.textColor,
+          backgroundColor: sampledColors.backgroundColor,
           hidden: false
         });
         totalElements += 1;
@@ -327,5 +420,6 @@ function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
 module.exports = {
   exactCanvasDesign,
   parseBboxLayout,
+  parsePdfXml,
   suggestedBinding
 };
