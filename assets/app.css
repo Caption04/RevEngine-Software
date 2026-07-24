@@ -9685,3 +9685,31 @@ body[data-document-editor-route="true"] .imported-permanent-toolbar [data-import
   padding-block: 0;
   align-self: center;
 }
+
+/* Use a CSS-rendered select in the imported-logo toolbar.
+   Windows Chromium can repaint a focused native select at the wrong vertical
+   offset when it sits inside the toolbar's horizontal overflow container. */
+body[data-document-editor-route="true"] .imported-permanent-toolbar [data-imported-logo-context-controls] select {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  display: block;
+  width: 235px;
+  padding: 0 34px 0 10px;
+  border: 1px solid #c8d3e2;
+  border-radius: 8px;
+  background-color: #fff;
+  background-image: var(--select-chevron);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px 14px;
+  color: #111827;
+  line-height: 30px;
+  vertical-align: middle;
+  outline: none;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar [data-imported-logo-context-controls] select:focus {
+  border-color: rgba(35, 99, 255, .65);
+  box-shadow: 0 0 0 3px rgba(35, 99, 255, .10);
+}

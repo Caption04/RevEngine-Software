@@ -229,3 +229,11 @@ test('logo toolbar dropdown and action stay aligned at the same fixed height', (
   assert.match(css, /\[data-imported-logo-context-controls\]\s*\{[\s\S]*?flex-direction:\s*row;[\s\S]*?align-items:\s*center;[\s\S]*?min-height:\s*32px;/);
   assert.match(css, /\[data-imported-logo-context-controls\] select,[\s\S]*?\[data-imported-logo-context-controls\] \.secondary-button\.compact\s*\{[\s\S]*?height:\s*32px;[\s\S]*?min-height:\s*32px;[\s\S]*?margin:\s*0;/);
 });
+
+
+test('logo mode select uses a stable custom appearance inside the scrollable toolbar', () => {
+  const css = read('assets/app.css');
+  assert.match(css, /\[data-imported-logo-context-controls\] select\s*\{[\s\S]*?appearance:\s*none/);
+  assert.match(css, /\[data-imported-logo-context-controls\] select\s*\{[\s\S]*?background-image:\s*var\(--select-chevron\)/);
+  assert.match(css, /\[data-imported-logo-context-controls\] select\s*\{[\s\S]*?line-height:\s*30px/);
+});
