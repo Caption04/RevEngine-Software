@@ -341,7 +341,12 @@
     logos = logos.map((logo, index) => ({
       ...logo,
       id: String(logo.id || `imported-logo-${logo.page || index + 1}-${index + 1}`),
-      page: Number(logo.page || 1)
+      page: Number(logo.page || 1),
+      imageScale: Number.isFinite(Number(logo.imageScale)) ? Math.max(0.25, Number(logo.imageScale)) : 1,
+      imageOffsetX: Number.isFinite(Number(logo.imageOffsetX)) ? Number(logo.imageOffsetX) : 0,
+      imageOffsetY: Number.isFinite(Number(logo.imageOffsetY)) ? Number(logo.imageOffsetY) : 0,
+      imagePadding: Number.isFinite(Number(logo.imagePadding)) ? Math.max(0, Number(logo.imagePadding)) : 4,
+      logoRatio: Number.isFinite(Number(logo.logoRatio)) && Number(logo.logoRatio) > 0 ? Number(logo.logoRatio) : 1.8
     }));
     if (logos.length === 1 && canvas.pages.length > 1) {
       const base = logos[0];
@@ -523,6 +528,37 @@
     return importedDocumentPages && importedDocumentPages.querySelector(`[data-imported-inline-text="${CSS.escape(String(id || ''))}"]`);
   }
 
+  function importedLogoPlacement(logo, zoom = state.importedZoom || 1) {
+    const companyLogoUrl = state.editorContext && state.editorContext.companyLogoUrl;
+    const boxWidth = Math.max(8, Number(logo && logo.width || 1) * zoom);
+    const boxHeight = Math.max(8, Number(logo && logo.height || 1) * zoom);
+    if (!companyLogoUrl) return null;
+    const ratio = Number(logo.logoRatio || 1.8) > 0 ? Number(logo.logoRatio || 1.8) : 1.8;
+    const padding = Math.max(0, Number(logo.imagePadding == null ? 4 : logo.imagePadding)) * zoom;
+    const availableWidth = Math.max(1, boxWidth - (padding * 2));
+    const availableHeight = Math.max(1, boxHeight - (padding * 2));
+    const boxRatio = availableWidth / availableHeight;
+    const baseWidth = ratio >= boxRatio ? availableWidth : availableHeight * ratio;
+    const baseHeight = ratio >= boxRatio ? availableWidth / ratio : availableHeight;
+    const scale = Math.max(0.25, Number(logo.imageScale || 1));
+    const scaledWidth = baseWidth * scale;
+    const scaledHeight = baseHeight * scale;
+    const minOffsetX = Math.min(0, availableWidth - scaledWidth);
+    const maxOffsetX = Math.max(0, availableWidth - scaledWidth);
+    const minOffsetY = Math.min(0, availableHeight - scaledHeight);
+    const maxOffsetY = Math.max(0, availableHeight - scaledHeight);
+    const requestedOffsetX = Number(logo.imageOffsetX || 0) * zoom;
+    const requestedOffsetY = Number(logo.imageOffsetY || 0) * zoom;
+    const offsetX = Math.min(maxOffsetX, Math.max(minOffsetX, requestedOffsetX));
+    const offsetY = Math.min(maxOffsetY, Math.max(minOffsetY, requestedOffsetY));
+    return {
+      width: scaledWidth,
+      height: scaledHeight,
+      offsetX: padding + offsetX,
+      offsetY: padding + offsetY
+    };
+  }
+
   function setCaretAtEnd(node) {
     if (!node || !node.isContentEditable) return;
     const range = document.createRange();
@@ -617,11 +653,16 @@
     const companyLogoUrl = state.editorContext && state.editorContext.companyLogoUrl;
     return logos.map((logo) => {
       const mode = String(logo.mode || 'ORIGINAL').toUpperCase();
+      const placement = mode === 'COMPANY' && companyLogoUrl ? importedLogoPlacement(logo, zoom) : null;
       const style = [
         `left:${Number(logo.x || 0) * zoom}px`, `top:${Number(logo.y || 0) * zoom}px`,
         `width:${Math.max(8, Number(logo.width || 1) * zoom)}px`, `height:${Math.max(8, Number(logo.height || 1) * zoom)}px`,
-        `--imported-cover:${escapeHtml(logo.backgroundColor || '#FFFFFF')}`
-      ].join(';');
+        `--imported-cover:${escapeHtml(logo.backgroundColor || '#FFFFFF')}`,
+        placement ? `--imported-logo-width:${placement.width}px` : '',
+        placement ? `--imported-logo-height:${placement.height}px` : '',
+        placement ? `--imported-logo-offset-x:${placement.offsetX}px` : '',
+        placement ? `--imported-logo-offset-y:${placement.offsetY}px` : ''
+      ].filter(Boolean).join(';');
       const replacement = mode === 'COMPANY'
         ? companyLogoUrl ? `<span class="imported-logo-image-frame"><img src="${escapeHtml(companyLogoUrl)}" alt="Company logo"></span>` : '<span>Company logo</span>'
         : mode === 'HIDDEN' ? '<span>Logo hidden</span>' : '';
@@ -657,6 +698,8 @@
           changed ? 'is-replacement' : '',
           binding !== 'STATIC' ? 'is-live-field' : '',
           element.hidden ? 'is-hidden-text' : '',
+          element.underline ? 'is-underlined' : '',
+          element.linkUrl ? 'is-linkish' : '',
           state.selectedImportedElementId === element.id ? 'is-selected' : ''
         ].filter(Boolean).join(' ');
         const style = [
@@ -670,7 +713,8 @@
           `text-align:${String(element.align || 'LEFT').toLowerCase()}`,
           `--imported-text:${escapeHtml(element.textColor || '#111827')}`
         ].join(';');
-        return `<div class="${classes}" style="${style}" data-imported-inline-text="${escapeHtml(element.id)}" data-binding="${escapeHtml(binding)}" contenteditable="${canType ? 'plaintext-only' : 'false'}" spellcheck="false" role="textbox" aria-label="Editable text on page ${page.pageNumber}">${escapeHtml(display)}</div>`;
+        const title = element.linkUrl ? ` title="${escapeHtml(element.linkUrl)}" data-link-url="${escapeHtml(element.linkUrl)}"` : '';
+        return `<div class="${classes}" style="${style}" data-imported-inline-text="${escapeHtml(element.id)}" data-binding="${escapeHtml(binding)}" contenteditable="${canType ? 'plaintext-only' : 'false'}" spellcheck="false" role="textbox" aria-label="Editable text on page ${page.pageNumber}"${title}>${escapeHtml(display)}</div>`;
       }).join('');
       return `<article class="imported-edit-page" data-imported-page="${page.pageNumber}" style="width:${width}px;height:${height}px">
         <span class="imported-page-number">Page ${page.pageNumber}</span>
@@ -906,6 +950,10 @@
         ${modalField('y', 'Top position', `<input id="templateModal-y" name="y" type="number" min="0" max="${page.height}" step="1" value="${draft.y}">`)}
         ${modalField('width', 'Width', `<input id="templateModal-width" name="width" type="number" min="8" max="${page.width}" step="1" value="${draft.width}">`)}
         ${modalField('height', 'Height', `<input id="templateModal-height" name="height" type="number" min="8" max="${page.height}" step="1" value="${draft.height}">`)}
+        ${modalField('imageScale', 'Company logo size', `<input id="templateModal-imageScale" name="imageScale" type="number" min="0.25" max="6" step="0.05" value="${draft.imageScale || 1}">`)}
+        ${modalField('imageOffsetX', 'Logo move left/right', `<input id="templateModal-imageOffsetX" name="imageOffsetX" type="number" min="-1000" max="1000" step="1" value="${draft.imageOffsetX || 0}">`)}
+        ${modalField('imageOffsetY', 'Logo move up/down', `<input id="templateModal-imageOffsetY" name="imageOffsetY" type="number" min="-1000" max="1000" step="1" value="${draft.imageOffsetY || 0}">`)}
+        ${modalField('imagePadding', 'Inner padding', `<input id="templateModal-imagePadding" name="imagePadding" type="number" min="0" max="120" step="1" value="${draft.imagePadding == null ? 4 : draft.imagePadding}">`)}
         ${modalField('backgroundColor', 'Background colour', `<input id="templateModal-backgroundColor" name="backgroundColor" type="color" value="${draft.backgroundColor || '#FFFFFF'}">`)}
       </div>`,
       onSubmit: async (data) => {
@@ -917,6 +965,10 @@
           y: Math.max(0, Number(data.get('y')) || 0),
           width: Math.max(8, Number(data.get('width')) || 80),
           height: Math.max(8, Number(data.get('height')) || 40),
+          imageScale: Math.max(0.25, Number(data.get('imageScale')) || 1),
+          imageOffsetX: Number(data.get('imageOffsetX')) || 0,
+          imageOffsetY: Number(data.get('imageOffsetY')) || 0,
+          imagePadding: Math.max(0, Number(data.get('imagePadding')) || 0),
           mode: importedInlineLogoMode && importedInlineLogoMode.value || importedLogoMode && importedLogoMode.value || draft.mode || 'ORIGINAL',
           backgroundColor: String(data.get('backgroundColor') || '#FFFFFF')
         };
@@ -1503,6 +1555,10 @@
       if (event.target.closest('[data-imported-inline-reset]')) { updateImportedTextFormatting('reset'); return; }
       if (event.target.closest('[data-imported-inline-hide]')) { updateImportedTextFormatting('hide'); return; }
       if (event.target.closest('[data-imported-inline-insert-field]')) { openImportedFieldPicker(); return; }
+      if (inlineText && (event.metaKey || event.ctrlKey) && inlineText.dataset.linkUrl) {
+        window.open(inlineText.dataset.linkUrl, '_blank', 'noopener');
+        return;
+      }
       if (state.importedMode === 'EDIT' && event.target.closest('[data-imported-document-stage]') && !event.target.closest('[data-imported-contextbar]')) clearImportedSelection();
       if (open) {
         const template = state.templates.find((item) => item.id === open.dataset.templateOpen);

@@ -86,6 +86,14 @@ function importedFontStack(value) {
   return `"${family}", Arial, Helvetica, sans-serif`;
 }
 
+function fontTraits(value) {
+  const family = clean(value).toLowerCase();
+  return {
+    bold: /(?:^|[-_\s])(bold|black|heavy|demi|semibold|extrabold|ultrabold)(?:$|[-_\s])/i.test(family),
+    italic: /(?:^|[-_\s])(italic|oblique)(?:$|[-_\s])/i.test(family)
+  };
+}
+
 function styledShare(body, tagName, totalLength) {
   const pattern = new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'gi');
   let match;
@@ -133,6 +141,9 @@ function parsePdfXml(xml) {
       const lineHeight = numericAttribute(attrs, 'height', font.size || 1);
       if (![x, y, lineWidth, lineHeight].every(Number.isFinite) || lineWidth <= 0 || lineHeight <= 0) continue;
       const fontSize = Math.max(4, Math.min(72, Number(font.size || lineHeight)));
+      const traits = fontTraits(font.family || '');
+      const linkMatch = body.match(/<a\b[^>]*href="([^"]+)"[^>]*>/i);
+      const hasUnderlineTag = /<(?:u|underline)\b/i.test(body);
       lines.push({
         text,
         x,
@@ -141,8 +152,10 @@ function parsePdfXml(xml) {
         height: lineHeight,
         fontSize,
         fontFamily: font.family || 'Arial, Helvetica, sans-serif',
-        bold: styledShare(body, 'b', text.length) >= 0.55,
-        italic: styledShare(body, 'i', text.length) >= 0.55,
+        bold: traits.bold || styledShare(body, 'b', text.length) >= 0.55,
+        italic: traits.italic || styledShare(body, 'i', text.length) >= 0.55,
+        underline: hasUnderlineTag || Boolean(linkMatch),
+        linkUrl: linkMatch ? xmlDecode(linkMatch[1]) : '',
         lineHeight: Math.max(0.8, Math.min(2, lineHeight / fontSize)),
         textColor: /^#[0-9a-f]{6}$/i.test(font.color || '') ? font.color : '#111827'
       });
@@ -349,6 +362,8 @@ function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
           align: line.x + line.width > page.width * 0.86 ? 'RIGHT' : 'LEFT',
           textColor: line.textColor || sampledColors.textColor,
           backgroundColor: sampledColors.backgroundColor,
+          underline: line.underline === true,
+          linkUrl: line.linkUrl || '',
           hidden: false
         });
         totalElements += 1;

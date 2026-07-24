@@ -213,6 +213,8 @@ function normalizeImportedTextElement(input, pageNumber, index) {
     align: oneOf(source.align, ['LEFT', 'CENTER', 'RIGHT'], 'LEFT'),
     textColor: color(source.textColor, '#111827'),
     backgroundColor: color(source.backgroundColor, '#FFFFFF'),
+    underline: bool(source.underline, false),
+    linkUrl: text(source.linkUrl, 2000),
     hidden: bool(source.hidden, false)
   };
 }
@@ -227,7 +229,11 @@ function normalizeImportedLogo(input, index = 0) {
     width: number(source.width, 1, 1, 2000),
     height: number(source.height, 1, 1, 1000),
     mode: oneOf(source.mode, ['ORIGINAL', 'COMPANY', 'HIDDEN'], 'ORIGINAL'),
-    backgroundColor: color(source.backgroundColor, '#FFFFFF')
+    backgroundColor: color(source.backgroundColor, '#FFFFFF'),
+    imageScale: number(source.imageScale, 1, 0.25, 6),
+    imageOffsetX: number(source.imageOffsetX, 0, -2000, 2000),
+    imageOffsetY: number(source.imageOffsetY, 0, -2000, 2000),
+    imagePadding: number(source.imagePadding, 4, 0, 120)
   };
 }
 

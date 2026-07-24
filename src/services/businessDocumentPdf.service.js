@@ -54,6 +54,48 @@ function commandLine(x1, y1, x2, y2, width = 1, gray = 0.84) {
   return `${gray} G ${width} w ${x1} ${y1} m ${x2} ${y2} l S\n`;
 }
 
+function estimateTextWidth(value, size) {
+  const stringValue = ascii(value);
+  let units = 0;
+  for (const character of stringValue) {
+    if (/\s/.test(character)) units += 0.28;
+    else if (/[A-Z0-9]/.test(character)) units += 0.62;
+    else if (/[ilI.,'`:;]/.test(character)) units += 0.24;
+    else if (/[mwMW@#%&]/.test(character)) units += 0.86;
+    else units += 0.52;
+  }
+  return units * size;
+}
+
+function drawContainedLogoPlacement(logo, preparedLogo) {
+  const logoWidth = Math.max(1, Number(logo.width || 1));
+  const logoHeight = Math.max(1, Number(logo.height || 1));
+  const padding = Math.max(0, Number(logo.imagePadding == null ? 4 : logo.imagePadding));
+  const availableWidth = Math.max(1, logoWidth - (padding * 2));
+  const availableHeight = Math.max(1, logoHeight - (padding * 2));
+  const ratio = preparedLogo.width / preparedLogo.height;
+  const boxRatio = availableWidth / availableHeight;
+  const baseWidth = ratio >= boxRatio ? availableWidth : availableHeight * ratio;
+  const baseHeight = ratio >= boxRatio ? availableWidth / ratio : availableHeight;
+  const scale = Math.max(0.25, Number(logo.imageScale || 1));
+  const scaledWidth = baseWidth * scale;
+  const scaledHeight = baseHeight * scale;
+  const minOffsetX = Math.min(0, availableWidth - scaledWidth);
+  const maxOffsetX = Math.max(0, availableWidth - scaledWidth);
+  const minOffsetY = Math.min(0, availableHeight - scaledHeight);
+  const maxOffsetY = Math.max(0, availableHeight - scaledHeight);
+  const requestedOffsetX = Number(logo.imageOffsetX || 0);
+  const requestedOffsetY = Number(logo.imageOffsetY || 0);
+  const offsetX = Math.min(maxOffsetX, Math.max(minOffsetX, requestedOffsetX));
+  const offsetY = Math.min(maxOffsetY, Math.max(minOffsetY, requestedOffsetY));
+  return {
+    width: scaledWidth,
+    height: scaledHeight,
+    x: padding + offsetX,
+    y: padding + offsetY
+  };
+}
+
 function commandColorLine(x1, y1, x2, y2, width, color) {
   return `${color.r.toFixed(3)} ${color.g.toFixed(3)} ${color.b.toFixed(3)} RG ${width} w ${x1} ${y1} m ${x2} ${y2} l S\n`;
 }
@@ -941,8 +983,9 @@ function createImportedCanvasPdf({ kind, record, company, branding, localization
       const align = String(element.align || 'LEFT').toUpperCase();
       const textX = align === 'RIGHT' ? x + boxWidth - estimatedWidth : align === 'CENTER' ? x + (boxWidth - estimatedWidth) / 2 : x;
       const baseline = y + Math.max(1, (boxHeight - size) * 0.42);
+      const drawX = Math.max(0, textX);
       output += commandText(
-        Math.max(0, textX),
+        drawX,
         baseline,
         size,
         value,
@@ -950,6 +993,11 @@ function createImportedCanvasPdf({ kind, record, company, branding, localization
         hexRgb(element.textColor, '#111827'),
         { fontFamily: element.fontFamily, italic: element.italic === true }
       );
+      if (element.underline === true) {
+        const underlineY = Math.max(0, baseline - Math.max(0.8, size * 0.12));
+        const underlineWidth = Math.min(boxWidth, estimateTextWidth(value, size));
+        output += commandColorLine(drawX, underlineY, drawX + underlineWidth, underlineY, Math.max(0.6, size * 0.05), hexRgb(element.textColor, '#111827'));
+      }
     }
     const pageLogos = (Array.isArray(canvas.logos) && canvas.logos.length ? canvas.logos : canvas.logo ? [canvas.logo] : [])
       .filter((logo) => Number(logo.page || 1) === Number(page.pageNumber));
@@ -961,14 +1009,8 @@ function createImportedCanvasPdf({ kind, record, company, branding, localization
       const logoY = page.height - Number(logo.y || 0) - logoHeight;
       output += commandRect(logoX - 1, logoY - 1, logoWidth + 2, logoHeight + 2, hexRgb(logo.backgroundColor, '#FFFFFF'));
       if (logo.mode === 'COMPANY' && preparedLogo) {
-        const inset = Math.max(2, Math.min(8, Math.min(logoWidth, logoHeight) * 0.04));
-        const availableWidth = Math.max(1, logoWidth - (inset * 2));
-        const availableHeight = Math.max(1, logoHeight - (inset * 2));
-        const ratio = preparedLogo.width / preparedLogo.height;
-        const boxRatio = availableWidth / availableHeight;
-        const width = ratio >= boxRatio ? availableWidth : availableHeight * ratio;
-        const height = ratio >= boxRatio ? availableWidth / ratio : availableHeight;
-        output += commandImage(logoX + inset + (availableWidth - width) / 2, logoY + inset + (availableHeight - height) / 2, width, height);
+        const placement = drawContainedLogoPlacement(logo, preparedLogo);
+        output += commandImage(logoX + placement.x, logoY + placement.y, placement.width, placement.height);
       }
     }
     commands.push(output);

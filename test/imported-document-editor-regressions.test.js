@@ -64,7 +64,7 @@ test('company logos use contain fitting in both the editor and generated PDF', (
   assert.match(frontend, /imported-logo-image-frame/);
   assert.match(css, /object-fit:\s*contain/);
   assert.match(css, /object-position:\s*center/);
-  assert.match(pdf, /const inset = Math\.max\(2, Math\.min\(8/);
+  assert.match(pdf, /function drawContainedLogoPlacement\(/);
   assert.match(pdf, /availableWidth/);
   assert.match(pdf, /availableHeight/);
 });
@@ -82,4 +82,35 @@ test('undo and redo cover typing, toolbar actions, logo changes, and keyboard sh
   assert.match(frontend, /shortcut === 'z'/);
   assert.match(frontend, /shortcut === 'y'/);
   assert.match(frontend, /event\.shiftKey\) redoImportedChange\(\)/);
+});
+
+
+test('imported company logos can be resized and moved inside their reserved box without overflowing', () => {
+  const frontend = read('assets/document-templates.js');
+  const css = read('assets/app.css');
+  const pdf = read('src/services/businessDocumentPdf.service.js');
+  const templateService = read('src/services/documentTemplate.service.js');
+  assert.match(frontend, /function importedLogoPlacement\(/);
+  assert.match(frontend, /imageScale/);
+  assert.match(frontend, /imageOffsetX/);
+  assert.match(frontend, /imageOffsetY/);
+  assert.match(css, /--imported-logo-width/);
+  assert.match(pdf, /drawContainedLogoPlacement/);
+  assert.match(templateService, /imageScale:/);
+});
+
+test('imported text preserves underline and link metadata for link-like PDF content', () => {
+  const frontend = read('assets/document-templates.js');
+  const css = read('assets/app.css');
+  const canvasService = read('src/services/importedDocumentCanvas.service.js');
+  const templateService = read('src/services/documentTemplate.service.js');
+  const pdf = read('src/services/businessDocumentPdf.service.js');
+  assert.match(canvasService, /linkUrl/);
+  assert.match(canvasService, /underline/);
+  assert.match(templateService, /linkUrl:/);
+  assert.match(templateService, /underline:/);
+  assert.match(frontend, /is-underlined/);
+  assert.match(frontend, /data-link-url/);
+  assert.match(css, /text-decoration: underline/);
+  assert.match(pdf, /estimateTextWidth/);
 });
