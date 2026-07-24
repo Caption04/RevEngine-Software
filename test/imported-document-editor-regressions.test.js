@@ -5,6 +5,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { normalizeImportedCanvas } = require('../src/services/documentTemplate.service');
+const { parsePdfXml } = require('../src/services/importedDocumentCanvas.service');
+const { createBusinessDocumentPdf } = require('../src/services/businessDocumentPdf.service');
 
 const root = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
@@ -85,32 +87,103 @@ test('undo and redo cover typing, toolbar actions, logo changes, and keyboard sh
 });
 
 
-test('imported company logos can be resized and moved inside their reserved box without overflowing', () => {
+test('imported company logos can be resized and dragged inside a clipped reserved box', () => {
   const frontend = read('assets/document-templates.js');
   const css = read('assets/app.css');
   const pdf = read('src/services/businessDocumentPdf.service.js');
   const templateService = read('src/services/documentTemplate.service.js');
-  assert.match(frontend, /function importedLogoPlacement\(/);
-  assert.match(frontend, /imageScale/);
+  assert.match(frontend, /--imported-logo-scale/);
   assert.match(frontend, /imageOffsetX/);
   assert.match(frontend, /imageOffsetY/);
-  assert.match(css, /--imported-logo-width/);
-  assert.match(pdf, /drawContainedLogoPlacement/);
+  assert.match(frontend, /importedLogoDrag/);
+  assert.match(frontend, /pointermove/);
+  assert.match(css, /\.imported-inline-logo\.mode-company\s*\{[\s\S]*?overflow:\s*hidden !important/);
+  assert.match(css, /\.imported-logo-image-frame\s*\{[\s\S]*?overflow:\s*hidden !important/);
+  assert.match(css, /scale\(var\(--imported-logo-scale, 1\)\)/);
+  assert.match(pdf, /commandClippedNamedImage/);
+  assert.match(pdf, / re W n /);
   assert.match(templateService, /imageScale:/);
 });
 
-test('imported text preserves underline and link metadata for link-like PDF content', () => {
+test('imported text preserves links and lets any selected text become a link', () => {
+  const html = read('imported-document-editor.html');
   const frontend = read('assets/document-templates.js');
   const css = read('assets/app.css');
   const canvasService = read('src/services/importedDocumentCanvas.service.js');
   const templateService = read('src/services/documentTemplate.service.js');
   const pdf = read('src/services/businessDocumentPdf.service.js');
-  assert.match(canvasService, /linkUrl/);
-  assert.match(canvasService, /underline/);
-  assert.match(templateService, /linkUrl:/);
-  assert.match(templateService, /underline:/);
+  assert.match(html, /data-imported-inline-link/);
+  assert.match(html, /data-imported-inline-open-link/);
+  assert.match(frontend, /function editImportedTextLink\(/);
+  assert.match(frontend, /normalizeImportedLinkUrl/);
+  assert.match(frontend, /openImportedLink/);
+  assert.match(canvasService, /linkUrlFromMarkup/);
+  assert.match(canvasService, /parseHtmlLinks/);
+  assert.match(templateService, /originalLinkUrl:/);
   assert.match(frontend, /is-underlined/);
   assert.match(frontend, /data-link-url/);
   assert.match(css, /text-decoration: underline/);
-  assert.match(pdf, /estimateTextWidth/);
+  assert.match(pdf, /\/Subtype \/Link/);
+  assert.match(pdf, /\/Annots/);
+});
+
+test('PDF font family traits retain original bold and italic styling', () => {
+  const pages = parsePdfXml(`
+    <pdf2xml>
+      <fontspec id="0" size="12" family="Arial-BoldMT" color="#000000"/>
+      <fontspec id="1" size="10" family="TimesNewRomanPS-ItalicMT" color="#111111"/>
+      <page number="1" width="595" height="842">
+        <text top="10" left="20" width="180" height="14" font="0">Important payment notice</text>
+        <text top="30" left="20" width="160" height="12" font="1">Italic detail</text>
+        <text top="50" left="20" width="220" height="14" font="0"><a href="https://example.com/pay">Make an Online Payment</a></text>
+      </page>
+    </pdf2xml>
+  `);
+  assert.equal(pages[0].lines[0].bold, true);
+  assert.equal(pages[0].lines[1].italic, true);
+  assert.equal(pages[0].lines[2].bold, true);
+  assert.equal(pages[0].lines[2].underline, true);
+  assert.equal(pages[0].lines[2].linkUrl, 'https://example.com/pay');
+});
+
+test('generated imported PDFs clip oversized logos and contain clickable link annotations', () => {
+  const background = fs.readFileSync(path.join(root, 'assets/rev-engine-mark.png'));
+  const design = {
+    importedCanvas: {
+      mode: 'EXACT_PDF',
+      textEditable: true,
+      pages: [{
+        pageNumber: 1,
+        width: 200,
+        height: 200,
+        backgroundAsset: 'page-1.png',
+        textElements: [{
+          id: 'link-1', page: 1, x: 20, y: 20, width: 120, height: 16,
+          originalText: 'Pay online', text: 'Pay online', binding: 'STATIC',
+          fontSize: 10, fontFamily: 'Arial, Helvetica, sans-serif', bold: true,
+          italic: false, lineHeight: 1, align: 'LEFT', textColor: '#1155CC',
+          backgroundColor: '#FFFFFF', underline: true, linkUrl: 'https://example.com/pay'
+        }]
+      }],
+      logos: [{
+        id: 'logo-1', page: 1, x: 20, y: 60, width: 80, height: 40,
+        mode: 'COMPANY', backgroundColor: '#FFFFFF', imageScale: 3,
+        imageOffsetX: 25, imageOffsetY: -10, imagePadding: 2
+      }]
+    }
+  };
+  const output = createBusinessDocumentPdf({
+    kind: 'invoice',
+    record: { number: 'INV-1', customer: { name: 'Customer' }, total: 1 },
+    company: { name: 'Company' },
+    branding: { brandName: 'Company' },
+    localization: { documentDesign: design, defaultCurrency: 'USD', numberFormat: 'en-US' },
+    logoImage: { type: 'png', buffer: background },
+    importedAssets: { 'page-1.png': { type: 'png', buffer: background } }
+  });
+  const source = output.toString('latin1');
+  assert.match(source, / re W n [\d.]+ 0 0 [\d.]+ [\d.-]+ [\d.-]+ cm \/Logo Do Q/);
+  assert.match(source, /\/Subtype \/Link/);
+  assert.match(source, /\/URI \(https:\/\/example\.com\/pay\)/);
+  assert.match(source, /\/Annots \[/);
 });

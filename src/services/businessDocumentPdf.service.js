@@ -23,6 +23,13 @@ function pdfEscape(value) {
   return ascii(value).replace(/([\\()])/g, '\\$1');
 }
 
+function safeExternalLink(value) {
+  const input = String(value || '').trim();
+  if (!input) return '';
+  if (/^www\./i.test(input)) return `https://${input}`;
+  return /^(?:https?:\/\/|mailto:|tel:)/i.test(input) ? input : '';
+}
+
 function hexRgb(value, fallback = '#2363ff') {
   const input = /^#[0-9a-f]{6}$/i.test(String(value || '')) ? String(value) : fallback;
   return {
@@ -80,19 +87,13 @@ function drawContainedLogoPlacement(logo, preparedLogo) {
   const scale = Math.max(0.25, Number(logo.imageScale || 1));
   const scaledWidth = baseWidth * scale;
   const scaledHeight = baseHeight * scale;
-  const minOffsetX = Math.min(0, availableWidth - scaledWidth);
-  const maxOffsetX = Math.max(0, availableWidth - scaledWidth);
-  const minOffsetY = Math.min(0, availableHeight - scaledHeight);
-  const maxOffsetY = Math.max(0, availableHeight - scaledHeight);
-  const requestedOffsetX = Number(logo.imageOffsetX || 0);
-  const requestedOffsetY = Number(logo.imageOffsetY || 0);
-  const offsetX = Math.min(maxOffsetX, Math.max(minOffsetX, requestedOffsetX));
-  const offsetY = Math.min(maxOffsetY, Math.max(minOffsetY, requestedOffsetY));
+  const offsetX = Number(logo.imageOffsetX || 0);
+  const offsetY = Number(logo.imageOffsetY || 0);
   return {
     width: scaledWidth,
     height: scaledHeight,
-    x: padding + offsetX,
-    y: padding + offsetY
+    x: padding + ((availableWidth - scaledWidth) / 2) + offsetX,
+    y: padding + ((availableHeight - scaledHeight) / 2) - offsetY
   };
 }
 
@@ -111,6 +112,11 @@ function commandStrokeRect(x, y, width, height, color, lineWidth = 1) {
 function commandNamedImage(name, x, y, width, height) {
   const safeName = String(name || 'Image').replace(/[^A-Za-z0-9]/g, '') || 'Image';
   return `q ${width.toFixed(2)} 0 0 ${height.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm /${safeName} Do Q\n`;
+}
+
+function commandClippedNamedImage(name, clipX, clipY, clipWidth, clipHeight, x, y, width, height) {
+  const safeName = String(name || 'Image').replace(/[^A-Za-z0-9]/g, '') || 'Image';
+  return `q ${clipX.toFixed(2)} ${clipY.toFixed(2)} ${clipWidth.toFixed(2)} ${clipHeight.toFixed(2)} re W n ${width.toFixed(2)} 0 0 ${height.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm /${safeName} Do Q\n`;
 }
 
 function commandImage(x, y, width, height) {
@@ -851,6 +857,22 @@ function assemblePdf(pageCommands, logoImage, options = {}) {
     pageObjectIds.push(nextId++);
     contentObjectIds.push(nextId++);
   });
+  const pageAnnotationIds = pageCommands.map((_, pageIndex) => {
+    const annotations = Array.isArray(options.pageAnnotations && options.pageAnnotations[pageIndex])
+      ? options.pageAnnotations[pageIndex]
+      : [];
+    return annotations.map((annotation) => {
+      const url = safeExternalLink(annotation && annotation.url);
+      if (!url) return null;
+      const id = nextId++;
+      const x1 = Number(annotation.x || 0);
+      const y1 = Number(annotation.y || 0);
+      const x2 = x1 + Math.max(1, Number(annotation.width || 1));
+      const y2 = y1 + Math.max(1, Number(annotation.height || 1));
+      objects.set(id, Buffer.from(`<< /Type /Annot /Subtype /Link /Rect [${x1.toFixed(2)} ${y1.toFixed(2)} ${x2.toFixed(2)} ${y2.toFixed(2)}] /Border [0 0 0] /A << /S /URI /URI (${pdfEscape(url)}) >> >>`, 'ascii'));
+      return id;
+    }).filter(Boolean);
+  });
   objects.set(2, Buffer.from(`<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageObjectIds.length} >>`, 'ascii'));
   pageCommands.forEach((commands, index) => {
     const pageSpec = options.pageSpecs && options.pageSpecs[index] || { width: PAGE_WIDTH, height: PAGE_HEIGHT };
@@ -858,7 +880,10 @@ function assemblePdf(pageCommands, logoImage, options = {}) {
       ? ` /XObject << ${Array.from(imageObjects.entries()).map(([name, id]) => `/${name} ${id} 0 R`).join(' ')} >>`
       : '';
     const fontResources = fonts.map((font, fontIndex) => `/F${fontIndex + 1} ${fontIndex + 3} 0 R`).join(' ');
-    objects.set(pageObjectIds[index], Buffer.from(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageSpec.width} ${pageSpec.height}] /Resources << /Font << ${fontResources} >>${xObject} >> /Contents ${contentObjectIds[index]} 0 R >>`, 'ascii'));
+    const annotations = pageAnnotationIds[index].length
+      ? ` /Annots [${pageAnnotationIds[index].map((id) => `${id} 0 R`).join(' ')}]`
+      : '';
+    objects.set(pageObjectIds[index], Buffer.from(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageSpec.width} ${pageSpec.height}] /Resources << /Font << ${fontResources} >>${xObject} >> /Contents ${contentObjectIds[index]} 0 R${annotations} >>`, 'ascii'));
     objects.set(contentObjectIds[index], streamObject('', Buffer.from(commands, 'ascii')));
   });
 
@@ -954,6 +979,7 @@ function createImportedCanvasPdf({ kind, record, company, branding, localization
   const preparedLogo = prepareLogoImage(logoImage);
   const extraImages = [];
   const pageSpecs = [];
+  const pageAnnotations = [];
   const commands = [];
   const assetMap = importedAssets && typeof importedAssets === 'object' ? importedAssets : {};
   for (const [index, page] of canvas.pages.entries()) {
@@ -966,6 +992,7 @@ function createImportedCanvasPdf({ kind, record, company, branding, localization
     const imageName = `BG${index + 1}`;
     extraImages.push({ name: imageName, image: prepared });
     pageSpecs.push({ width: page.width, height: page.height });
+    const annotations = [];
     let output = commandNamedImage(imageName, 0, 0, page.width, page.height);
     for (const element of page.textElements || []) {
       const binding = String(element.binding || 'STATIC').toUpperCase();
@@ -998,6 +1025,8 @@ function createImportedCanvasPdf({ kind, record, company, branding, localization
         const underlineWidth = Math.min(boxWidth, estimateTextWidth(value, size));
         output += commandColorLine(drawX, underlineY, drawX + underlineWidth, underlineY, Math.max(0.6, size * 0.05), hexRgb(element.textColor, '#111827'));
       }
+      const linkUrl = safeExternalLink(element.linkUrl);
+      if (linkUrl) annotations.push({ x, y, width: boxWidth, height: boxHeight, url: linkUrl });
     }
     const pageLogos = (Array.isArray(canvas.logos) && canvas.logos.length ? canvas.logos : canvas.logo ? [canvas.logo] : [])
       .filter((logo) => Number(logo.page || 1) === Number(page.pageNumber));
@@ -1010,12 +1039,23 @@ function createImportedCanvasPdf({ kind, record, company, branding, localization
       output += commandRect(logoX - 1, logoY - 1, logoWidth + 2, logoHeight + 2, hexRgb(logo.backgroundColor, '#FFFFFF'));
       if (logo.mode === 'COMPANY' && preparedLogo) {
         const placement = drawContainedLogoPlacement(logo, preparedLogo);
-        output += commandImage(logoX + placement.x, logoY + placement.y, placement.width, placement.height);
+        output += commandClippedNamedImage(
+          'Logo',
+          logoX,
+          logoY,
+          logoWidth,
+          logoHeight,
+          logoX + placement.x,
+          logoY + placement.y,
+          placement.width,
+          placement.height
+        );
       }
     }
+    pageAnnotations.push(annotations);
     commands.push(output);
   }
-  return assemblePdf(commands, preparedLogo, { extraImages, pageSpecs });
+  return assemblePdf(commands, preparedLogo, { extraImages, pageSpecs, pageAnnotations });
 }
 
 function createBusinessDocumentPdf({ kind, record, company, branding, localization, logoImage, importedAssets }) {

@@ -74,6 +74,39 @@ function attribute(tag, name, fallback = '') {
   return match ? xmlDecode(match[1]) : fallback;
 }
 
+function linkUrlFromMarkup(value) {
+  const match = String(value || '').match(/<(?:a|link)\b[^>]*(?:href|xlink:href)\s*=\s*(["'])(.*?)\1/i);
+  return match ? xmlDecode(match[2]).trim() : '';
+}
+
+function parseHtmlLinks(value) {
+  const links = [];
+  const pattern = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  let match;
+  while ((match = pattern.exec(String(value || '')))) {
+    const href = linkUrlFromMarkup(`<a ${match[1]}>`);
+    const label = clean(xmlDecode(match[2].replace(/<[^>]+>/g, '')));
+    if (href && label) links.push({ href, label });
+  }
+  return links;
+}
+
+function applyFallbackLinks(pages, links) {
+  const remaining = links.map((link) => ({ ...link, used: false }));
+  for (const page of pages) {
+    for (const line of page.lines || []) {
+      if (line.linkUrl) continue;
+      const normalizedLine = clean(line.text).toLowerCase();
+      const match = remaining.find((link) => !link.used && clean(link.label).toLowerCase() === normalizedLine);
+      if (!match) continue;
+      line.linkUrl = match.href;
+      line.underline = true;
+      match.used = true;
+    }
+  }
+  return pages;
+}
+
 function importedFontStack(value) {
   const family = clean(value).replace(/["']/g, '');
   if (!family) return 'Arial, Helvetica, sans-serif';
@@ -89,8 +122,8 @@ function importedFontStack(value) {
 function fontTraits(value) {
   const family = clean(value).toLowerCase();
   return {
-    bold: /(?:^|[-_\s])(bold|black|heavy|demi|semibold|extrabold|ultrabold)(?:$|[-_\s])/i.test(family),
-    italic: /(?:^|[-_\s])(italic|oblique)(?:$|[-_\s])/i.test(family)
+    bold: /bold|black|heavy|demi|semi[-_ ]?bold|extra[-_ ]?bold|ultra[-_ ]?bold/i.test(family),
+    italic: /italic|oblique/i.test(family)
   };
 }
 
@@ -113,9 +146,13 @@ function parsePdfXml(xml) {
     const attrs = fontMatch[1];
     const id = attribute(attrs, 'id');
     if (!id) continue;
+    const rawFamily = attribute(attrs, 'family');
+    const traits = fontTraits(rawFamily);
     fonts.set(id, {
       size: numericAttribute(attrs, 'size', 0),
-      family: importedFontStack(attribute(attrs, 'family')),
+      family: importedFontStack(rawFamily),
+      bold: traits.bold,
+      italic: traits.italic,
       color: attribute(attrs, 'color', '#111827').toUpperCase()
     });
   }
@@ -141,8 +178,7 @@ function parsePdfXml(xml) {
       const lineHeight = numericAttribute(attrs, 'height', font.size || 1);
       if (![x, y, lineWidth, lineHeight].every(Number.isFinite) || lineWidth <= 0 || lineHeight <= 0) continue;
       const fontSize = Math.max(4, Math.min(72, Number(font.size || lineHeight)));
-      const traits = fontTraits(font.family || '');
-      const linkMatch = body.match(/<a\b[^>]*href="([^"]+)"[^>]*>/i);
+      const linkUrl = linkUrlFromMarkup(body);
       const hasUnderlineTag = /<(?:u|underline)\b/i.test(body);
       lines.push({
         text,
@@ -152,10 +188,10 @@ function parsePdfXml(xml) {
         height: lineHeight,
         fontSize,
         fontFamily: font.family || 'Arial, Helvetica, sans-serif',
-        bold: traits.bold || styledShare(body, 'b', text.length) >= 0.55,
-        italic: traits.italic || styledShare(body, 'i', text.length) >= 0.55,
-        underline: hasUnderlineTag || Boolean(linkMatch),
-        linkUrl: linkMatch ? xmlDecode(linkMatch[1]) : '',
+        bold: font.bold === true || styledShare(body, 'b', text.length) >= 0.55,
+        italic: font.italic === true || styledShare(body, 'i', text.length) >= 0.55,
+        ...(hasUnderlineTag || linkUrl ? { underline: true } : {}),
+        ...(linkUrl ? { linkUrl } : {}),
         lineHeight: Math.max(0.8, Math.min(2, lineHeight / fontSize)),
         textColor: /^#[0-9a-f]{6}$/i.test(font.color || '') ? font.color : '#111827'
       });
@@ -324,6 +360,16 @@ function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
       const bbox = run('pdftotext', ['-bbox-layout', inputPath, '-'], { encoding: 'utf8', timeout: 20000 });
       pages = parseBboxLayout(bbox.stdout);
     }
+    try {
+      const linkPrefix = path.join(tempDir, 'link-layout');
+      run('pdftohtml', ['-i', '-noframes', '-hidden', '-nodrm', '-zoom', '1', inputPath, linkPrefix], { encoding: 'utf8', timeout: 30000 });
+      const linkFile = fs.readdirSync(tempDir)
+        .map((name) => path.join(tempDir, name))
+        .find((candidate) => candidate.startsWith(linkPrefix) && /\.html?$/i.test(candidate));
+      if (linkFile) applyFallbackLinks(pages, parseHtmlLinks(fs.readFileSync(linkFile, 'utf8')));
+    } catch {
+      // Link extraction is best-effort. Users can add or correct links in the editor toolbar.
+    }
     if (!pages.length) throw new Error('The PDF did not contain readable pages.');
     const outputPrefix = path.join(tempDir, 'page');
     run('pdftoppm', ['-png', '-r', '144', '-f', '1', '-l', String(Math.min(MAX_PAGES, pages.length)), inputPath, outputPrefix], { timeout: 60000 });
@@ -364,6 +410,11 @@ function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
           backgroundColor: sampledColors.backgroundColor,
           underline: line.underline === true,
           linkUrl: line.linkUrl || '',
+          originalBold: typeof line.bold === 'boolean' ? line.bold : inferBold(line.text, line.height),
+          originalItalic: line.italic === true,
+          originalUnderline: line.underline === true,
+          originalLinkUrl: line.linkUrl || '',
+          originalTextColor: line.textColor || sampledColors.textColor,
           hidden: false
         });
         totalElements += 1;
@@ -436,5 +487,7 @@ module.exports = {
   exactCanvasDesign,
   parseBboxLayout,
   parsePdfXml,
+  parseHtmlLinks,
+  applyFallbackLinks,
   suggestedBinding
 };

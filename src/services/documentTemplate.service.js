@@ -215,6 +215,11 @@ function normalizeImportedTextElement(input, pageNumber, index) {
     backgroundColor: color(source.backgroundColor, '#FFFFFF'),
     underline: bool(source.underline, false),
     linkUrl: text(source.linkUrl, 2000),
+    originalBold: bool(source.originalBold, bool(source.bold, false)),
+    originalItalic: bool(source.originalItalic, bool(source.italic, false)),
+    originalUnderline: bool(source.originalUnderline, bool(source.underline, false)),
+    originalLinkUrl: text(source.originalLinkUrl == null ? source.linkUrl : source.originalLinkUrl, 2000),
+    originalTextColor: color(source.originalTextColor, color(source.textColor, '#111827')),
     hidden: bool(source.hidden, false)
   };
 }

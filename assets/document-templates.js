@@ -30,7 +30,8 @@
     importedCaretOffset: null,
     importedUndoStack: [],
     importedRedoStack: [],
-    importedTypingSnapshot: null
+    importedTypingSnapshot: null,
+    importedLogoDrag: null
   };
 
   state.filter = initialFilter;
@@ -104,6 +105,8 @@
   const importedLogoContextControls = document.querySelector('[data-imported-logo-context-controls]');
   const importedInlineBinding = document.querySelector('[data-imported-inline-binding]');
   const importedInlineColour = document.querySelector('[data-imported-inline-colour]');
+  const importedInlineLinkButton = document.querySelector('[data-imported-inline-link]');
+  const importedInlineOpenLinkButton = document.querySelector('[data-imported-inline-open-link]');
   const importedInlineLogoMode = document.querySelector('[data-imported-inline-logo-mode]');
   const importedDataPreview = document.querySelector('[data-imported-data-preview]');
   const importedPreviewFrame = document.querySelector('[data-imported-preview-frame]');
@@ -528,35 +531,18 @@
     return importedDocumentPages && importedDocumentPages.querySelector(`[data-imported-inline-text="${CSS.escape(String(id || ''))}"]`);
   }
 
-  function importedLogoPlacement(logo, zoom = state.importedZoom || 1) {
-    const companyLogoUrl = state.editorContext && state.editorContext.companyLogoUrl;
-    const boxWidth = Math.max(8, Number(logo && logo.width || 1) * zoom);
-    const boxHeight = Math.max(8, Number(logo && logo.height || 1) * zoom);
-    if (!companyLogoUrl) return null;
-    const ratio = Number(logo.logoRatio || 1.8) > 0 ? Number(logo.logoRatio || 1.8) : 1.8;
-    const padding = Math.max(0, Number(logo.imagePadding == null ? 4 : logo.imagePadding)) * zoom;
-    const availableWidth = Math.max(1, boxWidth - (padding * 2));
-    const availableHeight = Math.max(1, boxHeight - (padding * 2));
-    const boxRatio = availableWidth / availableHeight;
-    const baseWidth = ratio >= boxRatio ? availableWidth : availableHeight * ratio;
-    const baseHeight = ratio >= boxRatio ? availableWidth / ratio : availableHeight;
-    const scale = Math.max(0.25, Number(logo.imageScale || 1));
-    const scaledWidth = baseWidth * scale;
-    const scaledHeight = baseHeight * scale;
-    const minOffsetX = Math.min(0, availableWidth - scaledWidth);
-    const maxOffsetX = Math.max(0, availableWidth - scaledWidth);
-    const minOffsetY = Math.min(0, availableHeight - scaledHeight);
-    const maxOffsetY = Math.max(0, availableHeight - scaledHeight);
-    const requestedOffsetX = Number(logo.imageOffsetX || 0) * zoom;
-    const requestedOffsetY = Number(logo.imageOffsetY || 0) * zoom;
-    const offsetX = Math.min(maxOffsetX, Math.max(minOffsetX, requestedOffsetX));
-    const offsetY = Math.min(maxOffsetY, Math.max(minOffsetY, requestedOffsetY));
-    return {
-      width: scaledWidth,
-      height: scaledHeight,
-      offsetX: padding + offsetX,
-      offsetY: padding + offsetY
-    };
+  function normalizeImportedLinkUrl(value) {
+    const input = String(value || '').trim();
+    if (!input) return '';
+    if (/^www\./i.test(input)) return `https://${input}`;
+    if (/^(?:https?:\/\/|mailto:|tel:)/i.test(input)) return input;
+    throw new Error('Enter a full web address beginning with https://, http://, mailto:, or tel:.');
+  }
+
+  function openImportedLink(value) {
+    const url = normalizeImportedLinkUrl(value);
+    if (!url) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   function setCaretAtEnd(node) {
@@ -598,6 +584,11 @@
     if (!hasSelection) {
       if (title) title.textContent = 'Formatting';
       if (copy) copy.textContent = 'Select text or a logo on the page.';
+      if (importedInlineLinkButton) {
+        importedInlineLinkButton.classList.remove('is-active');
+        importedInlineLinkButton.textContent = 'Link';
+      }
+      if (importedInlineOpenLinkButton) importedInlineOpenLinkButton.hidden = true;
       return;
     }
     if (logo) {
@@ -608,12 +599,21 @@
     }
     const element = match.element;
     if (title) title.textContent = `Text on page ${match.page.pageNumber}`;
-    if (copy) copy.textContent = element.hidden ? 'This text is hidden. Show or reset it to edit again.' : 'Type directly on the page or connect this text to live Rev Engine data.';
+    if (copy) copy.textContent = element.hidden
+      ? 'This text is hidden. Show or reset it to edit again.'
+      : element.linkUrl
+        ? 'This text is linked. Use Open or Ctrl+click the text to test it.'
+        : 'Type directly on the page or connect this text to live Rev Engine data.';
     if (importedInlineBinding) {
       importedInlineBinding.innerHTML = importedBindingOptions(String(element.binding || 'STATIC').toUpperCase());
       importedInlineBinding.value = String(element.binding || 'STATIC').toUpperCase();
     }
     if (importedInlineColour) importedInlineColour.value = element.textColor || '#111827';
+    if (importedInlineLinkButton) {
+      importedInlineLinkButton.classList.toggle('is-active', Boolean(element.linkUrl));
+      importedInlineLinkButton.textContent = element.linkUrl ? 'Edit link' : 'Link';
+    }
+    if (importedInlineOpenLinkButton) importedInlineOpenLinkButton.hidden = !element.linkUrl;
     const bold = importedContextbar.querySelector('[data-imported-inline-bold]');
     if (bold) bold.classList.toggle('is-active', element.bold === true);
     importedContextbar.querySelectorAll('[data-imported-inline-align]').forEach((button) => {
@@ -653,16 +653,15 @@
     const companyLogoUrl = state.editorContext && state.editorContext.companyLogoUrl;
     return logos.map((logo) => {
       const mode = String(logo.mode || 'ORIGINAL').toUpperCase();
-      const placement = mode === 'COMPANY' && companyLogoUrl ? importedLogoPlacement(logo, zoom) : null;
       const style = [
         `left:${Number(logo.x || 0) * zoom}px`, `top:${Number(logo.y || 0) * zoom}px`,
         `width:${Math.max(8, Number(logo.width || 1) * zoom)}px`, `height:${Math.max(8, Number(logo.height || 1) * zoom)}px`,
         `--imported-cover:${escapeHtml(logo.backgroundColor || '#FFFFFF')}`,
-        placement ? `--imported-logo-width:${placement.width}px` : '',
-        placement ? `--imported-logo-height:${placement.height}px` : '',
-        placement ? `--imported-logo-offset-x:${placement.offsetX}px` : '',
-        placement ? `--imported-logo-offset-y:${placement.offsetY}px` : ''
-      ].filter(Boolean).join(';');
+        `--imported-logo-scale:${Math.max(0.25, Number(logo.imageScale || 1))}`,
+        `--imported-logo-offset-x:${Number(logo.imageOffsetX || 0) * zoom}px`,
+        `--imported-logo-offset-y:${Number(logo.imageOffsetY || 0) * zoom}px`,
+        `--imported-logo-padding:${Math.max(0, Number(logo.imagePadding == null ? 4 : logo.imagePadding)) * zoom}px`
+      ].join(';');
       const replacement = mode === 'COMPANY'
         ? companyLogoUrl ? `<span class="imported-logo-image-frame"><img src="${escapeHtml(companyLogoUrl)}" alt="Company logo"></span>` : '<span>Company logo</span>'
         : mode === 'HIDDEN' ? '<span>Logo hidden</span>' : '';
@@ -787,6 +786,34 @@
     });
   }
 
+  function editImportedTextLink() {
+    const match = selectedImportedText();
+    if (!match) return;
+    const element = match.element;
+    openModal({
+      title: element.linkUrl ? 'Edit link' : 'Make this text a link',
+      copy: 'Add a safe web address. Leave it empty to remove the link. Linked text remains editable.',
+      submitLabel: element.linkUrl ? 'Save link' : 'Add link',
+      body: `${modalField('linkUrl', 'Web address', `<input id="templateModal-linkUrl" name="linkUrl" type="text" maxlength="2000" value="${escapeHtml(element.linkUrl || '')}" placeholder="https://example.com">`, 'Use https://, http://, mailto:, or tel:.')}`,
+      onSubmit: async (data) => {
+        const previousUrl = String(element.linkUrl || '');
+        const nextUrl = normalizeImportedLinkUrl(data.get('linkUrl'));
+        rememberImportedChange();
+        element.linkUrl = nextUrl;
+        element.underline = Boolean(nextUrl) ? true : Boolean(element.originalUnderline);
+        if (nextUrl && !previousUrl && /^#?(?:000000|111827)$/i.test(String(element.textColor || '').replace('#', ''))) {
+          element.textColor = '#1155CC';
+        }
+        refreshImportedInlineEditor();
+        schedulePreview(250);
+      },
+      afterOpen: () => {
+        const input = document.querySelector('#templateModal-linkUrl');
+        if (input) input.focus();
+      }
+    });
+  }
+
   function updateImportedTextFormatting(action, value) {
     const match = selectedImportedText();
     if (!match) return;
@@ -800,6 +827,11 @@
       element.text = element.originalText;
       element.binding = 'STATIC';
       element.hidden = false;
+      element.bold = element.originalBold == null ? element.bold : element.originalBold;
+      element.italic = element.originalItalic == null ? element.italic : element.originalItalic;
+      element.underline = element.originalUnderline == null ? element.underline : element.originalUnderline;
+      element.linkUrl = element.originalLinkUrl == null ? element.linkUrl : element.originalLinkUrl;
+      element.textColor = element.originalTextColor || element.textColor;
     }
     refreshImportedInlineEditor();
     schedulePreview(400);
@@ -1545,7 +1577,17 @@
         }
         return;
       }
+      if (event.target.closest('[data-imported-inline-link]')) { editImportedTextLink(); return; }
+      if (event.target.closest('[data-imported-inline-open-link]')) {
+        const match = selectedImportedText();
+        if (match && match.element.linkUrl) openImportedLink(match.element.linkUrl);
+        return;
+      }
       const inlineText = event.target.closest('[data-imported-inline-text]');
+      if (inlineText && (event.metaKey || event.ctrlKey) && inlineText.dataset.linkUrl) {
+        openImportedLink(inlineText.dataset.linkUrl);
+        return;
+      }
       if (inlineText) { selectImportedText(inlineText.dataset.importedInlineText, inlineText); return; }
       const inlineLogo = event.target.closest('[data-imported-inline-logo]');
       if (inlineLogo) { selectImportedLogo(inlineLogo); return; }
@@ -1555,10 +1597,6 @@
       if (event.target.closest('[data-imported-inline-reset]')) { updateImportedTextFormatting('reset'); return; }
       if (event.target.closest('[data-imported-inline-hide]')) { updateImportedTextFormatting('hide'); return; }
       if (event.target.closest('[data-imported-inline-insert-field]')) { openImportedFieldPicker(); return; }
-      if (inlineText && (event.metaKey || event.ctrlKey) && inlineText.dataset.linkUrl) {
-        window.open(inlineText.dataset.linkUrl, '_blank', 'noopener');
-        return;
-      }
       if (state.importedMode === 'EDIT' && event.target.closest('[data-imported-document-stage]') && !event.target.closest('[data-imported-contextbar]')) clearImportedSelection();
       if (open) {
         const template = state.templates.find((item) => item.id === open.dataset.templateOpen);
@@ -1667,6 +1705,61 @@
     refreshImportedInlineEditor();
     schedulePreview(300);
   });
+
+  document.addEventListener('pointerdown', (event) => {
+    const node = event.target.closest && event.target.closest('[data-imported-inline-logo]');
+    if (!node || event.button !== 0) return;
+    const logo = ensureImportedLogoCollection().find((item) => item.id === node.dataset.importedInlineLogo);
+    if (!logo || String(logo.mode || '').toUpperCase() !== 'COMPANY') return;
+    selectImportedLogo(node);
+    state.importedLogoDrag = {
+      node,
+      logo,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originalX: Number(logo.imageOffsetX || 0),
+      originalY: Number(logo.imageOffsetY || 0),
+      snapshot: importedHistorySnapshot(),
+      changed: false
+    };
+    if (node.setPointerCapture) node.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+
+  document.addEventListener('pointermove', (event) => {
+    const drag = state.importedLogoDrag;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const zoom = Math.max(0.01, Number(state.importedZoom || 1));
+    const nextX = drag.originalX + ((event.clientX - drag.startX) / zoom);
+    const nextY = drag.originalY + ((event.clientY - drag.startY) / zoom);
+    if (!drag.changed && (Math.abs(event.clientX - drag.startX) > 2 || Math.abs(event.clientY - drag.startY) > 2)) {
+      rememberImportedChange(drag.snapshot);
+      drag.changed = true;
+    }
+    drag.logo.imageOffsetX = Number(nextX.toFixed(2));
+    drag.logo.imageOffsetY = Number(nextY.toFixed(2));
+    drag.node.style.setProperty('--imported-logo-offset-x', `${drag.logo.imageOffsetX * zoom}px`);
+    drag.node.style.setProperty('--imported-logo-offset-y', `${drag.logo.imageOffsetY * zoom}px`);
+    if (drag.changed) schedulePreview(500);
+    event.preventDefault();
+  });
+
+  function finishImportedLogoDrag(event) {
+    const drag = state.importedLogoDrag;
+    if (!drag || (event && drag.pointerId !== event.pointerId)) return;
+    if (drag.node.releasePointerCapture && drag.node.hasPointerCapture && drag.node.hasPointerCapture(drag.pointerId)) {
+      drag.node.releasePointerCapture(drag.pointerId);
+    }
+    state.importedLogoDrag = null;
+    if (drag.changed) {
+      syncImportedLogoCompatibility();
+      schedulePreview(150);
+    }
+  }
+
+  document.addEventListener('pointerup', finishImportedLogoDrag);
+  document.addEventListener('pointercancel', finishImportedLogoDrag);
 
   document.addEventListener('focusin', (event) => {
     const node = event.target.closest && event.target.closest('[data-imported-inline-text]');
