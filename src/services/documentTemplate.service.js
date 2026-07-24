@@ -120,6 +120,23 @@ function normalizePaymentAccount(account, index) {
   };
 }
 
+function normalizeImportAnalysis(input) {
+  if (!input || typeof input !== 'object') return null;
+  const allowedStatuses = ['CONVERTED', 'CONVERTED_WITH_WARNINGS', 'NEEDS_REVIEW', 'REVIEWED'];
+  const allowedQualities = ['GOOD', 'FAIR', 'LOW'];
+  return {
+    sourceFormat: oneOf(input.sourceFormat, ['PDF', 'DOCX', 'IMAGE'], 'PDF'),
+    fileName: text(input.fileName, 240),
+    pageCount: number(input.pageCount, 1, 1, 500),
+    status: oneOf(input.status, allowedStatuses, 'NEEDS_REVIEW'),
+    quality: oneOf(input.quality, allowedQualities, 'LOW'),
+    extractedText: text(input.extractedText, 24000),
+    detectedFields: Array.isArray(input.detectedFields) ? input.detectedFields.map((item) => text(item, 80)).filter(Boolean).slice(0, 40) : [],
+    warnings: Array.isArray(input.warnings) ? input.warnings.map((item) => text(item, 500)).filter(Boolean).slice(0, 12) : [],
+    convertedAt: text(input.convertedAt, 80)
+  };
+}
+
 function normalizeBlock(block, documentType) {
   const type = oneOf(block && block.type, BLOCK_TYPES, 'FOOTER');
   const fallback = defaultBlock(type, documentType);
@@ -141,6 +158,7 @@ function normalizeBlock(block, documentType) {
     body: text(block && block.body, 6000),
     columns,
     accounts: Array.isArray(accountSource) ? accountSource.slice(0, 4).map(normalizePaymentAccount) : [],
+    accountLayout: oneOf(block && block.accountLayout, ['STACKED', 'COLUMNS'], 'STACKED'),
     bankName: text(block && block.bankName, 160),
     accountName: text(block && block.accountName, 160),
     accountNumber: text(block && block.accountNumber, 120),
@@ -204,7 +222,8 @@ function normalizeDesign(input, documentType = 'INVOICE') {
       showPhone: bool(source.header && source.header.showPhone, true),
       showWebsite: bool(source.header && source.header.showWebsite, true)
     },
-    blocks: unique
+    blocks: unique,
+    importAnalysis: normalizeImportAnalysis(source.importAnalysis)
   };
 }
 

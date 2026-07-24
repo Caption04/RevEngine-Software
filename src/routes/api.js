@@ -43,6 +43,7 @@ const { calculateInvoiceLedger, money: paymentMoney, recalculateInvoice: recalcu
 const { paymentTermsDays, requirePurchaseOrderNumber, resolveInvoiceBranch } = require('../services/invoicePolicy.service');
 const { createBusinessDocumentPdf } = require('../services/businessDocumentPdf.service');
 const { loadBusinessDocumentLogo } = require('../services/businessDocumentLogo.service');
+const { convertImportedDocument, DOCX_TYPE } = require('../services/documentImportConversion.service');
 const {
   BLOCK_TYPES: DOCUMENT_BLOCK_TYPES,
   DOCUMENT_TYPES,
@@ -4864,6 +4865,17 @@ router.post('/document-templates/import', requireRole(...adminRoles), documentTe
   if (name.length < 2) throw new AppError(400, 'Enter a template name.');
   const extension = path.extname(req.file.originalname || '').toLowerCase().replace(/[^.a-z0-9]/g, '') || '.bin';
   const storedName = `${req.companyId}-${crypto.randomUUID()}${extension}`;
+  let conversion;
+  try {
+    conversion = convertImportedDocument({
+      buffer: req.file.buffer,
+      mimeType: req.file.mimetype,
+      fileName: req.file.originalname,
+      documentType
+    });
+  } catch (error) {
+    throw new AppError(400, error && error.message || 'The document could not be converted. Try a searchable PDF or DOCX file.');
+  }
   await fs.promises.writeFile(path.join(documentImportDir, storedName), req.file.buffer, { mode: 0o600 });
   const template = await prisma.documentTemplate.create({
     data: {
@@ -4873,15 +4885,15 @@ router.post('/document-templates/import', requireRole(...adminRoles), documentTe
       sourceType: 'IMPORTED',
       status: 'DRAFT',
       isDefault: false,
-      design: starterDesign(documentType, 'PROFESSIONAL'),
+      design: normalizeDesign(conversion.design, documentType),
       currentVersion: 0,
       importFileName: String(req.file.originalname || 'Imported document').slice(0, 240),
       importMimeType: req.file.mimetype,
       importSourceUrl: storedName,
-      importStatus: 'NEEDS_MAPPING'
+      importStatus: conversion.status
     }
   });
-  await audit(req, 'IMPORT', 'DocumentTemplate', template.id, { documentType, fileName: template.importFileName, mimeType: template.importMimeType });
+  await audit(req, 'IMPORT', 'DocumentTemplate', template.id, { documentType, fileName: template.importFileName, mimeType: template.importMimeType, conversionStatus: conversion.status, warnings: conversion.warnings });
   sendData(res, normalize(safeDocumentTemplate(template)), 201);
 }));
 
@@ -4898,6 +4910,61 @@ router.get('/document-templates/:id/import-source', requireRole(...adminRoles), 
     .set('Content-Disposition', `inline; filename="${String(template.importFileName || 'imported-document').replace(/[\r\n"]/g, '')}"`)
     .set('Cache-Control', 'private, no-store')
     .sendFile(sourcePath);
+}));
+
+router.get('/document-templates/:id/import-preview', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.view', 'company.settings.manage', 'settings.finance.manage']);
+  const template = await prisma.documentTemplate.findFirst({ where: { id: req.params.id, companyId: req.companyId } });
+  if (!template || !template.importSourceUrl) throw notFound('Imported source not found');
+  const storedName = path.basename(template.importSourceUrl);
+  const sourcePath = path.join(documentImportDir, storedName);
+  const stat = await fs.promises.stat(sourcePath).catch(() => null);
+  if (!stat || !stat.isFile()) throw notFound('Imported source not found');
+  if (template.importMimeType !== DOCX_TYPE) {
+    return res.status(200)
+      .set('Content-Type', template.importMimeType || 'application/octet-stream')
+      .set('Content-Disposition', `inline; filename="${String(template.importFileName || 'imported-document').replace(/[\r\n"]/g, '')}"`)
+      .set('Cache-Control', 'private, no-store')
+      .sendFile(sourcePath);
+  }
+  const analysis = template.design && typeof template.design === 'object' && template.design.importAnalysis || {};
+  const extracted = String(analysis.extractedText || '').slice(0, 24000);
+  const escapePreviewHtml = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+  const paragraphs = extracted.split(/\n{1,2}/).map((line) => line.trim()).filter(Boolean);
+  const body = paragraphs.length
+    ? paragraphs.map((line) => `<p>${escapePreviewHtml(line)}</p>`).join('')
+    : '<p class="empty">No readable Word content was found.</p>';
+  res.status(200)
+    .set('Content-Type', 'text/html; charset=utf-8')
+    .set('Cache-Control', 'private, no-store')
+    .send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapePreviewHtml(template.importFileName || 'Imported document')}</title><style>body{margin:0;background:#eef2f7;color:#11213d;font-family:Arial,sans-serif}.page{box-sizing:border-box;width:min(794px,calc(100% - 32px));min-height:1123px;margin:16px auto;padding:64px;background:#fff;box-shadow:0 10px 30px rgba(17,33,61,.12)}p{margin:0 0 12px;line-height:1.5;white-space:pre-wrap}.empty{color:#60708a}@media(max-width:600px){.page{width:100%;margin:0;padding:28px;box-shadow:none}}</style></head><body><main class="page">${body}</main></body></html>`);
+}));
+
+router.post('/document-templates/:id/reconvert', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.manage', 'settings.finance.manage']);
+  const template = await prisma.documentTemplate.findFirst({ where: editableDocumentTemplateWhere(req.params.id, req.companyId) });
+  if (!template) throw notFound('Document template not found');
+  if (!template.importSourceUrl) throw notFound('Imported source not found');
+  const sourcePath = path.join(documentImportDir, path.basename(template.importSourceUrl));
+  const buffer = await fs.promises.readFile(sourcePath).catch(() => null);
+  if (!buffer) throw notFound('Imported source not found');
+  let conversion;
+  try {
+    conversion = convertImportedDocument({
+      buffer,
+      mimeType: template.importMimeType,
+      fileName: template.importFileName,
+      documentType: template.documentType
+    });
+  } catch (error) {
+    throw new AppError(400, error && error.message || 'The document could not be converted. Try a searchable PDF or DOCX file.');
+  }
+  const updated = await prisma.documentTemplate.update({
+    where: { id: template.id },
+    data: { design: normalizeDesign(conversion.design, template.documentType), importStatus: conversion.status }
+  });
+  await audit(req, 'RECONVERT', 'DocumentTemplate', template.id, { documentType: template.documentType, conversionStatus: conversion.status, warnings: conversion.warnings });
+  sendData(res, normalize(safeDocumentTemplate(updated)));
 }));
 
 router.delete('/document-templates/:id/import-source', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {
@@ -4922,7 +4989,7 @@ router.patch('/document-templates/:id', requireRole(...adminRoles), validate(idP
   if (req.body.name) data.name = req.body.name;
   if (req.body.design) {
     data.design = normalizeDesign(req.body.design, existing.documentType);
-    if (existing.sourceType === 'IMPORTED') data.importStatus = 'MAPPED';
+    if (existing.sourceType === 'IMPORTED' && existing.importStatus === 'NEEDS_REVIEW') data.importStatus = 'REVIEWED';
   }
   const template = await prisma.documentTemplate.update({ where: { id: existing.id }, data });
   await audit(req, 'UPDATE', 'DocumentTemplate', template.id, { documentType: template.documentType });

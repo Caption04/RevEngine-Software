@@ -637,25 +637,55 @@ function buildPageCommands({ kind, record, company, branding, localization, item
         output += commandText(left + 7, cursor, headingSize - 0.5, section.label || 'PAYMENT OPTIONS', true, darken(header.primary, 0.25));
         cursor -= 23;
         wrap(body, Math.max(64, Math.round(width / 5.2))).slice(0, 3).forEach((line) => { output += commandText(left, cursor, Math.max(7, bodySize - 1.5), line, false, textColor); cursor -= 10; });
-        for (const account of accounts.slice(0, 4)) {
-          const rows = [
-            ['Bank', account.bankName],
-            ['Account name', account.accountName],
-            ['Account number', account.accountNumber],
-            ['Branch', account.branchName],
-            ['Branch code', account.branchCode],
-            ['SWIFT code', account.swiftCode]
-          ].filter((row) => row[1]);
-          if (!rows.length || cursor < bottom + 44) continue;
-          output += commandRect(left, cursor - 4, right - left, 16, template.accentColor ? hexRgb(template.accentColor) : { r: 0.96, g: 0.89, b: 0.42 });
-          output += commandText(left + 6, cursor, Math.max(7, bodySize - 1.7), account.label || 'Payment option', true, darken(header.primary, 0.25));
-          cursor -= 18;
-          for (const [rowLabel, value] of rows) {
-            if (cursor < bottom + 26) break;
-            output += commandStrokeRect(left, cursor - 4, right - left, 16, template.borderColor ? hexRgb(template.borderColor) : { r: 0.82, g: 0.86, b: 0.91 }, 0.45);
-            output += commandText(left + 6, cursor, Math.max(7, bodySize - 1.8), rowLabel, true, textColor);
-            output += commandText(left + Math.min(116, width * 0.23), cursor, Math.max(7, bodySize - 1.8), value, false, textColor);
-            cursor -= 16;
+        const rowsForAccount = (account) => [
+          ['Bank', account.bankName],
+          ['Account name', account.accountName],
+          ['Account number', account.accountNumber],
+          ['Branch', account.branchName],
+          ['Branch code', account.branchCode],
+          ['SWIFT code', account.swiftCode]
+        ].filter((row) => row[1]);
+        if (section.accountLayout === 'COLUMNS' && accounts.length > 1) {
+          const columnGap = 8;
+          const columnWidth = (width - columnGap) / 2;
+          const accountColumns = accounts.slice(0, 4);
+          for (let accountIndex = 0; accountIndex < accountColumns.length; accountIndex += 2) {
+            const pair = accountColumns.slice(accountIndex, accountIndex + 2).map((account) => ({ account, rows: rowsForAccount(account) }));
+            const rowCount = Math.max(...pair.map((item) => item.rows.length), 0);
+            if (!rowCount || cursor < bottom + 44) continue;
+            pair.forEach((item, columnIndex) => {
+              const columnLeft = left + columnIndex * (columnWidth + columnGap);
+              output += commandRect(columnLeft, cursor - 4, columnWidth, 16, template.accentColor ? hexRgb(template.accentColor) : { r: 0.96, g: 0.89, b: 0.42 });
+              output += commandText(columnLeft + 6, cursor, Math.max(7, bodySize - 1.7), fitText(item.account.label || 'Payment option', 34), true, darken(header.primary, 0.25));
+            });
+            cursor -= 18;
+            for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+              if (cursor < bottom + 26) break;
+              pair.forEach((item, columnIndex) => {
+                const row = item.rows[rowIndex];
+                if (!row) return;
+                const columnLeft = left + columnIndex * (columnWidth + columnGap);
+                output += commandStrokeRect(columnLeft, cursor - 4, columnWidth, 16, template.borderColor ? hexRgb(template.borderColor) : { r: 0.82, g: 0.86, b: 0.91 }, 0.45);
+                output += commandText(columnLeft + 5, cursor, Math.max(6.5, bodySize - 2), fitText(row[0], 17), true, textColor);
+                output += commandText(columnLeft + Math.min(78, columnWidth * 0.35), cursor, Math.max(6.5, bodySize - 2), fitText(row[1], 25), false, textColor);
+              });
+              cursor -= 16;
+            }
+          }
+        } else {
+          for (const account of accounts.slice(0, 4)) {
+            const rows = rowsForAccount(account);
+            if (!rows.length || cursor < bottom + 44) continue;
+            output += commandRect(left, cursor - 4, right - left, 16, template.accentColor ? hexRgb(template.accentColor) : { r: 0.96, g: 0.89, b: 0.42 });
+            output += commandText(left + 6, cursor, Math.max(7, bodySize - 1.7), account.label || 'Payment option', true, darken(header.primary, 0.25));
+            cursor -= 18;
+            for (const [rowLabel, value] of rows) {
+              if (cursor < bottom + 26) break;
+              output += commandStrokeRect(left, cursor - 4, right - left, 16, template.borderColor ? hexRgb(template.borderColor) : { r: 0.82, g: 0.86, b: 0.91 }, 0.45);
+              output += commandText(left + 6, cursor, Math.max(7, bodySize - 1.8), rowLabel, true, textColor);
+              output += commandText(left + Math.min(116, width * 0.23), cursor, Math.max(7, bodySize - 1.8), value, false, textColor);
+              cursor -= 16;
+            }
           }
         }
         if (section.referenceRule && cursor >= bottom + 20) {
@@ -671,10 +701,17 @@ function buildPageCommands({ kind, record, company, branding, localization, item
 
       if (section.type === 'ONLINE_PAYMENT' && kind === 'invoice') {
         const paymentUrl = section.urlMode === 'CUSTOM' ? section.customUrl : record.onlinePaymentUrl;
-        if (!paymentUrl) continue;
+        const instructions = section.body || '';
+        if (!paymentUrl && !instructions && !section.buttonLabel) continue;
         output += drawHeading(section.label || 'PAY ONLINE', cursor);
         cursor -= 16;
-        wrap(`${section.buttonLabel || 'Make payment online'}: ${paymentUrl}`, Math.max(64, Math.round(width / 5.2))).slice(0, 2).forEach((line) => { output += commandText(left, cursor, Math.max(7, bodySize - 1.7), line, true, darken(header.primary, 0.15)); cursor -= 10; });
+        wrap(instructions, Math.max(64, Math.round(width / 5.2))).slice(0, 5).forEach((line) => { output += commandText(left, cursor, Math.max(7, bodySize - 1.8), line, false, textColor); cursor -= 10; });
+        if (paymentUrl) {
+          wrap(`${section.buttonLabel || 'Make payment online'}: ${paymentUrl}`, Math.max(64, Math.round(width / 5.2))).slice(0, 2).forEach((line) => { output += commandText(left, cursor, Math.max(7, bodySize - 1.7), line, true, darken(header.primary, 0.15)); cursor -= 10; });
+        } else if (section.buttonLabel && !instructions.includes(section.buttonLabel)) {
+          output += commandText(left, cursor, Math.max(7, bodySize - 1.7), section.buttonLabel, true, darken(header.primary, 0.15));
+          cursor -= 10;
+        }
         cursor -= 8;
         continue;
       }
