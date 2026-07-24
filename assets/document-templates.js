@@ -847,7 +847,7 @@
     if (exactImport) {
       renderImportedInlineEditor();
       setImportedMode('EDIT');
-      window.setTimeout(fitImportedDocument, 0);
+      window.requestAnimationFrame(() => window.requestAnimationFrame(fitImportedDocument));
     } else {
       renderBlocks();
       schedulePreview(80);
@@ -1314,6 +1314,10 @@
   }
 
   document.addEventListener('click', async (event) => {
+    const openEditorMenu = event.target.closest('[data-imported-editor-menu]');
+    document.querySelectorAll('[data-imported-editor-menu][open]').forEach((menu) => {
+      if (!openEditorMenu || menu !== openEditorMenu || event.target.closest('.imported-file-menu-item')) menu.removeAttribute('open');
+    });
     const open = event.target.closest('[data-template-open]');
     const duplicate = event.target.closest('[data-template-duplicate]');
     const restore = event.target.closest('[data-template-restore]');
@@ -1498,6 +1502,11 @@
   });
 
   document.addEventListener('keydown', (event) => {
+    if (editorRoute && (event.ctrlKey || event.metaKey) && String(event.key || '').toLowerCase() === 's') {
+      event.preventDefault();
+      saveTemplate().catch((error) => notify(error.message || 'The template could not be saved.', false));
+      return;
+    }
     const node = event.target.closest && event.target.closest('[data-imported-inline-text]');
     if (!node) return;
     if (event.key === 'Enter') event.preventDefault();

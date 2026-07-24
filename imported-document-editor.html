@@ -16,20 +16,38 @@
         <section data-template-grid></section>
       </div>
       <section class="document-template-editor" data-template-editor="" hidden="">
-<div class="document-editor-heading">
-<button class="text-button document-editor-back" data-back-to-templates="" type="button">← Back to templates</button>
-<div class="document-editor-summary">
-<div>
-<p class="eyebrow" data-editor-type="">Invoice template</p>
-<h2 data-editor-title="">Template</h2>
+<header class="imported-editor-ribbon" aria-label="Document editor toolbar">
+<details class="imported-editor-file-menu" data-imported-editor-menu="">
+<summary class="imported-ribbon-tab">File</summary>
+<div class="imported-file-menu-panel">
+<button class="imported-file-menu-item" data-back-to-templates="" type="button"><span>Back to templates</span></button>
+<div class="imported-file-menu-separator" role="separator"></div>
+<button class="imported-file-menu-item" data-save-template="" type="button"><span>Save draft</span><small>Ctrl+S</small></button>
+<button class="imported-file-menu-item is-primary" data-publish-template="" type="button"><span>Publish as default</span></button>
+<div class="imported-file-menu-separator" role="separator"></div>
+<button class="imported-file-menu-item" data-view-import-source="" type="button"><span>Open original PDF</span></button>
+<button class="imported-file-menu-item" data-reconvert-import-source="" type="button"><span>Convert original again</span></button>
+<button class="imported-file-menu-item" data-duplicate-template="" type="button"><span>Duplicate template</span></button>
+<button class="imported-file-menu-item" data-archive-template="" type="button"><span>Archive template</span></button>
+<button class="imported-file-menu-item danger-text" data-remove-import-source="" type="button"><span>Remove original file</span></button>
+<button class="imported-file-menu-item danger-text" data-delete-template="" type="button"><span>Delete template</span></button>
 </div>
+</details>
+<div class="imported-ribbon-document" title="Current template">
+<strong data-editor-title="">Template</strong>
+<span data-editor-type="">Invoice template</span>
 <span class="badge gray" data-editor-status="">Draft</span>
 </div>
-<div class="document-editor-actions">
-<button class="secondary-button" data-save-template="" type="button">Save draft</button>
-<button class="primary-button" data-publish-template="" type="button">Publish as default</button>
+<div aria-label="Editor mode" class="imported-editor-mode-switch imported-ribbon-mode" role="tablist">
+<button class="active" data-imported-editor-mode="EDIT" type="button">Edit</button>
+<button data-imported-editor-mode="PREVIEW" type="button">Preview</button>
 </div>
+<div aria-label="Document zoom" class="imported-editor-zoom imported-ribbon-zoom">
+<button aria-label="Zoom out" class="icon-button" data-imported-zoom="out" type="button">−</button>
+<button class="text-button imported-zoom-value" data-imported-zoom="fit" type="button">100%</button>
+<button aria-label="Zoom in" class="icon-button" data-imported-zoom="in" type="button">+</button>
 </div>
+</header>
 <div class="document-import-banner" data-import-banner="" hidden="">
 <div>
 <strong data-import-heading="">Your document was converted into editable sections.</strong>
@@ -42,31 +60,7 @@
 </div>
 </div>
 <section class="imported-inline-editor" data-imported-inline-editor="" hidden="">
-<div class="imported-editor-commandbar">
-<div aria-label="Imported document editor mode" class="imported-editor-mode-switch" role="tablist">
-<button class="active" data-imported-editor-mode="EDIT" type="button">Edit design</button>
-<button data-imported-editor-mode="PREVIEW" type="button">Preview with data</button>
-</div>
-<div class="imported-editor-command-actions">
-<div aria-label="Document zoom" class="imported-editor-zoom">
-<button aria-label="Zoom out" class="icon-button" data-imported-zoom="out" type="button">−</button>
-<button class="text-button imported-zoom-value" data-imported-zoom="fit" type="button">100%</button>
-<button aria-label="Zoom in" class="icon-button" data-imported-zoom="in" type="button">+</button>
-</div>
-<button class="secondary-button compact" data-view-import-source="" type="button">Original PDF</button>
-<details class="imported-editor-more">
-<summary aria-label="More template actions" class="secondary-button compact">More</summary>
-<div class="imported-editor-more-menu">
-<button class="text-button" data-reconvert-import-source="" type="button">Convert original again</button>
-<button class="text-button" data-duplicate-template="" type="button">Duplicate template</button>
-<button class="text-button" data-archive-template="" type="button">Archive template</button>
-<button class="text-button danger-text" data-remove-import-source="" type="button">Remove original file</button>
-<button class="text-button danger-text" data-delete-template="" type="button">Delete template</button>
-</div>
-</details>
-</div>
-</div>
-<div class="imported-editor-guidance" data-imported-editor-guidance="">
+<div class="imported-editor-guidance" data-imported-editor-guidance="" hidden>
 <strong>Edit the document itself.</strong>
 <span>Click any text and type. The page structure stays locked so the design cannot be accidentally broken.</span>
 </div>
