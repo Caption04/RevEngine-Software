@@ -5,6 +5,18 @@ const crypto = require('node:crypto');
 const DOCUMENT_TYPES = ['QUOTE', 'INVOICE', 'CONTRACT'];
 const SOURCE_TYPES = ['STARTER', 'BLANK', 'IMPORTED'];
 const STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED', 'DELETED'];
+
+const IMPORTED_BINDINGS = [
+  'STATIC',
+  'COMPANY_NAME', 'COMPANY_LEGAL_NAME', 'COMPANY_ADDRESS', 'COMPANY_EMAIL', 'COMPANY_PHONE', 'COMPANY_WEBSITE', 'COMPANY_REGISTRATION', 'COMPANY_TAX',
+  'CUSTOMER_NAME', 'CUSTOMER_CONTACT', 'CUSTOMER_EMAIL', 'CUSTOMER_PHONE', 'CUSTOMER_ADDRESS',
+  'DOCUMENT_TITLE', 'DOCUMENT_NUMBER', 'DOCUMENT_STATUS', 'DOCUMENT_ISSUE_DATE', 'DOCUMENT_DUE_DATE', 'DOCUMENT_PO',
+  'TOTAL_SUBTOTAL', 'TOTAL_DISCOUNT', 'TOTAL_TAX', 'TOTAL_TOTAL', 'PAYMENT_REFERENCE',
+  ...Array.from({ length: 8 }, (_, index) => [
+    `ITEM_${index + 1}_DESCRIPTION`, `ITEM_${index + 1}_QTY`, `ITEM_${index + 1}_UNIT`, `ITEM_${index + 1}_TOTAL`
+  ]).flat()
+];
+
 const BLOCK_TYPES = [
   'CUSTOMER_DETAILS',
   'DOCUMENT_DETAILS',
@@ -122,7 +134,7 @@ function normalizePaymentAccount(account, index) {
 
 function normalizeImportAnalysis(input) {
   if (!input || typeof input !== 'object') return null;
-  const allowedStatuses = ['CONVERTED', 'CONVERTED_WITH_WARNINGS', 'NEEDS_REVIEW', 'REVIEWED'];
+  const allowedStatuses = ['CONVERTED', 'CONVERTED_WITH_WARNINGS', 'EXACT_LAYOUT', 'NEEDS_REVIEW', 'REVIEWED'];
   const allowedQualities = ['GOOD', 'FAIR', 'LOW'];
   return {
     sourceFormat: oneOf(input.sourceFormat, ['PDF', 'DOCX', 'IMAGE'], 'PDF'),
@@ -171,6 +183,68 @@ function normalizeBlock(block, documentType) {
     customUrl: text(block && block.customUrl, 1000),
     leftLabel: text(block && block.leftLabel, 100),
     rightLabel: text(block && block.rightLabel, 100)
+  };
+}
+
+
+function safeAssetName(value) {
+  return text(value, 240).split(/[\\/]/).pop().replace(/[^a-zA-Z0-9._-]/g, '');
+}
+
+function normalizeImportedTextElement(input, pageNumber, index) {
+  const source = input && typeof input === 'object' ? input : {};
+  const originalText = text(source.originalText, 1200);
+  return {
+    id: text(source.id, 100) || `imported-text-${pageNumber}-${index + 1}`,
+    page: number(source.page, pageNumber, 1, 500),
+    x: number(source.x, 0, 0, 2000),
+    y: number(source.y, 0, 0, 3000),
+    width: number(source.width, 1, 0.5, 2000),
+    height: number(source.height, 1, 0.5, 1000),
+    originalText,
+    text: text(source.text == null ? originalText : source.text, 1200),
+    binding: oneOf(source.binding, IMPORTED_BINDINGS, 'STATIC'),
+    suggestedBinding: oneOf(source.suggestedBinding, IMPORTED_BINDINGS, 'STATIC'),
+    fontSize: number(source.fontSize, 9, 4, 72),
+    bold: bool(source.bold, false),
+    align: oneOf(source.align, ['LEFT', 'CENTER', 'RIGHT'], 'LEFT'),
+    textColor: color(source.textColor, '#111827'),
+    backgroundColor: color(source.backgroundColor, '#FFFFFF'),
+    hidden: bool(source.hidden, false)
+  };
+}
+
+function normalizeImportedCanvas(input) {
+  if (!input || typeof input !== 'object' || String(input.mode || '').toUpperCase() !== 'EXACT_PDF') return null;
+  const pages = Array.isArray(input.pages) ? input.pages.slice(0, 20).map((page, index) => {
+    const pageNumber = number(page && page.pageNumber, index + 1, 1, 500);
+    return {
+      pageNumber,
+      width: number(page && page.width, 595, 100, 2000),
+      height: number(page && page.height, 842, 100, 3000),
+      backgroundAsset: safeAssetName(page && page.backgroundAsset),
+      textElements: Array.isArray(page && page.textElements)
+        ? page.textElements.slice(0, 900).map((item, itemIndex) => normalizeImportedTextElement(item, pageNumber, itemIndex))
+        : []
+    };
+  }).filter((page) => page.backgroundAsset) : [];
+  const logoSource = input.logo && typeof input.logo === 'object' ? input.logo : null;
+  const logo = logoSource ? {
+    page: number(logoSource.page, 1, 1, 500),
+    x: number(logoSource.x, 0, 0, 2000),
+    y: number(logoSource.y, 0, 0, 3000),
+    width: number(logoSource.width, 1, 1, 2000),
+    height: number(logoSource.height, 1, 1, 1000),
+    mode: oneOf(logoSource.mode, ['ORIGINAL', 'COMPANY', 'HIDDEN'], 'ORIGINAL'),
+    backgroundColor: color(logoSource.backgroundColor, '#FFFFFF')
+  } : null;
+  return {
+    mode: 'EXACT_PDF',
+    sourceFileName: text(input.sourceFileName, 240),
+    rasterDpi: number(input.rasterDpi, 144, 72, 300),
+    pages,
+    logo,
+    textEditable: bool(input.textEditable, pages.some((page) => page.textElements.length > 0))
   };
 }
 
@@ -223,7 +297,8 @@ function normalizeDesign(input, documentType = 'INVOICE') {
       showWebsite: bool(source.header && source.header.showWebsite, true)
     },
     blocks: unique,
-    importAnalysis: normalizeImportAnalysis(source.importAnalysis)
+    importAnalysis: normalizeImportAnalysis(source.importAnalysis),
+    importedCanvas: normalizeImportedCanvas(source.importedCanvas)
   };
 }
 
@@ -309,6 +384,7 @@ async function seedStarterTemplates(client, companyId) {
 }
 
 module.exports = {
+  IMPORTED_BINDINGS,
   BLOCK_TYPES,
   DOCUMENT_TYPES,
   SOURCE_TYPES,
@@ -318,6 +394,7 @@ module.exports = {
   findDefaultTemplate,
   findTemplateVersion,
   normalizeDesign,
+  normalizeImportedCanvas,
   rendererLocalization,
   seedStarterTemplates,
   starterDesign

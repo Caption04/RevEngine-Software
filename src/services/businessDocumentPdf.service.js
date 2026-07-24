@@ -55,8 +55,13 @@ function commandStrokeRect(x, y, width, height, color, lineWidth = 1) {
   return `${color.r.toFixed(3)} ${color.g.toFixed(3)} ${color.b.toFixed(3)} RG ${lineWidth} w ${x} ${y} ${width} ${height} re S\n`;
 }
 
+function commandNamedImage(name, x, y, width, height) {
+  const safeName = String(name || 'Image').replace(/[^A-Za-z0-9]/g, '') || 'Image';
+  return `q ${width.toFixed(2)} 0 0 ${height.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm /${safeName} Do Q\n`;
+}
+
 function commandImage(x, y, width, height) {
-  return `q ${width.toFixed(2)} 0 0 ${height.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm /Logo Do Q\n`;
+  return commandNamedImage('Logo', x, y, width, height);
 }
 
 function wrap(value, maxCharacters) {
@@ -187,7 +192,8 @@ function normalizeTemplate(localization) {
     disclaimer: block('DISCLAIMER'),
     signatures: block('SIGNATURES'),
     footer: block('FOOTER'),
-    contractBody: block('CONTRACT_BODY')
+    contractBody: block('CONTRACT_BODY'),
+    importedCanvas: design && design.importedCanvas || null
   };
 }
 
@@ -759,24 +765,28 @@ function streamObject(dictionary, data) {
   ]);
 }
 
-function assemblePdf(pageCommands, logoImage) {
+function assemblePdf(pageCommands, logoImage, options = {}) {
   const objects = new Map();
   objects.set(1, Buffer.from('<< /Type /Catalog /Pages 2 0 R >>', 'ascii'));
   objects.set(3, Buffer.from('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>', 'ascii'));
   objects.set(4, Buffer.from('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>', 'ascii'));
 
   let nextId = 5;
-  let imageId = null;
-  if (logoImage) {
-    imageId = nextId++;
+  const imageObjects = new Map();
+  const addImage = (name, image) => {
+    if (!image || imageObjects.has(name)) return;
+    const imageId = nextId++;
     let maskId = null;
-    if (logoImage.alpha) {
+    if (image.alpha) {
       maskId = nextId++;
-      objects.set(maskId, streamObject(`/Type /XObject /Subtype /Image /Width ${logoImage.width} /Height ${logoImage.height} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode`, logoImage.alpha));
+      objects.set(maskId, streamObject(`/Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /FlateDecode`, image.alpha));
     }
     const smask = maskId ? ` /SMask ${maskId} 0 R` : '';
-    objects.set(imageId, streamObject(`/Type /XObject /Subtype /Image /Width ${logoImage.width} /Height ${logoImage.height} /ColorSpace /${logoImage.colorSpace} /BitsPerComponent 8 /Filter /${logoImage.filter}${smask}`, logoImage.data));
-  }
+    objects.set(imageId, streamObject(`/Type /XObject /Subtype /Image /Width ${image.width} /Height ${image.height} /ColorSpace /${image.colorSpace} /BitsPerComponent 8 /Filter /${image.filter}${smask}`, image.data));
+    imageObjects.set(name, imageId);
+  };
+  addImage('Logo', logoImage);
+  for (const entry of options.extraImages || []) addImage(entry.name, entry.image);
 
   const pageObjectIds = [];
   const contentObjectIds = [];
@@ -786,8 +796,11 @@ function assemblePdf(pageCommands, logoImage) {
   });
   objects.set(2, Buffer.from(`<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageObjectIds.length} >>`, 'ascii'));
   pageCommands.forEach((commands, index) => {
-    const xObject = imageId ? ` /XObject << /Logo ${imageId} 0 R >>` : '';
-    objects.set(pageObjectIds[index], Buffer.from(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE_WIDTH} ${PAGE_HEIGHT}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >>${xObject} >> /Contents ${contentObjectIds[index]} 0 R >>`, 'ascii'));
+    const pageSpec = options.pageSpecs && options.pageSpecs[index] || { width: PAGE_WIDTH, height: PAGE_HEIGHT };
+    const xObject = imageObjects.size
+      ? ` /XObject << ${Array.from(imageObjects.entries()).map(([name, id]) => `/${name} ${id} 0 R`).join(' ')} >>`
+      : '';
+    objects.set(pageObjectIds[index], Buffer.from(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageSpec.width} ${pageSpec.height}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >>${xObject} >> /Contents ${contentObjectIds[index]} 0 R >>`, 'ascii'));
     objects.set(contentObjectIds[index], streamObject('', Buffer.from(commands, 'ascii')));
   });
 
@@ -811,10 +824,133 @@ function assemblePdf(pageCommands, logoImage) {
   return Buffer.concat(chunks);
 }
 
-function createBusinessDocumentPdf({ kind, record, company, branding, localization, logoImage }) {
+function importedBindingValue(binding, context) {
+  const { kind, record, company, branding, localization } = context;
+  const customer = record && record.customer || {};
+  const items = lineItems(record || {});
+  const companyName = branding && branding.brandName || company.tradingName || company.name || '';
+  const values = {
+    COMPANY_NAME: companyName,
+    COMPANY_LEGAL_NAME: company.legalName || companyName,
+    COMPANY_ADDRESS: company.address || '',
+    COMPANY_EMAIL: branding && branding.supportEmail || company.email || '',
+    COMPANY_PHONE: branding && branding.supportPhone || company.phone || '',
+    COMPANY_WEBSITE: branding && branding.websiteUrl || '',
+    COMPANY_REGISTRATION: company.registrationNumber || '',
+    COMPANY_TAX: company.taxNumber || '',
+    CUSTOMER_NAME: customerName(record),
+    CUSTOMER_CONTACT: customerContact(record),
+    CUSTOMER_EMAIL: customer.email || '',
+    CUSTOMER_PHONE: customer.phone || '',
+    CUSTOMER_ADDRESS: customer.address || '',
+    DOCUMENT_TITLE: kind === 'quote' ? 'QUOTE' : kind === 'contract' ? 'CONTRACT' : 'INVOICE',
+    DOCUMENT_NUMBER: record.number || record.contractNumber || '',
+    DOCUMENT_STATUS: record.status || '',
+    DOCUMENT_ISSUE_DATE: dateLabel(record.createdAt || record.issuedAt || record.startDate),
+    DOCUMENT_DUE_DATE: dateLabel(kind === 'quote' ? record.validUntil : kind === 'contract' ? record.endDate : record.dueDate),
+    DOCUMENT_PO: record.purchaseOrderNumber || '',
+    TOTAL_SUBTOTAL: money(record.subtotal != null ? record.subtotal : record.amount || 0, localization),
+    TOTAL_DISCOUNT: money(record.discountTotal || 0, localization),
+    TOTAL_TAX: money(record.taxTotal || 0, localization),
+    TOTAL_TOTAL: money(record.total != null ? record.total : record.contractValue != null ? record.contractValue : record.amount || 0, localization),
+    PAYMENT_REFERENCE: record.number || record.contractNumber || ''
+  };
+  const itemMatch = String(binding || '').match(/^ITEM_(\d+)_(DESCRIPTION|QTY|UNIT|TOTAL)$/);
+  if (itemMatch) {
+    const item = items[Number(itemMatch[1]) - 1] || {};
+    if (itemMatch[2] === 'DESCRIPTION') return item.description || item.title || item.service && item.service.name || '';
+    if (itemMatch[2] === 'QTY') return item.quantity == null ? '' : String(Number(item.quantity).toFixed(2).replace(/\.00$/, ''));
+    if (itemMatch[2] === 'UNIT') return money(item.unitPrice || 0, localization);
+    return money(item.lineTotal != null ? item.lineTotal : Number(item.quantity || 0) * Number(item.unitPrice || 0), localization);
+  }
+  return values[binding] == null ? '' : String(values[binding]);
+}
+
+function isImportedBinding(binding) {
+  const value = String(binding || '').toUpperCase();
+  return [
+    'COMPANY_NAME', 'COMPANY_LEGAL_NAME', 'COMPANY_ADDRESS', 'COMPANY_EMAIL', 'COMPANY_PHONE', 'COMPANY_WEBSITE', 'COMPANY_REGISTRATION', 'COMPANY_TAX',
+    'CUSTOMER_NAME', 'CUSTOMER_CONTACT', 'CUSTOMER_EMAIL', 'CUSTOMER_PHONE', 'CUSTOMER_ADDRESS',
+    'DOCUMENT_TITLE', 'DOCUMENT_NUMBER', 'DOCUMENT_STATUS', 'DOCUMENT_ISSUE_DATE', 'DOCUMENT_DUE_DATE', 'DOCUMENT_PO',
+    'TOTAL_SUBTOTAL', 'TOTAL_DISCOUNT', 'TOTAL_TAX', 'TOTAL_TOTAL', 'PAYMENT_REFERENCE'
+  ].includes(value) || /^ITEM_[1-8]_(DESCRIPTION|QTY|UNIT|TOTAL)$/.test(value);
+}
+
+function interpolateImportedText(value, context) {
+  return String(value || '').replace(/\{\{\s*([A-Z0-9_]+)\s*\}\}/gi, (token, binding) => {
+    const normalized = String(binding || '').toUpperCase();
+    return isImportedBinding(normalized) ? importedBindingValue(normalized, context) : token;
+  });
+}
+
+function fittedImportedFontSize(value, width, preferred) {
+  const text = ascii(value);
+  if (!text) return Math.max(4, preferred);
+  const estimated = text.length * preferred * 0.52;
+  if (estimated <= width) return preferred;
+  return Math.max(4, Math.min(preferred, width / Math.max(1, text.length * 0.52)));
+}
+
+function createImportedCanvasPdf({ kind, record, company, branding, localization, logoImage, importedAssets, template }) {
+  const canvas = template.importedCanvas;
+  const preparedLogo = prepareLogoImage(logoImage);
+  const extraImages = [];
+  const pageSpecs = [];
+  const commands = [];
+  const assetMap = importedAssets && typeof importedAssets === 'object' ? importedAssets : {};
+  for (const [index, page] of canvas.pages.entries()) {
+    const asset = assetMap[page.backgroundAsset];
+    const prepared = asset && asset.buffer ? prepareLogoImage(asset) : null;
+    if (!prepared) throw new Error('An imported document page is missing. Convert the original document again.');
+    const imageName = `BG${index + 1}`;
+    extraImages.push({ name: imageName, image: prepared });
+    pageSpecs.push({ width: page.width, height: page.height });
+    let output = commandNamedImage(imageName, 0, 0, page.width, page.height);
+    for (const element of page.textElements || []) {
+      const binding = String(element.binding || 'STATIC').toUpperCase();
+      const changed = binding !== 'STATIC' || String(element.text || '') !== String(element.originalText || '') || element.hidden === true;
+      if (!changed) continue;
+      const x = Number(element.x || 0);
+      const top = Number(element.y || 0);
+      const boxWidth = Number(element.width || 1);
+      const boxHeight = Number(element.height || 1);
+      const y = page.height - top - boxHeight;
+      output += commandRect(Math.max(0, x - 1.5), Math.max(0, y - 1.2), boxWidth + 3, boxHeight + 2.4, hexRgb(element.backgroundColor, '#FFFFFF'));
+      if (element.hidden) continue;
+      const context = { kind, record, company, branding, localization };
+      const value = binding === 'STATIC' ? interpolateImportedText(element.text, context) : importedBindingValue(binding, context);
+      if (!value) continue;
+      const size = fittedImportedFontSize(value, boxWidth, Number(element.fontSize || 9));
+      const estimatedWidth = ascii(value).length * size * 0.52;
+      const align = String(element.align || 'LEFT').toUpperCase();
+      const textX = align === 'RIGHT' ? x + boxWidth - estimatedWidth : align === 'CENTER' ? x + (boxWidth - estimatedWidth) / 2 : x;
+      const baseline = y + Math.max(1, (boxHeight - size) * 0.42);
+      output += commandText(Math.max(0, textX), baseline, size, value, element.bold === true, hexRgb(element.textColor, '#111827'));
+    }
+    const logo = canvas.logo;
+    if (logo && Number(logo.page || 1) === Number(page.pageNumber) && logo.mode !== 'ORIGINAL') {
+      const logoY = page.height - Number(logo.y || 0) - Number(logo.height || 1);
+      output += commandRect(Number(logo.x || 0) - 1, logoY - 1, Number(logo.width || 1) + 2, Number(logo.height || 1) + 2, hexRgb(logo.backgroundColor, '#FFFFFF'));
+      if (logo.mode === 'COMPANY' && preparedLogo) {
+        const ratio = preparedLogo.width / preparedLogo.height;
+        const boxRatio = Number(logo.width) / Number(logo.height);
+        const width = ratio >= boxRatio ? Number(logo.width) : Number(logo.height) * ratio;
+        const height = ratio >= boxRatio ? Number(logo.width) / ratio : Number(logo.height);
+        output += commandImage(Number(logo.x) + (Number(logo.width) - width) / 2, logoY + (Number(logo.height) - height) / 2, width, height);
+      }
+    }
+    commands.push(output);
+  }
+  return assemblePdf(commands, preparedLogo, { extraImages, pageSpecs });
+}
+
+function createBusinessDocumentPdf({ kind, record, company, branding, localization, logoImage, importedAssets }) {
   if (!['quote', 'invoice', 'contract'].includes(kind)) throw new TypeError('Document kind must be quote, invoice, or contract.');
-  const allItems = lineItems(record || {});
   const template = normalizeTemplate(localization);
+  if (template.importedCanvas && Array.isArray(template.importedCanvas.pages) && template.importedCanvas.pages.length) {
+    return createImportedCanvasPdf({ kind, record: record || {}, company: company || {}, branding: branding || {}, localization: localization || {}, logoImage, importedAssets, template });
+  }
+  const allItems = lineItems(record || {});
   const hasDetailedDesign = Array.isArray(template.blocks) && template.blocks.length > 0;
   const perPage = hasDetailedDesign ? (template.tableDensity === 'COMPACT' ? 7 : 5) : (template.tableDensity === 'COMPACT' ? 13 : 11);
   const chunks = [];

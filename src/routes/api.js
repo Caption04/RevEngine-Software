@@ -2219,11 +2219,13 @@ const proofUploadDir = path.resolve(__dirname, '../../uploads/jobs/proof');
 const signatureUploadDir = path.resolve(__dirname, '../../uploads/jobs/signatures');
 const bookingUploadDir = path.resolve(__dirname, '../../uploads/booking-requests');
 const documentImportDir = path.resolve(__dirname, '../../private-data/document-template-imports');
+const documentTemplateAssetDir = path.resolve(__dirname, '../../private-data/document-template-assets');
 fs.mkdirSync(uploadDir, { recursive: true });
 fs.mkdirSync(proofUploadDir, { recursive: true });
 fs.mkdirSync(signatureUploadDir, { recursive: true });
 fs.mkdirSync(bookingUploadDir, { recursive: true });
 fs.mkdirSync(documentImportDir, { recursive: true });
+fs.mkdirSync(documentTemplateAssetDir, { recursive: true });
 
 const evidenceImageTypes = ['image/png', 'image/jpeg', 'image/webp'];
 
@@ -3715,7 +3717,8 @@ router.get("/client/service-contracts/:id/pdf", requireClientAuth, validate(idPa
   if (!company) throw notFound("Company not found");
   const branding = publicBranding(company);
   const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
-  const pdf = createBusinessDocumentPdf({ kind: 'contract', record: normalize(record), company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage });
+  const importedAssets = await loadImportedCanvasAssets(template && template.design);
+  const pdf = createBusinessDocumentPdf({ kind: 'contract', record: normalize(record), company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage, importedAssets });
   const filename = `contract-${String(record.contractNumber || record.id).replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80)}.pdf`;
   res.status(200).set('Content-Type', 'application/pdf').set('Content-Disposition', `inline; filename="${filename}"`).set('Cache-Control', 'private, no-store').send(pdf);
 }));
@@ -3744,7 +3747,8 @@ router.get("/client/quotes/:id/pdf", requireClientAuth, validate(idParam, "param
   if (!company) throw notFound("Company not found");
   const branding = publicBranding(company);
   const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
-  const pdf = createBusinessDocumentPdf({ kind: 'quote', record: normalize(record), company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage });
+  const importedAssets = await loadImportedCanvasAssets(template && template.design);
+  const pdf = createBusinessDocumentPdf({ kind: 'quote', record: normalize(record), company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage, importedAssets });
   const filename = `quote-${String(record.number || record.id).replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80)}.pdf`;
   res.status(200).set('Content-Type', 'application/pdf').set('Content-Disposition', `inline; filename="${filename}"`).set('Cache-Control', 'private, no-store').send(pdf);
 }));
@@ -3824,7 +3828,8 @@ router.get("/client/invoices/:id/pdf", requireClientAuth, validate(idParam, "par
   const branding = publicBranding(company);
   const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
   const pdfRecord = normalize({ ...record, onlinePaymentUrl: paymentLink && paymentLink.checkoutUrl || null });
-  const pdf = createBusinessDocumentPdf({ kind: 'invoice', record: pdfRecord, company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage });
+  const importedAssets = await loadImportedCanvasAssets(template && template.design);
+  const pdf = createBusinessDocumentPdf({ kind: 'invoice', record: pdfRecord, company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage, importedAssets });
   const filename = `invoice-${String(record.number || record.id).replace(/[^a-z0-9_-]+/gi, '-').slice(0, 80)}.pdf`;
   res.status(200).set('Content-Type', 'application/pdf').set('Content-Disposition', `inline; filename="${filename}"`).set('Cache-Control', 'private, no-store').send(pdf);
 }));
@@ -4730,6 +4735,34 @@ async function removeDocumentTemplateImportFile(template) {
   });
 }
 
+function safeDocumentTemplateAssetName(fileName) {
+  const safe = path.basename(String(fileName || '')).replace(/[^a-zA-Z0-9._-]/g, '');
+  if (!safe || safe !== String(fileName || '')) throw new AppError(400, 'Imported document asset name is invalid.');
+  return safe;
+}
+
+async function writeDocumentTemplateAssets(assets) {
+  for (const asset of Array.isArray(assets) ? assets : []) {
+    if (!asset || !Buffer.isBuffer(asset.buffer)) continue;
+    const fileName = safeDocumentTemplateAssetName(asset.fileName);
+    await fs.promises.writeFile(path.join(documentTemplateAssetDir, fileName), asset.buffer, { mode: 0o600 });
+  }
+}
+
+async function loadImportedCanvasAssets(design) {
+  const canvas = design && typeof design === 'object' ? design.importedCanvas : null;
+  const pages = canvas && Array.isArray(canvas.pages) ? canvas.pages : [];
+  const assets = {};
+  for (const page of pages) {
+    if (!page || !page.backgroundAsset) continue;
+    const fileName = safeDocumentTemplateAssetName(page.backgroundAsset);
+    const buffer = await fs.promises.readFile(path.join(documentTemplateAssetDir, fileName)).catch(() => null);
+    if (!buffer) throw new AppError(409, 'An imported document page is missing. Convert the original document again.');
+    assets[fileName] = { type: 'png', buffer };
+  }
+  return assets;
+}
+
 function editableDocumentTemplateWhere(id, companyId) {
   return { id, companyId, status: { notIn: ['ARCHIVED', 'DELETED'] } };
 }
@@ -4871,12 +4904,14 @@ router.post('/document-templates/import', requireRole(...adminRoles), documentTe
       buffer: req.file.buffer,
       mimeType: req.file.mimetype,
       fileName: req.file.originalname,
-      documentType
+      documentType,
+      assetKey: `${req.companyId}-${crypto.randomUUID()}`
     });
   } catch (error) {
     throw new AppError(400, error && error.message || 'The document could not be converted. Try a searchable PDF or DOCX file.');
   }
   await fs.promises.writeFile(path.join(documentImportDir, storedName), req.file.buffer, { mode: 0o600 });
+  await writeDocumentTemplateAssets(conversion.assets);
   const template = await prisma.documentTemplate.create({
     data: {
       companyId: req.companyId,
@@ -4954,11 +4989,13 @@ router.post('/document-templates/:id/reconvert', requireRole(...adminRoles), val
       buffer,
       mimeType: template.importMimeType,
       fileName: template.importFileName,
-      documentType: template.documentType
+      documentType: template.documentType,
+      assetKey: `${req.companyId}-${crypto.randomUUID()}`
     });
   } catch (error) {
     throw new AppError(400, error && error.message || 'The document could not be converted. Try a searchable PDF or DOCX file.');
   }
+  await writeDocumentTemplateAssets(conversion.assets);
   const updated = await prisma.documentTemplate.update({
     where: { id: template.id },
     data: { design: normalizeDesign(conversion.design, template.documentType), importStatus: conversion.status }
@@ -4975,7 +5012,7 @@ router.delete('/document-templates/:id/import-source', requireRole(...adminRoles
   await removeDocumentTemplateImportFile(template);
   const updated = await prisma.documentTemplate.update({
     where: { id: template.id },
-    data: { sourceType: 'BLANK', importFileName: null, importMimeType: null, importSourceUrl: null, importStatus: null }
+    data: { importFileName: null, importMimeType: null, importSourceUrl: null }
   });
   await audit(req, 'REMOVE_IMPORT', 'DocumentTemplate', template.id, { fileName: template.importFileName });
   sendData(res, normalize(safeDocumentTemplate(updated)));
@@ -5005,7 +5042,7 @@ router.post('/document-templates/:id/duplicate', requireRole(...adminRoles), val
       companyId: req.companyId,
       name: `${existing.name} copy`.slice(0, 120),
       documentType: existing.documentType,
-      sourceType: 'BLANK',
+      sourceType: existing.design && existing.design.importedCanvas ? 'IMPORTED' : 'BLANK',
       status: 'DRAFT',
       isDefault: false,
       design: normalizeDesign(existing.design, existing.documentType),
@@ -5095,7 +5132,8 @@ router.post('/document-templates/preview.pdf', requireRole(...adminRoles), valid
   const record = documentTemplateSampleRecord(req.body.documentType, localization);
   const branding = publicBranding(company);
   const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
-  const pdf = createBusinessDocumentPdf({ kind: documentTemplateKind(req.body.documentType), record, company: normalize(company), branding, localization, logoImage });
+  const importedAssets = await loadImportedCanvasAssets(template.design);
+  const pdf = createBusinessDocumentPdf({ kind: documentTemplateKind(req.body.documentType), record, company: normalize(company), branding, localization, logoImage, importedAssets });
   res.status(200)
     .set('Content-Type', 'application/pdf')
     .set('Content-Disposition', 'inline; filename="document-template-preview.pdf"')
@@ -8794,7 +8832,8 @@ router.get('/service-contracts/:id/pdf', requireRole(...adminRoles), validate(id
   const template = await documentTemplateForRecord(req.companyId, 'CONTRACT', record);
   const branding = publicBranding(company);
   const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
-  const pdf = createBusinessDocumentPdf({ kind: 'contract', record: normalize(record), company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage });
+  const importedAssets = await loadImportedCanvasAssets(template && template.design);
+  const pdf = createBusinessDocumentPdf({ kind: 'contract', record: normalize(record), company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage, importedAssets });
   const filename = `contract-${String(record.contractNumber || record.id).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || record.id}.pdf`;
   res.status(200)
     .set('Content-Type', 'application/pdf')
@@ -10430,7 +10469,8 @@ router.get('/quotes/:id/pdf', validate(idParam, 'params'), asyncHandler(async (r
   const template = await documentTemplateForRecord(req.companyId, 'QUOTE', record);
   const branding = publicBranding(company);
   const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
-  const pdf = createBusinessDocumentPdf({ kind: 'quote', record: normalize(record), company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage });
+  const importedAssets = await loadImportedCanvasAssets(template && template.design);
+  const pdf = createBusinessDocumentPdf({ kind: 'quote', record: normalize(record), company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage, importedAssets });
   const filename = `quote-${String(record.number || record.id).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || record.id}.pdf`;
   res.status(200)
     .set('Content-Type', 'application/pdf')
@@ -10660,7 +10700,8 @@ router.get('/invoices/:id/pdf', validate(idParam, 'params'), asyncHandler(async 
   const branding = publicBranding(company);
   const logoImage = await loadBusinessDocumentLogo(branding.logoUrl);
   const pdfRecord = normalize({ ...record, onlinePaymentUrl: paymentLink && paymentLink.checkoutUrl || null });
-  const pdf = createBusinessDocumentPdf({ kind: 'invoice', record: pdfRecord, company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage });
+  const importedAssets = await loadImportedCanvasAssets(template && template.design);
+  const pdf = createBusinessDocumentPdf({ kind: 'invoice', record: pdfRecord, company: normalize(company), branding, localization: rendererLocalization(financeLocalization(finance), template), logoImage, importedAssets });
   const filename = `invoice-${String(record.number || record.id).replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 80) || record.id}.pdf`;
   res.status(200)
     .set('Content-Type', 'application/pdf')

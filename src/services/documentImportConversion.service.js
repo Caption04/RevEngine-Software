@@ -3,6 +3,7 @@
 const zlib = require('node:zlib');
 const { spawnSync } = require('node:child_process');
 const { starterDesign, normalizeDesign } = require('./documentTemplate.service');
+const { exactCanvasDesign } = require('./importedDocumentCanvas.service');
 
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const PDF_TYPE = 'application/pdf';
@@ -600,7 +601,7 @@ function importFormat(mimeType, fileName) {
   return 'UNKNOWN';
 }
 
-function convertImportedDocument({ buffer, mimeType, fileName, documentType }) {
+function convertImportedDocument({ buffer, mimeType, fileName, documentType, assetKey }) {
   const format = importFormat(mimeType, fileName);
   if (format === 'IMAGE') {
     const design = starterDesign(documentType, 'BLANK');
@@ -617,7 +618,7 @@ function convertImportedDocument({ buffer, mimeType, fileName, documentType }) {
     };
     return { design: normalizeDesign(design, documentType), status: 'NEEDS_REVIEW', warnings: design.importAnalysis.warnings };
   }
-  if (format === 'PDF') return convertExtractedToDesign({ extracted: extractPdf(buffer), documentType, sourceFormat: 'PDF', fileName });
+  if (format === 'PDF') return exactCanvasDesign({ buffer, documentType, fileName, assetKey: assetKey || `import-${Date.now().toString(36)}` });
   if (format === 'DOCX') return convertExtractedToDesign({ extracted: extractDocx(buffer), documentType, sourceFormat: 'DOCX', fileName });
   throw new Error('Import a searchable PDF, DOCX, PNG, JPG, or WEBP file.');
 }
