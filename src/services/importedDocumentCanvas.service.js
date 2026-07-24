@@ -200,8 +200,16 @@ function parseSvgLogo(svg, page, raster) {
   }
   const logo = candidates.sort((left, right) => right.area - left.area)[0];
   if (!logo) return null;
-  const colors = sampleElementColors(raster, page, logo);
-  return { ...logo, mode: 'ORIGINAL', backgroundColor: colors.backgroundColor };
+  const padding = Math.max(3, Math.min(10, Math.min(logo.width, logo.height) * 0.06));
+  const padded = {
+    ...logo,
+    x: Math.max(0, logo.x - padding),
+    y: Math.max(0, logo.y - padding),
+    width: Math.min(page.width - Math.max(0, logo.x - padding), logo.width + (padding * 2)),
+    height: Math.min(page.height - Math.max(0, logo.y - padding), logo.height + (padding * 2))
+  };
+  const colors = sampleElementColors(raster, page, padded);
+  return { ...padded, mode: 'ORIGINAL', backgroundColor: colors.backgroundColor };
 }
 
 function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
@@ -217,7 +225,7 @@ function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
     run('pdftoppm', ['-png', '-r', '144', '-f', '1', '-l', String(Math.min(MAX_PAGES, pages.length)), inputPath, outputPrefix], { timeout: 60000 });
     const assets = [];
     let totalElements = 0;
-    let logo = null;
+    const logos = [];
     const canvasPages = [];
     for (const page of pages.slice(0, MAX_PAGES)) {
       const generated = path.join(tempDir, `page-${page.pageNumber}.png`);
@@ -243,6 +251,7 @@ function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
           binding: 'STATIC',
           suggestedBinding: suggestedBinding(line.text),
           fontSize,
+          fontFamily: 'Arial, Helvetica, sans-serif',
           bold: inferBold(line.text, line.height),
           align: line.x + line.width > page.width * 0.86 ? 'RIGHT' : 'LEFT',
           textColor: colors.textColor,
@@ -251,19 +260,30 @@ function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
         });
         totalElements += 1;
       }
-      if (page.pageNumber === 1) {
-        const svgPath = path.join(tempDir, 'page.svg');
-        try {
-          run('pdftocairo', ['-f', '1', '-l', '1', '-svg', inputPath, svgPath], { timeout: 30000 });
-          const actualSvgPath = fs.existsSync(svgPath) ? svgPath : fs.existsSync(`${svgPath}-1.svg`) ? `${svgPath}-1.svg` : null;
-          if (actualSvgPath) logo = parseSvgLogo(fs.readFileSync(actualSvgPath, 'utf8'), page, raster);
-        } catch {
-          logo = null;
+      const svgPath = path.join(tempDir, `logo-page-${page.pageNumber}.svg`);
+      try {
+        run('pdftocairo', ['-f', String(page.pageNumber), '-l', String(page.pageNumber), '-svg', inputPath, svgPath], { timeout: 30000 });
+        const exactPath = fs.existsSync(svgPath) ? svgPath : null;
+        const generatedPath = exactPath || fs.readdirSync(tempDir)
+          .map((name) => path.join(tempDir, name))
+          .find((candidate) => candidate.startsWith(svgPath.replace(/\.svg$/i, '')) && /\.svg$/i.test(candidate));
+        if (generatedPath) {
+          const detectedLogo = parseSvgLogo(fs.readFileSync(generatedPath, 'utf8'), page, raster);
+          if (detectedLogo) logos.push({ ...detectedLogo, id: `imported-logo-${page.pageNumber}-1` });
         }
+      } catch {
+        // Logo detection is best-effort. The page remains editable when no logo is found.
       }
       canvasPages.push({ pageNumber: page.pageNumber, width: page.width, height: page.height, backgroundAsset, textElements });
     }
     if (!canvasPages.length) throw new Error('The PDF pages could not be rendered.');
+    if (logos.length === 1 && canvasPages.length > 1) {
+      const base = logos[0];
+      canvasPages.forEach((page, index) => {
+        if (Number(page.pageNumber) === Number(base.page)) return;
+        logos.push({ ...base, id: `imported-logo-${page.pageNumber}-${index + 1}`, page: page.pageNumber });
+      });
+    }
     const searchable = totalElements > 0;
     const design = starterDesign(documentType, 'BLANK');
     design.variant = 'BLANK';
@@ -276,7 +296,8 @@ function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
       sourceFileName: fileName,
       rasterDpi: 144,
       pages: canvasPages,
-      logo,
+      logos,
+      logo: logos[0] || null,
       textEditable: searchable
     };
     design.importAnalysis = {

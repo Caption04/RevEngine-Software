@@ -23,8 +23,8 @@ test('exact PDF imports open as a full-width click-to-edit document instead of a
   assert.match(frontend, /contenteditable="\$\{canType \? 'plaintext-only' : 'false'\}"/);
   assert.match(html, /Click any text and type/);
   assert.match(css, /\.imported-document-stage\s*\{[\s\S]*?min-height:\s*calc\(100vh - 290px\)/);
-  assert.match(css, /\.imported-inline-text\.is-original\s*\{[\s\S]*?color:\s*transparent/);
-  assert.match(css, /\.imported-inline-text\.is-active[\s\S]*?background:\s*var\(--imported-cover\)/);
+  assert.match(frontend, /'is-rendered-text'/);
+  assert.match(css, /\.imported-inline-text\.is-rendered-text\s*\{[\s\S]*?background:\s*var\(--imported-cover\)/);
 });
 
 test('inline text editing keeps page geometry rigid while changing content and live-data mappings', () => {
@@ -54,5 +54,7 @@ test('the imported logo remains clickable and can be kept, replaced, or hidden',
   assert.match(html, /Use company logo/);
   assert.match(frontend, /data-imported-inline-logo/);
   assert.match(frontend, /companyLogoUrl/);
-  assert.match(frontend, /canvas\.logo\.mode = importedInlineLogoMode\.value/);
+  assert.match(frontend, /const logo = selectedImportedLogo\(\)/);
+  assert.match(frontend, /logo\.mode = importedInlineLogoMode\.value/);
+  assert.match(frontend, /ensureImportedLogoCollection\(\)/);
 });

@@ -9385,3 +9385,225 @@ body[data-document-editor-route="true"] .imported-page-number {
     padding-inline: 8px;
   }
 }
+
+/* Imported document editor corrections: permanent toolbar, clean text layer, and uncropped logos. */
+body[data-document-editor-route="true"] .document-template-editor.is-imported-inline {
+  grid-template-rows: 40px 52px minmax(0, 1fr);
+}
+
+body[data-document-editor-route="true"] .imported-editor-ribbon {
+  grid-template-columns: auto minmax(120px, 1fr) auto auto auto;
+}
+
+body[data-document-editor-route="true"] .imported-ribbon-history {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding-right: 5px;
+  border-right: 1px solid #dce3ed;
+}
+
+body[data-document-editor-route="true"] .imported-ribbon-history .icon-button {
+  width: 27px;
+  height: 27px;
+  min-height: 27px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+}
+
+body[data-document-editor-route="true"] .imported-ribbon-history .icon-button:hover:not(:disabled) {
+  color: #164fbd;
+  background: #edf4ff;
+}
+
+body[data-document-editor-route="true"] .imported-ribbon-history .icon-button:disabled {
+  opacity: .35;
+  cursor: default;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar {
+  position: relative;
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  height: 52px;
+  min-height: 52px;
+  padding: 5px 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 0;
+  border-bottom: 1px solid #d5dde8;
+  border-radius: 0;
+  background: #f8fafc;
+  box-shadow: none;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-copy {
+  display: grid;
+  flex: 0 0 150px;
+  gap: 1px;
+  min-width: 0;
+  padding-right: 10px;
+  border-right: 1px solid #dce3ed;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-copy strong {
+  overflow: hidden;
+  color: #152642;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-copy span,
+body[data-document-editor-route="true"] .imported-context-empty {
+  overflow: hidden;
+  color: #708097;
+  font-size: 9px;
+  line-height: 1.25;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+body[data-document-editor-route="true"] .imported-context-empty {
+  display: flex;
+  align-items: center;
+  min-width: 220px;
+}
+
+body[data-document-editor-route="true"] .imported-context-empty[hidden],
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-controls[hidden] {
+  display: none !important;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-controls {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  width: auto;
+  gap: 7px;
+  overflow: visible;
+  flex-wrap: nowrap;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-controls > label {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 235px);
+  align-items: center;
+  width: auto;
+  gap: 6px;
+  color: #52637e;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-controls select,
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-controls .icon-button,
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-colour input {
+  height: 32px;
+  min-height: 32px;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-controls .icon-button,
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-colour input {
+  width: 32px;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-format-button-row,
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-format-menu-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 5px;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-colour {
+  grid-template-columns: auto 32px !important;
+}
+
+body[data-document-editor-route="true"] .imported-inline-editor {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.imported-inline-text.is-rendered-text {
+  color: var(--imported-text);
+  background: var(--imported-cover);
+  font-synthesis: none;
+  line-height: 1;
+}
+
+.imported-inline-text.is-rendered-text.is-active {
+  color: var(--imported-text);
+  background: var(--imported-cover);
+}
+
+.imported-inline-logo.mode-company {
+  overflow: visible;
+}
+
+.imported-inline-logo.mode-company::before,
+.imported-inline-logo.mode-hidden::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--imported-cover);
+}
+
+.imported-logo-image-frame {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 4%;
+  overflow: visible;
+}
+
+.imported-inline-logo .imported-logo-image-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+.imported-inline-logo > span:not(.imported-logo-image-frame) {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 900px) {
+  body[data-document-editor-route="true"] .document-template-editor.is-imported-inline {
+    grid-template-rows: 40px 48px minmax(0, 1fr);
+  }
+
+  body[data-document-editor-route="true"] .imported-permanent-toolbar {
+    height: 48px;
+    min-height: 48px;
+  }
+
+  body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-copy {
+    display: none;
+  }
+}
+
+/* Keep edited lines inside their original PDF box so selecting text never changes its visual scale or pushes into nearby content. */
+.imported-inline-text.is-rendered-text.is-active {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}

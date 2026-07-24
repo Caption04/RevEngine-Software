@@ -26,8 +26,11 @@
     importedMode: 'EDIT',
     importedZoom: 1,
     selectedImportedElementId: null,
-    selectedImportedLogo: false,
-    importedCaretOffset: null
+    selectedImportedLogoId: null,
+    importedCaretOffset: null,
+    importedUndoStack: [],
+    importedRedoStack: [],
+    importedTypingSnapshot: null
   };
 
   state.filter = initialFilter;
@@ -96,6 +99,7 @@
   const importedDocumentStage = document.querySelector('[data-imported-document-stage]');
   const importedDocumentPages = document.querySelector('[data-imported-document-pages]');
   const importedContextbar = document.querySelector('[data-imported-contextbar]');
+  const importedEmptyContext = document.querySelector('[data-imported-empty-context]');
   const importedTextContextControls = document.querySelector('[data-imported-text-context-controls]');
   const importedLogoContextControls = document.querySelector('[data-imported-logo-context-controls]');
   const importedInlineBinding = document.querySelector('[data-imported-inline-binding]');
@@ -105,6 +109,8 @@
   const importedPreviewFrame = document.querySelector('[data-imported-preview-frame]');
   const importedPreviewStatus = document.querySelector('[data-imported-preview-status]');
   const importedZoomValue = document.querySelector('[data-imported-zoom="fit"]');
+  const importedUndoButton = document.querySelector('[data-imported-undo]');
+  const importedRedoButton = document.querySelector('[data-imported-redo]');
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
@@ -257,8 +263,12 @@
     state.selected = null;
     state.design = null;
     state.selectedImportedElementId = null;
-    state.selectedImportedLogo = false;
+    state.selectedImportedLogoId = null;
     state.importedCaretOffset = null;
+    state.importedUndoStack = [];
+    state.importedRedoStack = [];
+    state.importedTypingSnapshot = null;
+    updateImportedHistoryButtons();
     window.clearTimeout(state.previewTimer);
     if (state.previewController) state.previewController.abort();
     state.previewController = null;
@@ -314,6 +324,96 @@
   function exactImportedCanvas() {
     const canvas = state.design && state.design.importedCanvas;
     return canvas && canvas.mode === 'EXACT_PDF' && Array.isArray(canvas.pages) ? canvas : null;
+  }
+
+  function ensureImportedLogoCollection() {
+    const canvas = exactImportedCanvas();
+    if (!canvas) return [];
+    let logos = Array.isArray(canvas.logos) ? canvas.logos.filter(Boolean) : [];
+    if (!logos.length && canvas.logo) {
+      const base = { ...canvas.logo };
+      logos = canvas.pages.map((page) => ({
+        ...base,
+        id: `imported-logo-${page.pageNumber}`,
+        page: Number(page.pageNumber || 1)
+      }));
+    }
+    logos = logos.map((logo, index) => ({
+      ...logo,
+      id: String(logo.id || `imported-logo-${logo.page || index + 1}-${index + 1}`),
+      page: Number(logo.page || 1)
+    }));
+    if (logos.length === 1 && canvas.pages.length > 1) {
+      const base = logos[0];
+      logos = canvas.pages.map((page, index) => ({
+        ...base,
+        id: Number(page.pageNumber) === Number(base.page) ? base.id : `imported-logo-${page.pageNumber}-${index + 1}`,
+        page: Number(page.pageNumber || 1)
+      }));
+    }
+    canvas.logos = logos;
+    canvas.logo = logos[0] ? { ...logos[0] } : null;
+    return logos;
+  }
+
+  function selectedImportedLogo() {
+    if (!state.selectedImportedLogoId) return null;
+    return ensureImportedLogoCollection().find((logo) => logo.id === state.selectedImportedLogoId) || null;
+  }
+
+  function syncImportedLogoCompatibility() {
+    const canvas = exactImportedCanvas();
+    if (!canvas) return;
+    const logos = ensureImportedLogoCollection();
+    canvas.logo = logos[0] ? { ...logos[0] } : null;
+  }
+
+  function importedHistorySnapshot() {
+    const canvas = exactImportedCanvas();
+    return canvas ? deepClone(canvas) : null;
+  }
+
+  function updateImportedHistoryButtons() {
+    if (importedUndoButton) importedUndoButton.disabled = state.importedUndoStack.length === 0;
+    if (importedRedoButton) importedRedoButton.disabled = state.importedRedoStack.length === 0;
+  }
+
+  function rememberImportedChange(snapshot = importedHistorySnapshot()) {
+    if (!snapshot) return;
+    state.importedUndoStack.push(snapshot);
+    if (state.importedUndoStack.length > 60) state.importedUndoStack.shift();
+    state.importedRedoStack = [];
+    updateImportedHistoryButtons();
+  }
+
+  function restoreImportedHistory(snapshot) {
+    if (!snapshot || !state.design) return;
+    state.design.importedCanvas = deepClone(snapshot);
+    ensureImportedLogoCollection();
+    state.selectedImportedElementId = null;
+    state.selectedImportedLogoId = null;
+    state.importedCaretOffset = null;
+    state.importedTypingSnapshot = null;
+    renderImportedInlineEditor({ preserveScroll: true });
+    schedulePreview(120);
+  }
+
+  function undoImportedChange() {
+    if (!state.importedUndoStack.length) return;
+    const current = importedHistorySnapshot();
+    const previous = state.importedUndoStack.pop();
+    if (current) state.importedRedoStack.push(current);
+    restoreImportedHistory(previous);
+    updateImportedHistoryButtons();
+  }
+
+  function redoImportedChange() {
+    if (!state.importedRedoStack.length) return;
+    const current = importedHistorySnapshot();
+    const next = state.importedRedoStack.pop();
+    if (current) state.importedUndoStack.push(current);
+    restoreImportedHistory(next);
+    updateImportedHistoryButtons();
   }
 
   function importedTextElements() {
@@ -445,22 +545,31 @@
   function syncImportedContextbar() {
     if (!importedContextbar) return;
     const match = selectedImportedText();
-    const logoSelected = state.selectedImportedLogo && exactImportedCanvas() && exactImportedCanvas().logo;
-    const hasSelection = Boolean(match || logoSelected);
-    importedContextbar.hidden = !hasSelection;
-    if (!hasSelection) importedContextbar.removeAttribute('open');
-    else if (importedContextbar.matches('details')) importedContextbar.setAttribute('open', '');
+    const logo = selectedImportedLogo();
+    const hasSelection = Boolean(match || logo);
+    if (editorRoute) {
+      importedContextbar.hidden = false;
+      importedContextbar.classList.toggle('has-selection', hasSelection);
+      if (importedEmptyContext) importedEmptyContext.hidden = hasSelection;
+    } else {
+      importedContextbar.hidden = !hasSelection;
+      if (importedEmptyContext) importedEmptyContext.hidden = hasSelection;
+    }
     if (importedTextContextControls) importedTextContextControls.hidden = !match;
-    if (importedLogoContextControls) importedLogoContextControls.hidden = !logoSelected;
+    if (importedLogoContextControls) importedLogoContextControls.hidden = !logo;
     const title = importedContextbar.querySelector('[data-imported-context-title]');
     const copy = importedContextbar.querySelector('[data-imported-context-copy]');
-    if (logoSelected) {
-      if (title) title.textContent = 'Logo selected';
-      if (copy) copy.textContent = 'Keep the imported logo, replace it with the company logo, or hide it.';
-      if (importedInlineLogoMode) importedInlineLogoMode.value = exactImportedCanvas().logo.mode || 'ORIGINAL';
+    if (!hasSelection) {
+      if (title) title.textContent = 'Formatting';
+      if (copy) copy.textContent = 'Select text or a logo on the page.';
       return;
     }
-    if (!match) return;
+    if (logo) {
+      if (title) title.textContent = `Logo on page ${logo.page}`;
+      if (copy) copy.textContent = 'Keep the imported logo, replace it with the company logo, or hide it.';
+      if (importedInlineLogoMode) importedInlineLogoMode.value = logo.mode || 'ORIGINAL';
+      return;
+    }
     const element = match.element;
     if (title) title.textContent = `Text on page ${match.page.pageNumber}`;
     if (copy) copy.textContent = element.hidden ? 'This text is hidden. Show or reset it to edit again.' : 'Type directly on the page or connect this text to live Rev Engine data.';
@@ -480,7 +589,7 @@
 
   function clearImportedSelection() {
     state.selectedImportedElementId = null;
-    state.selectedImportedLogo = false;
+    state.selectedImportedLogoId = null;
     state.importedCaretOffset = null;
     importedDocumentPages && importedDocumentPages.querySelectorAll('.is-selected').forEach((node) => node.classList.remove('is-selected'));
     syncImportedContextbar();
@@ -488,7 +597,7 @@
 
   function selectImportedText(id, node) {
     state.selectedImportedElementId = id;
-    state.selectedImportedLogo = false;
+    state.selectedImportedLogoId = null;
     importedDocumentPages && importedDocumentPages.querySelectorAll('.is-selected').forEach((item) => item.classList.remove('is-selected'));
     if (node) node.classList.add('is-selected');
     syncImportedContextbar();
@@ -496,32 +605,35 @@
 
   function selectImportedLogo(node) {
     state.selectedImportedElementId = null;
-    state.selectedImportedLogo = true;
+    state.selectedImportedLogoId = node && node.dataset ? node.dataset.importedInlineLogo : null;
     importedDocumentPages && importedDocumentPages.querySelectorAll('.is-selected').forEach((item) => item.classList.remove('is-selected'));
     if (node) node.classList.add('is-selected');
     syncImportedContextbar();
   }
 
-  function importedLogoOverlay(page, zoom) {
-    const canvas = exactImportedCanvas();
-    const logo = canvas && canvas.logo;
-    if (!logo || Number(logo.page || 1) !== Number(page.pageNumber)) return '';
-    const mode = String(logo.mode || 'ORIGINAL').toUpperCase();
-    const style = [
-      `left:${Number(logo.x || 0) * zoom}px`, `top:${Number(logo.y || 0) * zoom}px`,
-      `width:${Number(logo.width || 1) * zoom}px`, `height:${Number(logo.height || 1) * zoom}px`,
-      `--imported-cover:${escapeHtml(logo.backgroundColor || '#FFFFFF')}`
-    ].join(';');
+  function importedLogoOverlays(page, zoom) {
+    const logos = ensureImportedLogoCollection().filter((logo) => Number(logo.page || 1) === Number(page.pageNumber));
+    if (!logos.length) return '';
     const companyLogoUrl = state.editorContext && state.editorContext.companyLogoUrl;
-    const replacement = mode === 'COMPANY'
-      ? companyLogoUrl ? `<img src="${escapeHtml(companyLogoUrl)}" alt="Company logo">` : '<span>Company logo</span>'
-      : mode === 'HIDDEN' ? '<span>Logo hidden</span>' : '';
-    return `<button class="imported-inline-logo mode-${mode.toLowerCase()}" type="button" style="${style}" data-imported-inline-logo aria-label="Edit logo">${replacement}</button>`;
+    return logos.map((logo) => {
+      const mode = String(logo.mode || 'ORIGINAL').toUpperCase();
+      const style = [
+        `left:${Number(logo.x || 0) * zoom}px`, `top:${Number(logo.y || 0) * zoom}px`,
+        `width:${Math.max(8, Number(logo.width || 1) * zoom)}px`, `height:${Math.max(8, Number(logo.height || 1) * zoom)}px`,
+        `--imported-cover:${escapeHtml(logo.backgroundColor || '#FFFFFF')}`
+      ].join(';');
+      const replacement = mode === 'COMPANY'
+        ? companyLogoUrl ? `<span class="imported-logo-image-frame"><img src="${escapeHtml(companyLogoUrl)}" alt="Company logo"></span>` : '<span>Company logo</span>'
+        : mode === 'HIDDEN' ? '<span>Logo hidden</span>' : '';
+      const selected = state.selectedImportedLogoId === logo.id ? ' is-selected' : '';
+      return `<button class="imported-inline-logo mode-${mode.toLowerCase()}${selected}" type="button" style="${style}" data-imported-inline-logo="${escapeHtml(logo.id)}" aria-label="Edit logo on page ${page.pageNumber}">${replacement}</button>`;
+    }).join('');
   }
 
   function renderImportedInlineEditor(options = {}) {
     const canvas = exactImportedCanvas();
     if (!canvas || !importedDocumentPages) return;
+    ensureImportedLogoCollection();
     const preserveScroll = options.preserveScroll === true;
     const scrollTop = preserveScroll && importedDocumentStage ? importedDocumentStage.scrollTop : 0;
     const scrollLeft = preserveScroll && importedDocumentStage ? importedDocumentStage.scrollLeft : 0;
@@ -535,17 +647,24 @@
         const changed = importedElementChanged(element);
         const display = element.hidden ? 'Hidden text' : importedElementDisplayValue(element);
         const canType = editable && !element.hidden && binding === 'STATIC';
+        const coverX = Math.max(0, Number(element.x || 0) - 1.75);
+        const coverY = Math.max(0, Number(element.y || 0) - 1.35);
+        const coverWidth = Number(element.width || 1) + 3.5;
+        const coverHeight = Number(element.height || 1) + 2.7;
         const classes = [
           'imported-inline-text',
-          changed ? 'is-replacement' : 'is-original',
+          'is-rendered-text',
+          changed ? 'is-replacement' : '',
           binding !== 'STATIC' ? 'is-live-field' : '',
           element.hidden ? 'is-hidden-text' : '',
           state.selectedImportedElementId === element.id ? 'is-selected' : ''
         ].filter(Boolean).join(' ');
         const style = [
-          `left:${Number(element.x || 0) * zoom}px`, `top:${Number(element.y || 0) * zoom}px`,
-          `width:${Math.max(4, Number(element.width || 1) * zoom)}px`, `height:${Math.max(4, Number(element.height || 1) * zoom)}px`,
+          `left:${coverX * zoom}px`, `top:${coverY * zoom}px`,
+          `width:${Math.max(4, coverWidth * zoom)}px`, `height:${Math.max(4, coverHeight * zoom)}px`,
+          `padding:${Math.max(.5, 1.35 * zoom)}px ${Math.max(.5, 1.75 * zoom)}px`,
           `font-size:${Math.max(4, Number(element.fontSize || 9) * zoom)}px`,
+          `font-family:${escapeHtml(element.fontFamily || 'Arial, Helvetica, sans-serif')}`,
           `font-weight:${element.bold ? '700' : '400'}`, `text-align:${String(element.align || 'LEFT').toLowerCase()}`,
           `--imported-text:${escapeHtml(element.textColor || '#111827')}`, `--imported-cover:${escapeHtml(element.backgroundColor || '#FFFFFF')}`
         ].join(';');
@@ -556,12 +675,13 @@
         <div class="imported-edit-page-canvas" style="width:${width}px;height:${height}px">
           <img src="${escapeHtml(importedCanvasAssetUrl(page))}" alt="Imported document page ${page.pageNumber}" draggable="false">
           ${elements}
-          ${importedLogoOverlay(page, zoom)}
+          ${importedLogoOverlays(page, zoom)}
         </div>
       </article>`;
     }).join('');
     updateImportedZoomLabel();
     syncImportedContextbar();
+    updateImportedHistoryButtons();
     if (importedDocumentStage && preserveScroll) {
       importedDocumentStage.scrollTop = scrollTop;
       importedDocumentStage.scrollLeft = scrollLeft;
@@ -607,6 +727,7 @@
         const binding = String(data.get('binding') || '');
         if (!binding) throw new Error('Choose a field to insert.');
         const element = match.element;
+        rememberImportedChange();
         const current = String(element.text == null ? element.originalText : element.text);
         const offset = Math.max(0, Math.min(current.length, Number.isFinite(state.importedCaretOffset) ? state.importedCaretOffset : current.length));
         const token = importedMergeToken(binding);
@@ -623,6 +744,7 @@
   function updateImportedTextFormatting(action, value) {
     const match = selectedImportedText();
     if (!match) return;
+    rememberImportedChange();
     const element = match.element;
     if (action === 'bold') element.bold = !element.bold;
     if (action === 'align') element.align = value;
@@ -720,6 +842,7 @@
         </div>
         <div class="document-detail-options imported-text-options"><label><input type="checkbox" name="bold"${element.bold ? ' checked' : ''}><span>Bold</span></label><label><input type="checkbox" name="hidden"${element.hidden ? ' checked' : ''}><span>Hide this text</span></label></div>`,
       onSubmit: async (data) => {
+        rememberImportedChange();
         element.text = String(data.get('text') || '');
         element.binding = String(data.get('binding') || 'STATIC');
         element.align = String(data.get('align') || 'LEFT');
@@ -757,29 +880,50 @@
   function adjustImportedLogo() {
     const canvas = exactImportedCanvas();
     if (!canvas || !canvas.pages.length) return;
-    const page = canvas.pages[0];
-    const logo = canvas.logo || { page: 1, x: 24, y: 24, width: Math.min(180, page.width / 3), height: 80, mode: 'ORIGINAL', backgroundColor: '#FFFFFF' };
+    const logos = ensureImportedLogoCollection();
+    const selected = selectedImportedLogo();
+    const logo = selected || logos[0] || null;
+    const pageNumber = Number(logo && logo.page || 1);
+    const page = canvas.pages.find((item) => Number(item.pageNumber) === pageNumber) || canvas.pages[0];
+    const draft = logo || {
+      id: `imported-logo-${page.pageNumber}-${Date.now().toString(36)}`,
+      page: Number(page.pageNumber || 1),
+      x: 24,
+      y: 24,
+      width: Math.min(180, page.width / 3),
+      height: 80,
+      mode: 'ORIGINAL',
+      backgroundColor: '#FFFFFF'
+    };
     openModal({
-      title: canvas.logo ? 'Adjust original logo area' : 'Mark the original logo area',
-      copy: 'These measurements identify the logo on the imported first page. The original remains unchanged until you replace or hide it.',
+      title: logo ? `Adjust logo area on page ${page.pageNumber}` : `Mark a logo area on page ${page.pageNumber}`,
+      copy: 'The full company logo is fitted inside this area without cropping. Each page can have its own selectable logo area.',
       submitLabel: 'Save logo area',
       body: `<div class="document-modal-grid">
-        ${modalField('x', 'Left position', `<input id="templateModal-x" name="x" type="number" min="0" max="${page.width}" step="1" value="${logo.x}">`)}
-        ${modalField('y', 'Top position', `<input id="templateModal-y" name="y" type="number" min="0" max="${page.height}" step="1" value="${logo.y}">`)}
-        ${modalField('width', 'Width', `<input id="templateModal-width" name="width" type="number" min="8" max="${page.width}" step="1" value="${logo.width}">`)}
-        ${modalField('height', 'Height', `<input id="templateModal-height" name="height" type="number" min="8" max="${page.height}" step="1" value="${logo.height}">`)}
-        ${modalField('backgroundColor', 'Background colour', `<input id="templateModal-backgroundColor" name="backgroundColor" type="color" value="${logo.backgroundColor || '#FFFFFF'}">`)}
+        ${modalField('x', 'Left position', `<input id="templateModal-x" name="x" type="number" min="0" max="${page.width}" step="1" value="${draft.x}">`)}
+        ${modalField('y', 'Top position', `<input id="templateModal-y" name="y" type="number" min="0" max="${page.height}" step="1" value="${draft.y}">`)}
+        ${modalField('width', 'Width', `<input id="templateModal-width" name="width" type="number" min="8" max="${page.width}" step="1" value="${draft.width}">`)}
+        ${modalField('height', 'Height', `<input id="templateModal-height" name="height" type="number" min="8" max="${page.height}" step="1" value="${draft.height}">`)}
+        ${modalField('backgroundColor', 'Background colour', `<input id="templateModal-backgroundColor" name="backgroundColor" type="color" value="${draft.backgroundColor || '#FFFFFF'}">`)}
       </div>`,
       onSubmit: async (data) => {
-        canvas.logo = {
-          page: 1,
+        rememberImportedChange();
+        const next = {
+          ...draft,
+          page: Number(page.pageNumber || 1),
           x: Math.max(0, Number(data.get('x')) || 0),
           y: Math.max(0, Number(data.get('y')) || 0),
           width: Math.max(8, Number(data.get('width')) || 80),
           height: Math.max(8, Number(data.get('height')) || 40),
-          mode: importedInlineLogoMode && importedInlineLogoMode.value || importedLogoMode && importedLogoMode.value || logo.mode || 'ORIGINAL',
+          mode: importedInlineLogoMode && importedInlineLogoMode.value || importedLogoMode && importedLogoMode.value || draft.mode || 'ORIGINAL',
           backgroundColor: String(data.get('backgroundColor') || '#FFFFFF')
         };
+        const index = logos.findIndex((item) => item.id === next.id);
+        if (index >= 0) logos[index] = next;
+        else logos.push(next);
+        canvas.logos = logos;
+        state.selectedImportedLogoId = next.id;
+        syncImportedLogoCompatibility();
         renderImportedInlineEditor({ preserveScroll: true });
         schedulePreview(80);
       }
@@ -813,8 +957,13 @@
     state.importedMode = 'EDIT';
     state.importedZoom = 1;
     state.selectedImportedElementId = null;
-    state.selectedImportedLogo = false;
+    state.selectedImportedLogoId = null;
     state.importedCaretOffset = null;
+    state.importedUndoStack = [];
+    state.importedRedoStack = [];
+    state.importedTypingSnapshot = null;
+    if (exactImport) ensureImportedLogoCollection();
+    updateImportedHistoryButtons();
     editor.classList.toggle('is-imported-inline', exactImport);
     document.body.classList.toggle('document-inline-editing', exactImport);
     document.querySelectorAll('[data-structured-design-controls]').forEach((node) => { node.hidden = exactImport; });
@@ -1321,15 +1470,14 @@
     document.querySelectorAll('[data-imported-editor-menu][open]').forEach((menu) => {
       if (!openEditorMenu || menu !== openEditorMenu || event.target.closest('.imported-file-menu-item')) menu.removeAttribute('open');
     });
-    if (importedContextbar && importedContextbar.open && !event.target.closest('[data-imported-contextbar]')) {
-      importedContextbar.removeAttribute('open');
-    }
     const open = event.target.closest('[data-template-open]');
     const duplicate = event.target.closest('[data-template-duplicate]');
     const restore = event.target.closest('[data-template-restore]');
     const deleteCard = event.target.closest('[data-template-delete]');
     const move = event.target.closest('[data-block-move]');
     try {
+      if (event.target.closest('[data-imported-undo]')) { undoImportedChange(); return; }
+      if (event.target.closest('[data-imported-redo]')) { redoImportedChange(); return; }
       const importedMode = event.target.closest('[data-imported-editor-mode]');
       if (importedMode) { setImportedMode(importedMode.dataset.importedEditorMode); return; }
       const importedZoom = event.target.closest('[data-imported-zoom]');
@@ -1417,9 +1565,12 @@
   });
 
   if (importedLogoMode) importedLogoMode.addEventListener('change', () => {
-    const canvas = exactImportedCanvas();
-    if (!canvas || !canvas.logo) return;
-    canvas.logo.mode = importedLogoMode.value;
+    const logos = ensureImportedLogoCollection();
+    if (!logos.length) return;
+    rememberImportedChange();
+    logos.forEach((logo) => { logo.mode = importedLogoMode.value; });
+    syncImportedLogoCompatibility();
+    renderImportedInlineEditor({ preserveScroll: true });
     schedulePreview(80);
   });
 
@@ -1436,6 +1587,7 @@
   if (importedInlineBinding) importedInlineBinding.addEventListener('change', () => {
     const match = selectedImportedText();
     if (!match) return;
+    rememberImportedChange();
     const element = match.element;
     element.binding = importedInlineBinding.value || 'STATIC';
     element.hidden = false;
@@ -1444,14 +1596,16 @@
     schedulePreview(400);
   });
 
-  if (importedInlineColour) importedInlineColour.addEventListener('input', () => {
+  if (importedInlineColour) importedInlineColour.addEventListener('change', () => {
     updateImportedTextFormatting('colour', importedInlineColour.value);
   });
 
   if (importedInlineLogoMode) importedInlineLogoMode.addEventListener('change', () => {
-    const canvas = exactImportedCanvas();
-    if (!canvas || !canvas.logo) return;
-    canvas.logo.mode = importedInlineLogoMode.value;
+    const logo = selectedImportedLogo();
+    if (!logo) return;
+    rememberImportedChange();
+    logo.mode = importedInlineLogoMode.value;
+    syncImportedLogoCompatibility();
     refreshImportedInlineEditor();
     schedulePreview(300);
   });
@@ -1462,6 +1616,7 @@
     const match = findImportedTextElement(node.dataset.importedInlineText);
     if (!match) return;
     selectImportedText(match.element.id, node);
+    state.importedTypingSnapshot = importedHistorySnapshot();
     if (String(match.element.binding || 'STATIC').toUpperCase() === 'STATIC' && !match.element.hidden) {
       node.classList.add('is-active');
       const editableValue = String(match.element.text == null ? match.element.originalText : match.element.text);
@@ -1478,6 +1633,10 @@
     const match = findImportedTextElement(node.dataset.importedInlineText);
     if (!match) return;
     const value = String(node.innerText || node.textContent || '').replace(/[\r\n]+/g, ' ');
+    if (state.importedTypingSnapshot) {
+      rememberImportedChange(state.importedTypingSnapshot);
+      state.importedTypingSnapshot = null;
+    }
     match.element.text = value;
     match.element.binding = 'STATIC';
     match.element.hidden = false;
@@ -1494,6 +1653,7 @@
     const match = findImportedTextElement(node.dataset.importedInlineText);
     if (!match) return;
     node.classList.remove('is-active');
+    state.importedTypingSnapshot = null;
     node.textContent = match.element.hidden ? 'Hidden text' : importedElementDisplayValue(match.element);
   });
 
@@ -1508,9 +1668,21 @@
   });
 
   document.addEventListener('keydown', (event) => {
-    if (editorRoute && (event.ctrlKey || event.metaKey) && String(event.key || '').toLowerCase() === 's') {
+    const shortcut = (event.ctrlKey || event.metaKey) ? String(event.key || '').toLowerCase() : '';
+    if (editorRoute && shortcut === 's') {
       event.preventDefault();
       saveTemplate().catch((error) => notify(error.message || 'The template could not be saved.', false));
+      return;
+    }
+    if (editorRoute && shortcut === 'z') {
+      event.preventDefault();
+      if (event.shiftKey) redoImportedChange();
+      else undoImportedChange();
+      return;
+    }
+    if (editorRoute && shortcut === 'y') {
+      event.preventDefault();
+      redoImportedChange();
       return;
     }
     const node = event.target.closest && event.target.closest('[data-imported-inline-text]');

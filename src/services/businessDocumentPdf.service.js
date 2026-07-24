@@ -908,35 +908,41 @@ function createImportedCanvasPdf({ kind, record, company, branding, localization
     let output = commandNamedImage(imageName, 0, 0, page.width, page.height);
     for (const element of page.textElements || []) {
       const binding = String(element.binding || 'STATIC').toUpperCase();
-      const changed = binding !== 'STATIC' || String(element.text || '') !== String(element.originalText || '') || element.hidden === true;
-      if (!changed) continue;
       const x = Number(element.x || 0);
       const top = Number(element.y || 0);
       const boxWidth = Number(element.width || 1);
       const boxHeight = Number(element.height || 1);
       const y = page.height - top - boxHeight;
-      output += commandRect(Math.max(0, x - 1.5), Math.max(0, y - 1.2), boxWidth + 3, boxHeight + 2.4, hexRgb(element.backgroundColor, '#FFFFFF'));
+      output += commandRect(Math.max(0, x - 1.75), Math.max(0, y - 1.35), boxWidth + 3.5, boxHeight + 2.7, hexRgb(element.backgroundColor, '#FFFFFF'));
       if (element.hidden) continue;
       const context = { kind, record, company, branding, localization };
       const value = binding === 'STATIC' ? interpolateImportedText(element.text, context) : importedBindingValue(binding, context);
       if (!value) continue;
-      const size = fittedImportedFontSize(value, boxWidth, Number(element.fontSize || 9));
+      const size = Math.max(4, Number(element.fontSize || 9));
       const estimatedWidth = ascii(value).length * size * 0.52;
       const align = String(element.align || 'LEFT').toUpperCase();
       const textX = align === 'RIGHT' ? x + boxWidth - estimatedWidth : align === 'CENTER' ? x + (boxWidth - estimatedWidth) / 2 : x;
       const baseline = y + Math.max(1, (boxHeight - size) * 0.42);
       output += commandText(Math.max(0, textX), baseline, size, value, element.bold === true, hexRgb(element.textColor, '#111827'));
     }
-    const logo = canvas.logo;
-    if (logo && Number(logo.page || 1) === Number(page.pageNumber) && logo.mode !== 'ORIGINAL') {
-      const logoY = page.height - Number(logo.y || 0) - Number(logo.height || 1);
-      output += commandRect(Number(logo.x || 0) - 1, logoY - 1, Number(logo.width || 1) + 2, Number(logo.height || 1) + 2, hexRgb(logo.backgroundColor, '#FFFFFF'));
+    const pageLogos = (Array.isArray(canvas.logos) && canvas.logos.length ? canvas.logos : canvas.logo ? [canvas.logo] : [])
+      .filter((logo) => Number(logo.page || 1) === Number(page.pageNumber));
+    for (const logo of pageLogos) {
+      if (logo.mode === 'ORIGINAL') continue;
+      const logoX = Number(logo.x || 0);
+      const logoWidth = Number(logo.width || 1);
+      const logoHeight = Number(logo.height || 1);
+      const logoY = page.height - Number(logo.y || 0) - logoHeight;
+      output += commandRect(logoX - 1, logoY - 1, logoWidth + 2, logoHeight + 2, hexRgb(logo.backgroundColor, '#FFFFFF'));
       if (logo.mode === 'COMPANY' && preparedLogo) {
+        const inset = Math.max(2, Math.min(8, Math.min(logoWidth, logoHeight) * 0.04));
+        const availableWidth = Math.max(1, logoWidth - (inset * 2));
+        const availableHeight = Math.max(1, logoHeight - (inset * 2));
         const ratio = preparedLogo.width / preparedLogo.height;
-        const boxRatio = Number(logo.width) / Number(logo.height);
-        const width = ratio >= boxRatio ? Number(logo.width) : Number(logo.height) * ratio;
-        const height = ratio >= boxRatio ? Number(logo.width) / ratio : Number(logo.height);
-        output += commandImage(Number(logo.x) + (Number(logo.width) - width) / 2, logoY + (Number(logo.height) - height) / 2, width, height);
+        const boxRatio = availableWidth / availableHeight;
+        const width = ratio >= boxRatio ? availableWidth : availableHeight * ratio;
+        const height = ratio >= boxRatio ? availableWidth / ratio : availableHeight;
+        output += commandImage(logoX + inset + (availableWidth - width) / 2, logoY + inset + (availableHeight - height) / 2, width, height);
       }
     }
     commands.push(output);

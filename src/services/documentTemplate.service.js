@@ -206,11 +206,26 @@ function normalizeImportedTextElement(input, pageNumber, index) {
     binding: oneOf(source.binding, IMPORTED_BINDINGS, 'STATIC'),
     suggestedBinding: oneOf(source.suggestedBinding, IMPORTED_BINDINGS, 'STATIC'),
     fontSize: number(source.fontSize, 9, 4, 72),
+    fontFamily: text(source.fontFamily, 120) || 'Arial, Helvetica, sans-serif',
     bold: bool(source.bold, false),
     align: oneOf(source.align, ['LEFT', 'CENTER', 'RIGHT'], 'LEFT'),
     textColor: color(source.textColor, '#111827'),
     backgroundColor: color(source.backgroundColor, '#FFFFFF'),
     hidden: bool(source.hidden, false)
+  };
+}
+
+function normalizeImportedLogo(input, index = 0) {
+  const source = input && typeof input === 'object' ? input : {};
+  return {
+    id: text(source.id, 120) || `imported-logo-${number(source.page, index + 1, 1, 500)}-${index + 1}`,
+    page: number(source.page, 1, 1, 500),
+    x: number(source.x, 0, 0, 2000),
+    y: number(source.y, 0, 0, 3000),
+    width: number(source.width, 1, 1, 2000),
+    height: number(source.height, 1, 1, 1000),
+    mode: oneOf(source.mode, ['ORIGINAL', 'COMPANY', 'HIDDEN'], 'ORIGINAL'),
+    backgroundColor: color(source.backgroundColor, '#FFFFFF')
   };
 }
 
@@ -228,22 +243,33 @@ function normalizeImportedCanvas(input) {
         : []
     };
   }).filter((page) => page.backgroundAsset) : [];
-  const logoSource = input.logo && typeof input.logo === 'object' ? input.logo : null;
-  const logo = logoSource ? {
-    page: number(logoSource.page, 1, 1, 500),
-    x: number(logoSource.x, 0, 0, 2000),
-    y: number(logoSource.y, 0, 0, 3000),
-    width: number(logoSource.width, 1, 1, 2000),
-    height: number(logoSource.height, 1, 1, 1000),
-    mode: oneOf(logoSource.mode, ['ORIGINAL', 'COMPANY', 'HIDDEN'], 'ORIGINAL'),
-    backgroundColor: color(logoSource.backgroundColor, '#FFFFFF')
-  } : null;
+  let logos = Array.isArray(input.logos)
+    ? input.logos.slice(0, 80).map((logo, index) => normalizeImportedLogo(logo, index))
+    : [];
+  if (!logos.length && input.logo && typeof input.logo === 'object') {
+    const legacy = normalizeImportedLogo(input.logo, 0);
+    logos = pages.map((page, index) => ({
+      ...legacy,
+      id: `imported-logo-${page.pageNumber}-${index + 1}`,
+      page: page.pageNumber
+    }));
+  }
+  logos = logos.filter((logo) => pages.some((page) => Number(page.pageNumber) === Number(logo.page)));
+  if (logos.length === 1 && pages.length > 1) {
+    const base = logos[0];
+    logos = pages.map((page, index) => ({
+      ...base,
+      id: Number(page.pageNumber) === Number(base.page) ? base.id : `imported-logo-${page.pageNumber}-${index + 1}`,
+      page: page.pageNumber
+    }));
+  }
   return {
     mode: 'EXACT_PDF',
     sourceFileName: text(input.sourceFileName, 240),
     rasterDpi: number(input.rasterDpi, 144, 72, 300),
     pages,
-    logo,
+    logos,
+    logo: logos[0] || null,
     textEditable: bool(input.textEditable, pages.some((page) => page.textElements.length > 0))
   };
 }
