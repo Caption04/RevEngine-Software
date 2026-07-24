@@ -7569,6 +7569,7 @@ body.modal-open { overflow: hidden; }
   margin-top: 5px;
 }
 
+.document-import-usage-note,
 .document-import-recommendation,
 .document-import-file-warning {
   display: grid;
@@ -7579,6 +7580,12 @@ body.modal-open { overflow: hidden; }
   background: #f5f9ff;
 }
 
+.document-import-usage-note {
+  border-color: #ead39a;
+  background: #fffaf0;
+}
+
+.document-import-usage-note span,
 .document-import-recommendation span,
 .document-import-file-warning {
   color: var(--muted);
@@ -8527,7 +8534,8 @@ body.document-inline-editing .content {
   z-index: 3;
   display: block;
   overflow: hidden;
-  padding: 0;
+  /* The JS expands the vertical box with transparent bleed so font descenders
+     remain visible while horizontal text still stays inside its PDF field. */
   border: 0;
   border-radius: 0;
   outline: 0;
@@ -9712,4 +9720,181 @@ body[data-document-editor-route="true"] .imported-permanent-toolbar [data-import
 body[data-document-editor-route="true"] .imported-permanent-toolbar [data-imported-logo-context-controls] select:focus {
   border-color: rgba(35, 99, 255, .65);
   box-shadow: 0 0 0 3px rgba(35, 99, 255, .10);
+}
+
+
+/* The visible logo mode control is a real custom menu, not a native select.
+   This prevents Windows Chromium from moving the focused select during the
+   document-canvas repaint that follows a logo mode change. */
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-logo-mode-field {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 6px;
+  height: 32px;
+  min-height: 32px;
+  color: #52637e;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-logo-mode-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 235px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 34px 0 10px;
+  border: 1px solid #c8d3e2;
+  border-radius: 8px;
+  background: #fff var(--select-chevron) right 10px center / 14px 14px no-repeat;
+  color: #111827;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-logo-mode-trigger:focus-visible,
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-logo-mode-trigger[aria-expanded="true"] {
+  outline: none;
+  border-color: rgba(35, 99, 255, .65);
+  box-shadow: 0 0 0 3px rgba(35, 99, 255, .10);
+}
+
+.imported-logo-mode-menu[popover] {
+  position: fixed;
+  inset: auto;
+  z-index: 9999;
+  margin: 0;
+  padding: 5px;
+  border: 1px solid #cfd9e7;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, .18);
+}
+
+.imported-logo-mode-menu::backdrop {
+  background: transparent;
+}
+
+.imported-logo-mode-menu button {
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #17243a;
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+}
+
+.imported-logo-mode-menu button:hover,
+.imported-logo-mode-menu button:focus-visible,
+.imported-logo-mode-menu button.is-active {
+  outline: none;
+  background: #edf4ff;
+  color: #174fc9;
+}
+
+
+/* Imported editor toolbar stability and text sizing.
+   The custom logo menu uses one hidden state input; never expose a second control. */
+body[data-document-editor-route="true"] [data-imported-inline-logo-mode][type="hidden"] {
+  display: none !important;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar {
+  --imported-toolbar-control-height: 32px;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-controls,
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-format-button-row,
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-format-menu-actions {
+  align-items: center;
+  height: var(--imported-toolbar-control-height);
+  min-height: var(--imported-toolbar-control-height);
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-controls > label,
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-logo-mode-field {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: 6px;
+  height: var(--imported-toolbar-control-height);
+  min-height: var(--imported-toolbar-control-height);
+  margin: 0;
+  line-height: 1;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-controls > label > span {
+  display: inline-flex;
+  align-items: center;
+  height: var(--imported-toolbar-control-height);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-controls select,
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-controls input:not([type="hidden"]),
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-controls button {
+  box-sizing: border-box;
+  align-self: center;
+  height: var(--imported-toolbar-control-height) !important;
+  min-height: var(--imported-toolbar-control-height) !important;
+  max-height: var(--imported-toolbar-control-height);
+  margin: 0 !important;
+  vertical-align: middle;
+  transform: none;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-live-data-control select {
+  width: 280px;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-font-size-control input {
+  width: 58px;
+  padding: 0 7px;
+  border: 1px solid #c8d3e2;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 30px;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-colour {
+  display: flex !important;
+  align-items: center;
+  height: var(--imported-toolbar-control-height);
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar .imported-context-colour input[type="color"] {
+  position: static;
+  top: auto;
+  width: var(--imported-toolbar-control-height);
+  padding: 3px;
+}
+
+/* Imported PDF text remains one line. Longer replacement values reduce their
+   rendered size to fit the original box instead of clipping or moving neighbours. */
+.imported-inline-text.is-rendered-text {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: clip;
+}
+
+.imported-inline-text.is-rendered-text.is-active {
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: hidden;
 }

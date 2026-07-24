@@ -56,6 +56,6 @@ test('the imported logo remains clickable and can be kept, replaced, or hidden',
   assert.match(frontend, /data-imported-inline-logo/);
   assert.match(frontend, /companyLogoUrl/);
   assert.match(frontend, /const logo = selectedImportedLogo\(\)/);
-  assert.match(frontend, /logo\.mode = importedInlineLogoMode\.value/);
+  assert.match(frontend, /logo\.mode = (?:importedInlineLogoMode\.value|nextMode)/);
   assert.match(frontend, /ensureImportedLogoCollection\(\)/);
 });

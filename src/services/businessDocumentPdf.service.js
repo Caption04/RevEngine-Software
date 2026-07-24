@@ -967,12 +967,21 @@ function interpolateImportedText(value, context) {
   });
 }
 
-function fittedImportedFontSize(value, width, preferred) {
-  const text = ascii(value);
-  if (!text) return Math.max(4, preferred);
-  const estimated = text.length * preferred * 0.52;
-  if (estimated <= width) return preferred;
-  return Math.max(4, Math.min(preferred, width / Math.max(1, text.length * 0.52)));
+function fittedImportedFontSize(value, width, height, preferred, lineHeight = 1) {
+  const safePreferred = Math.max(4, Number(preferred || 9));
+  const safeLineHeight = Math.max(0.8, Math.min(2, Number(lineHeight || 1)));
+  const heightLimit = Math.max(4, Number(height || safePreferred) / safeLineHeight);
+  const measured = estimateTextWidth(value, safePreferred);
+  const widthLimit = measured > width ? safePreferred * (width / Math.max(1, measured)) : safePreferred;
+  return Math.max(4, Math.min(safePreferred, widthLimit, heightLimit));
+}
+
+function importedTextBaseline(y, boxHeight, fontSize) {
+  const safeSize = Math.max(4, Number(fontSize || 9));
+  const safeHeight = Math.max(safeSize, Number(boxHeight || safeSize));
+  const descenderReserve = safeSize * 0.24;
+  const verticalSpare = Math.max(0, safeHeight - safeSize);
+  return y + descenderReserve + (verticalSpare * 0.5);
 }
 
 function importedElementBold(element) {
@@ -1014,11 +1023,12 @@ function createImportedCanvasPdf({ kind, record, company, branding, localization
       const context = { kind, record, company, branding, localization };
       const value = binding === 'STATIC' ? interpolateImportedText(element.text, context) : importedBindingValue(binding, context);
       if (!value) continue;
-      const size = Math.max(4, Number(element.fontSize || 9));
-      const estimatedWidth = ascii(value).length * size * 0.52;
+      const requestedSize = Math.max(4, Number(element.fontSize || 9));
+      const size = fittedImportedFontSize(value, boxWidth, boxHeight, requestedSize, element.lineHeight);
+      const estimatedWidth = estimateTextWidth(value, size);
       const align = String(element.align || 'LEFT').toUpperCase();
       const textX = align === 'RIGHT' ? x + boxWidth - estimatedWidth : align === 'CENTER' ? x + (boxWidth - estimatedWidth) / 2 : x;
-      const baseline = y + Math.max(1, (boxHeight - size) * 0.42);
+      const baseline = importedTextBaseline(y, boxHeight, size);
       const drawX = Math.max(0, textX);
       output += commandText(
         drawX,

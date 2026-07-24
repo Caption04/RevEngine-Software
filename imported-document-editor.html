@@ -61,9 +61,13 @@
 <span>Select text or a logo to use these tools.</span>
 </div>
 <div class="imported-context-controls" data-imported-text-context-controls="" hidden="">
-<label>
+<label class="imported-live-data-control">
 <span>Live data</span>
 <select data-imported-inline-binding=""></select>
+</label>
+<label class="imported-font-size-control">
+<span>Size</span>
+<input data-imported-inline-font-size="" type="number" min="4" max="72" step="0.5" inputmode="decimal" aria-label="Text size">
 </label>
 <div class="imported-format-button-row">
 <button aria-label="Bold" class="icon-button" data-imported-inline-bold="" title="Bold" type="button"><strong>B</strong></button>
@@ -84,14 +88,16 @@
 </div>
 </div>
 <div class="imported-context-controls" data-imported-logo-context-controls="" hidden="">
-<label>
+<div class="imported-logo-mode-field">
 <span>Logo</span>
-<select data-imported-inline-logo-mode="">
-<option value="ORIGINAL">Keep original</option>
-<option value="COMPANY">Use company logo</option>
-<option value="HIDDEN">Hide logo</option>
-</select>
-</label>
+<input data-imported-inline-logo-mode="" type="hidden" value="ORIGINAL">
+<button class="imported-logo-mode-trigger" data-imported-logo-mode-trigger="" type="button" aria-haspopup="menu" aria-expanded="false">Keep original</button>
+</div>
+<div class="imported-logo-mode-menu" data-imported-logo-mode-menu="" popover="auto" role="menu">
+<button type="button" role="menuitemradio" data-imported-logo-mode-option="ORIGINAL">Keep original</button>
+<button type="button" role="menuitemradio" data-imported-logo-mode-option="COMPANY">Use company logo</button>
+<button type="button" role="menuitemradio" data-imported-logo-mode-option="HIDDEN">Hide logo</button>
+</div>
 <button class="secondary-button compact" data-adjust-import-logo="" type="button">Adjust logo area</button>
 </div>
 </div>

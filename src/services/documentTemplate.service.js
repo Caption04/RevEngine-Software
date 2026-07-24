@@ -206,6 +206,7 @@ function normalizeImportedTextElement(input, pageNumber, index) {
     binding: oneOf(source.binding, IMPORTED_BINDINGS, 'STATIC'),
     suggestedBinding: oneOf(source.suggestedBinding, IMPORTED_BINDINGS, 'STATIC'),
     fontSize: number(source.fontSize, 9, 4, 72),
+    originalFontSize: number(source.originalFontSize, number(source.fontSize, 9, 4, 72), 4, 72),
     fontFamily: text(source.fontFamily, 120) || 'Arial, Helvetica, sans-serif',
     bold: bool(source.bold, false),
     italic: bool(source.italic, false),

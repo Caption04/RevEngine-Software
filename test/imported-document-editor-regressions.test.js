@@ -80,7 +80,7 @@ test('undo and redo cover typing, toolbar actions, logo changes, and keyboard sh
   assert.match(frontend, /importedUndoStack/);
   assert.match(frontend, /importedRedoStack/);
   assert.match(frontend, /rememberImportedChange\(state\.importedTypingSnapshot\)/);
-  assert.match(frontend, /rememberImportedChange\(\);[\s\S]*?logo\.mode = importedInlineLogoMode\.value/);
+  assert.match(frontend, /rememberImportedChange\(\);[\s\S]*?logo\.mode = (?:importedInlineLogoMode\.value|nextMode)/);
   assert.match(frontend, /shortcut === 'z'/);
   assert.match(frontend, /shortcut === 'y'/);
   assert.match(frontend, /event\.shiftKey\) redoImportedChange\(\)/);
@@ -236,4 +236,61 @@ test('logo mode select uses a stable custom appearance inside the scrollable too
   assert.match(css, /\[data-imported-logo-context-controls\] select\s*\{[\s\S]*?appearance:\s*none/);
   assert.match(css, /\[data-imported-logo-context-controls\] select\s*\{[\s\S]*?background-image:\s*var\(--select-chevron\)/);
   assert.match(css, /\[data-imported-logo-context-controls\] select\s*\{[\s\S]*?line-height:\s*30px/);
+});
+
+
+test('logo mode uses a custom popover menu so native select focus cannot move the toolbar', () => {
+  const html = read('imported-document-editor.html');
+  const frontend = read('assets/document-templates.js');
+  const css = read('assets/app.css');
+  assert.match(html, /data-imported-inline-logo-mode="" type="hidden" value="ORIGINAL"/);
+  assert.match(html, /data-imported-logo-mode-trigger/);
+  assert.match(html, /data-imported-logo-mode-menu="" popover="auto"/);
+  assert.match(frontend, /function openImportedLogoModeMenu\(\)/);
+  assert.match(frontend, /data-imported-logo-mode-option/);
+  assert.match(frontend, /dispatchEvent\(new Event\('change'/);
+  assert.match(css, /\.imported-logo-mode-trigger\s*\{/);
+  assert.match(css, /\.imported-logo-mode-menu\[popover\]/);
+});
+
+
+test('logo toolbar renders only one visible dropdown and all controls share one baseline', () => {
+  const html = read('imported-document-editor.html');
+  const css = read('assets/app.css');
+  assert.doesNotMatch(html, /<select data-imported-inline-logo-mode/);
+  assert.match(html, /<input data-imported-inline-logo-mode="" type="hidden" value="ORIGINAL">/);
+  assert.match(css, /\[data-imported-inline-logo-mode\]\[type="hidden"\]\s*\{[\s\S]*?display:\s*none !important/);
+  assert.match(css, /--imported-toolbar-control-height:\s*32px/);
+  assert.match(css, /\.imported-context-controls input:not\(\[type="hidden"\]\),[\s\S]*?\.imported-context-controls button\s*\{[\s\S]*?height:\s*var\(--imported-toolbar-control-height\) !important/);
+  assert.match(css, /\.imported-context-colour input\[type="color"\]\s*\{[\s\S]*?position:\s*static/);
+});
+
+test('imported text has a font-size control and automatically fits long values inside the original box', () => {
+  const html = read('imported-document-editor.html');
+  const frontend = read('assets/document-templates.js');
+  const pdf = read('src/services/businessDocumentPdf.service.js');
+  const templateService = read('src/services/documentTemplate.service.js');
+  const canvasService = read('src/services/importedDocumentCanvas.service.js');
+  assert.match(html, /data-imported-inline-font-size/);
+  assert.match(frontend, /function importedTextFitSize\(/);
+  assert.match(frontend, /applyImportedTextFit\(node, match\.element, value\)/);
+  assert.match(frontend, /updateImportedTextFormatting\('fontSize', value\)/);
+  assert.match(pdf, /fittedImportedFontSize\(value, boxWidth, boxHeight, requestedSize, element\.lineHeight\)/);
+  assert.match(templateService, /originalFontSize:/);
+  assert.match(canvasService, /styleWasChanged\(old, 'fontSize', 'originalFontSize'\)/);
+});
+
+
+test('imported text reserves vertical room for descenders in the editor and PDF', () => {
+  const frontend = read('assets/document-templates.js');
+  const css = read('assets/app.css');
+  const pdf = read('src/services/businessDocumentPdf.service.js');
+
+  assert.match(frontend, /const descenderBleed = Math\.max\(1, fittedFontSize \* 0\.28\)/);
+  assert.match(frontend, /padding:\$\{topBleed \* zoom\}px 0 \$\{bottomBleed \* zoom\}px/);
+  assert.match(frontend, /textHeight \+ topBleed \+ bottomBleed/);
+  assert.match(css, /vertical box with transparent bleed/);
+  assert.match(pdf, /function importedTextBaseline\(/);
+  assert.match(pdf, /const descenderReserve = safeSize \* 0\.24/);
+  assert.match(pdf, /const baseline = importedTextBaseline\(y, boxHeight, size\)/);
 });

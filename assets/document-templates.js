@@ -104,10 +104,14 @@
   const importedTextContextControls = document.querySelector('[data-imported-text-context-controls]');
   const importedLogoContextControls = document.querySelector('[data-imported-logo-context-controls]');
   const importedInlineBinding = document.querySelector('[data-imported-inline-binding]');
+  const importedInlineFontSize = document.querySelector('[data-imported-inline-font-size]');
   const importedInlineColour = document.querySelector('[data-imported-inline-colour]');
   const importedInlineLinkButton = document.querySelector('[data-imported-inline-link]');
   const importedInlineOpenLinkButton = document.querySelector('[data-imported-inline-open-link]');
   const importedInlineLogoMode = document.querySelector('[data-imported-inline-logo-mode]');
+  const importedLogoModeTrigger = document.querySelector('[data-imported-logo-mode-trigger]');
+  const importedLogoModeMenu = document.querySelector('[data-imported-logo-mode-menu]');
+  const importedLogoModeOptions = Array.from(document.querySelectorAll('[data-imported-logo-mode-option]'));
   const importedDataPreview = document.querySelector('[data-imported-data-preview]');
   const importedPreviewFrame = document.querySelector('[data-imported-preview-frame]');
   const importedPreviewStatus = document.querySelector('[data-imported-preview-status]');
@@ -493,6 +497,41 @@
     return element && element.linkUrl ? IMPORTED_LINK_COLOR : String(element && element.textColor || '#111827');
   }
 
+  const importedTextMeasureCanvas = document.createElement('canvas');
+  const importedTextMeasureContext = importedTextMeasureCanvas.getContext('2d');
+
+  function clampImportedFontSize(value, fallback = 9) {
+    const numeric = Number(value);
+    return Math.max(4, Math.min(72, Number.isFinite(numeric) ? numeric : fallback));
+  }
+
+  function importedTextFitSize(element, value) {
+    const preferred = clampImportedFontSize(element && element.fontSize, 9);
+    const boxWidth = Math.max(1, Number(element && element.width || 1));
+    const boxHeight = Math.max(1, Number(element && element.height || preferred));
+    const lineHeight = Math.max(0.8, Math.min(2, Number(element && element.lineHeight || 1)));
+    const heightLimit = Math.max(4, boxHeight / lineHeight);
+    const text = String(value == null ? '' : value);
+    if (!text) return Math.min(preferred, heightLimit);
+
+    let measuredWidth = text.length * preferred * 0.52;
+    if (importedTextMeasureContext) {
+      const weight = importedTextIsBold(element) ? '700' : '400';
+      const style = element && element.italic ? 'italic' : 'normal';
+      const family = String(element && element.fontFamily || 'Arial, Helvetica, sans-serif');
+      importedTextMeasureContext.font = `${style} ${weight} ${preferred}px ${family}`;
+      measuredWidth = importedTextMeasureContext.measureText(text).width || measuredWidth;
+    }
+    const widthLimit = measuredWidth > boxWidth ? preferred * (boxWidth / measuredWidth) : preferred;
+    return Math.max(4, Math.min(preferred, widthLimit, heightLimit));
+  }
+
+  function applyImportedTextFit(node, element, value) {
+    if (!node || !element) return;
+    const zoom = Math.max(0.01, Number(state.importedZoom || 1));
+    node.style.fontSize = `${importedTextFitSize(element, value) * zoom}px`;
+  }
+
   function importedElementDisplayValue(element) {
     if (!element || element.hidden) return '';
     const binding = String(element.binding || 'STATIC').toUpperCase();
@@ -574,6 +613,42 @@
     return range.toString().length;
   }
 
+  function importedLogoModeLabel(value) {
+    return ({ ORIGINAL: 'Keep original', COMPANY: 'Use company logo', HIDDEN: 'Hide logo' })[String(value || '').toUpperCase()] || 'Keep original';
+  }
+
+  function syncImportedLogoModePicker(value) {
+    const mode = ['ORIGINAL', 'COMPANY', 'HIDDEN'].includes(String(value || '').toUpperCase()) ? String(value).toUpperCase() : 'ORIGINAL';
+    if (importedInlineLogoMode) importedInlineLogoMode.value = mode;
+    if (importedLogoModeTrigger) {
+      importedLogoModeTrigger.textContent = importedLogoModeLabel(mode);
+      importedLogoModeTrigger.setAttribute('aria-expanded', importedLogoModeMenu && importedLogoModeMenu.matches(':popover-open') ? 'true' : 'false');
+    }
+    importedLogoModeOptions.forEach((option) => {
+      const active = option.dataset.importedLogoModeOption === mode;
+      option.classList.toggle('is-active', active);
+      option.setAttribute('aria-checked', active ? 'true' : 'false');
+    });
+  }
+
+  function openImportedLogoModeMenu() {
+    if (!importedLogoModeMenu || !importedLogoModeTrigger) return;
+    const rect = importedLogoModeTrigger.getBoundingClientRect();
+    importedLogoModeMenu.style.left = `${Math.round(rect.left)}px`;
+    importedLogoModeMenu.style.top = `${Math.round(rect.bottom + 4)}px`;
+    importedLogoModeMenu.style.width = `${Math.round(rect.width)}px`;
+    if (typeof importedLogoModeMenu.showPopover === 'function') importedLogoModeMenu.showPopover();
+    else importedLogoModeMenu.hidden = false;
+    importedLogoModeTrigger.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeImportedLogoModeMenu() {
+    if (!importedLogoModeMenu || !importedLogoModeTrigger) return;
+    if (typeof importedLogoModeMenu.hidePopover === 'function' && importedLogoModeMenu.matches(':popover-open')) importedLogoModeMenu.hidePopover();
+    else importedLogoModeMenu.hidden = true;
+    importedLogoModeTrigger.setAttribute('aria-expanded', 'false');
+  }
+
   function syncImportedContextbar() {
     if (!importedContextbar) return;
     const match = selectedImportedText();
@@ -604,7 +679,7 @@
     if (logo) {
       if (title) title.textContent = `Logo on page ${logo.page}`;
       if (copy) copy.textContent = 'Keep the imported logo, replace it with the company logo, or hide it.';
-      if (importedInlineLogoMode) importedInlineLogoMode.value = logo.mode || 'ORIGINAL';
+      syncImportedLogoModePicker(logo.mode || 'ORIGINAL');
       return;
     }
     const element = match.element;
@@ -618,6 +693,7 @@
       importedInlineBinding.innerHTML = importedBindingOptions(String(element.binding || 'STATIC').toUpperCase());
       importedInlineBinding.value = String(element.binding || 'STATIC').toUpperCase();
     }
+    if (importedInlineFontSize) importedInlineFontSize.value = String(clampImportedFontSize(element.fontSize, 9));
     if (importedInlineColour) {
       importedInlineColour.value = importedTextColour(element);
       importedInlineColour.disabled = Boolean(element.linkUrl);
@@ -705,6 +781,10 @@
         const textY = Math.max(0, Number(element.y || 0));
         const textWidth = Number(element.width || 1);
         const textHeight = Number(element.height || 1);
+        const fittedFontSize = importedTextFitSize(element, display);
+        const descenderBleed = Math.max(1, fittedFontSize * 0.28);
+        const topBleed = Math.min(textY, descenderBleed);
+        const bottomBleed = descenderBleed;
         const classes = [
           'imported-inline-text',
           'is-rendered-text',
@@ -716,10 +796,10 @@
           state.selectedImportedElementId === element.id ? 'is-selected' : ''
         ].filter(Boolean).join(' ');
         const style = [
-          `left:${textX * zoom}px`, `top:${textY * zoom}px`,
-          `width:${Math.max(4, textWidth * zoom)}px`, `height:${Math.max(4, textHeight * zoom)}px`,
-          'padding:0',
-          `font-size:${Math.max(4, Number(element.fontSize || 9) * zoom)}px`,
+          `left:${textX * zoom}px`, `top:${Math.max(0, textY - topBleed) * zoom}px`,
+          `width:${Math.max(4, textWidth * zoom)}px`, `height:${Math.max(4, (textHeight + topBleed + bottomBleed) * zoom)}px`,
+          `padding:${topBleed * zoom}px 0 ${bottomBleed * zoom}px`,
+          `font-size:${fittedFontSize * zoom}px`,
           `font-family:${escapeHtml(element.fontFamily || 'Arial, Helvetica, sans-serif')}`,
           `font-weight:${importedTextIsBold(element) ? '700' : '400'}`, `font-style:${element.italic ? 'italic' : 'normal'}`,
           `line-height:${Math.max(.8, Math.min(2, Number(element.lineHeight || 1)))}`,
@@ -833,12 +913,14 @@
     const element = match.element;
     if (action === 'bold') element.bold = !importedTextIsBold(element);
     if (action === 'align') element.align = value;
+    if (action === 'fontSize') element.fontSize = clampImportedFontSize(value, element.fontSize || 9);
     if (action === 'colour') element.textColor = value;
     if (action === 'hide') element.hidden = !element.hidden;
     if (action === 'reset') {
       element.text = element.originalText;
       element.binding = 'STATIC';
       element.hidden = false;
+      element.fontSize = element.originalFontSize == null ? element.fontSize : element.originalFontSize;
       element.bold = element.originalBold == null ? element.bold : element.originalBold;
       element.italic = element.originalItalic == null ? element.italic : element.originalItalic;
       element.underline = element.originalUnderline == null ? element.underline : element.originalUnderline;
@@ -1192,7 +1274,7 @@
       copy: 'A searchable PDF keeps its original pages, logo, colours, spacing, and text. You can then edit the text or map it to live customer and document data.',
       submitLabel: 'Import document',
       wide: true,
-      body: `<div class="document-import-recommendation"><strong>Best results: searchable PDF or DOCX</strong><span>Images and scanned documents are not recommended. They do not have a reliable editable text layer and may need to be rebuilt manually.</span></div><div class="document-modal-grid">${modalField('name', 'Template name', '<input id="templateModal-name" name="name" minlength="2" maxlength="120" required placeholder="Example: Existing company invoice">')}${modalField('documentType', 'Document type', '<select id="templateModal-documentType" name="documentType" required><option value="INVOICE">Invoice</option><option value="QUOTE">Quote</option><option value="CONTRACT">Contract</option></select>')}</div>${modalField('file', 'Document file', '<input id="templateModal-file" name="file" type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp" required>', 'Maximum 12 MB. Choose a searchable PDF or DOCX whenever possible.')}<div class="document-import-file-warning" data-import-file-warning hidden></div><section class="document-upload-preview" data-upload-preview><div class="document-upload-preview-empty"><strong>Document preview</strong><span>Select a file to check it before conversion.</span></div></section>`,
+      body: `<div class="document-import-usage-note"><strong>Use this for a document your company already uses</strong><span>Import an existing invoice, quote, or contract that is already part of your company workflow. To create a new document, use a ready-made template or start from scratch instead.</span></div><div class="document-import-recommendation"><strong>Best results: searchable PDF or DOCX</strong><span>Images and scanned documents are not recommended. They do not have a reliable editable text layer and may need to be rebuilt manually.</span></div><div class="document-modal-grid">${modalField('name', 'Template name', '<input id="templateModal-name" name="name" minlength="2" maxlength="120" required placeholder="Example: Existing company invoice">')}${modalField('documentType', 'Document type', '<select id="templateModal-documentType" name="documentType" required><option value="INVOICE">Invoice</option><option value="QUOTE">Quote</option><option value="CONTRACT">Contract</option></select>')}</div>${modalField('file', 'Document file', '<input id="templateModal-file" name="file" type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp" required>', 'Maximum 12 MB. Choose a searchable PDF or DOCX whenever possible.')}<div class="document-import-file-warning" data-import-file-warning hidden></div><section class="document-upload-preview" data-upload-preview><div class="document-upload-preview-empty"><strong>Document preview</strong><span>Select a file to check it before conversion.</span></div></section>`,
       afterOpen: (form) => {
         const input = form.querySelector('#templateModal-file');
         const preview = form.querySelector('[data-upload-preview]');
@@ -1574,6 +1656,19 @@
     const deleteCard = event.target.closest('[data-template-delete]');
     const move = event.target.closest('[data-block-move]');
     try {
+      if (event.target.closest('[data-imported-logo-mode-trigger]')) {
+        if (importedLogoModeMenu && importedLogoModeMenu.matches(':popover-open')) closeImportedLogoModeMenu();
+        else openImportedLogoModeMenu();
+        return;
+      }
+      const logoModeOption = event.target.closest('[data-imported-logo-mode-option]');
+      if (logoModeOption && importedInlineLogoMode) {
+        importedInlineLogoMode.value = logoModeOption.dataset.importedLogoModeOption;
+        closeImportedLogoModeMenu();
+        importedInlineLogoMode.dispatchEvent(new Event('change', { bubbles: true }));
+        importedLogoModeTrigger && importedLogoModeTrigger.focus({ preventScroll: true });
+        return;
+      }
       if (event.target.closest('[data-imported-undo]')) { undoImportedChange(); return; }
       if (event.target.closest('[data-imported-redo]')) { redoImportedChange(); return; }
       const importedMode = event.target.closest('[data-imported-editor-mode]');
@@ -1704,6 +1799,12 @@
     schedulePreview(400);
   });
 
+  if (importedInlineFontSize) importedInlineFontSize.addEventListener('change', () => {
+    const value = clampImportedFontSize(importedInlineFontSize.value, 9);
+    importedInlineFontSize.value = String(value);
+    updateImportedTextFormatting('fontSize', value);
+  });
+
   if (importedInlineColour) importedInlineColour.addEventListener('change', () => {
     updateImportedTextFormatting('colour', importedInlineColour.value);
   });
@@ -1711,11 +1812,17 @@
   if (importedInlineLogoMode) importedInlineLogoMode.addEventListener('change', () => {
     const logo = selectedImportedLogo();
     if (!logo) return;
+    const nextMode = importedInlineLogoMode.value;
     rememberImportedChange();
-    logo.mode = importedInlineLogoMode.value;
+    logo.mode = nextMode;
+    syncImportedLogoModePicker(nextMode);
     syncImportedLogoCompatibility();
     refreshImportedInlineEditor();
     schedulePreview(300);
+  });
+
+  if (importedLogoModeMenu) importedLogoModeMenu.addEventListener('toggle', () => {
+    if (importedLogoModeTrigger) importedLogoModeTrigger.setAttribute('aria-expanded', importedLogoModeMenu.matches(':popover-open') ? 'true' : 'false');
   });
 
   document.addEventListener('pointerdown', (event) => {
@@ -1787,6 +1894,7 @@
         node.textContent = editableValue;
         window.setTimeout(() => setCaretAtEnd(node), 0);
       }
+      applyImportedTextFit(node, match.element, editableValue);
     }
   });
 
@@ -1806,6 +1914,7 @@
     state.importedCaretOffset = currentCaretOffset(node);
     node.classList.remove('is-original', 'is-live-field', 'is-hidden-text');
     node.classList.add('is-replacement', 'is-active');
+    applyImportedTextFit(node, match.element, value);
     syncImportedContextbar();
     schedulePreview(800);
   });
@@ -1817,7 +1926,9 @@
     if (!match) return;
     node.classList.remove('is-active');
     state.importedTypingSnapshot = null;
-    node.textContent = match.element.hidden ? 'Hidden text' : importedElementDisplayValue(match.element);
+    const displayValue = match.element.hidden ? 'Hidden text' : importedElementDisplayValue(match.element);
+    node.textContent = displayValue;
+    applyImportedTextFit(node, match.element, displayValue);
   });
 
   document.addEventListener('keyup', (event) => {

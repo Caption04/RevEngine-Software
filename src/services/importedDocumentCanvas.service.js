@@ -400,6 +400,7 @@ function mergeImportedCanvasEdits(freshCanvas, existingCanvas) {
         hidden: old.hidden === true,
         align: old.align || freshElement.align
       };
+      if (styleWasChanged(old, 'fontSize', 'originalFontSize')) merged.fontSize = old.fontSize;
       if (styleWasChanged(old, 'bold', 'originalBold')) merged.bold = old.bold === true;
       if (styleWasChanged(old, 'italic', 'originalItalic')) merged.italic = old.italic === true;
       if (styleWasChanged(old, 'textColor', 'originalTextColor')) merged.textColor = old.textColor;
@@ -496,6 +497,7 @@ function exactCanvasDesign({ buffer, documentType, fileName, assetKey }) {
           binding: 'STATIC',
           suggestedBinding: suggestedBinding(line.text),
           fontSize,
+          originalFontSize: fontSize,
           fontFamily: line.fontFamily || 'Arial, Helvetica, sans-serif',
           bold: typeof line.bold === 'boolean' ? line.bold : inferBold(line.text, line.height),
           italic: line.italic === true,

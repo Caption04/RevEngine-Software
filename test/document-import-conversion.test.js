@@ -150,6 +150,9 @@ test('the import interface previews chosen files and warns against images and sc
   const frontend = read('assets/document-templates.js');
   const html = read('document-templates.html');
   const routes = read('src/routes/api.js');
+  assert.match(frontend, /Use this for a document your company already uses/);
+  assert.match(frontend, /already part of your company workflow/);
+  assert.match(frontend, /use a ready-made template or start from scratch instead/);
   assert.match(frontend, /Best results: searchable PDF or DOCX/);
   assert.match(frontend, /Images and scanned documents are not recommended/);
   assert.match(frontend, /URL\.createObjectURL\(file\)/);
