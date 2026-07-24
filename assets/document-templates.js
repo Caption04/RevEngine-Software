@@ -15,8 +15,14 @@
     previewController: null,
     modalPreviewUrl: null,
     saving: false,
+    editorContext: {},
     importedTextSearch: '',
-    importedPage: 'ALL'
+    importedPage: 'ALL',
+    importedMode: 'EDIT',
+    importedZoom: 1,
+    selectedImportedElementId: null,
+    selectedImportedLogo: false,
+    importedCaretOffset: null
   };
 
   const BLOCK_LABELS = {
@@ -78,6 +84,20 @@
   const importedPageFilter = document.querySelector('[data-imported-page-filter]');
   const importedTextSearch = document.querySelector('[data-imported-text-search]');
   const importedLogoMode = document.querySelector('[data-import-logo-mode]');
+  const structuredWorkspace = document.querySelector('[data-structured-workspace]');
+  const importedInlineEditor = document.querySelector('[data-imported-inline-editor]');
+  const importedDocumentStage = document.querySelector('[data-imported-document-stage]');
+  const importedDocumentPages = document.querySelector('[data-imported-document-pages]');
+  const importedContextbar = document.querySelector('[data-imported-contextbar]');
+  const importedTextContextControls = document.querySelector('[data-imported-text-context-controls]');
+  const importedLogoContextControls = document.querySelector('[data-imported-logo-context-controls]');
+  const importedInlineBinding = document.querySelector('[data-imported-inline-binding]');
+  const importedInlineColour = document.querySelector('[data-imported-inline-colour]');
+  const importedInlineLogoMode = document.querySelector('[data-imported-inline-logo-mode]');
+  const importedDataPreview = document.querySelector('[data-imported-data-preview]');
+  const importedPreviewFrame = document.querySelector('[data-imported-preview-frame]');
+  const importedPreviewStatus = document.querySelector('[data-imported-preview-status]');
+  const importedZoomValue = document.querySelector('[data-imported-zoom="fit"]');
 
   function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
@@ -212,16 +232,22 @@
   function showLibrary() {
     state.selected = null;
     state.design = null;
+    state.selectedImportedElementId = null;
+    state.selectedImportedLogo = false;
+    state.importedCaretOffset = null;
     window.clearTimeout(state.previewTimer);
     if (state.previewController) state.previewController.abort();
     state.previewController = null;
     state.previewRequest += 1;
     libraryNodes.forEach((node) => { node.hidden = false; });
     editor.hidden = true;
+    editor.classList.remove('is-imported-inline');
+    document.body.classList.remove('document-inline-editing');
     if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
     state.previewUrl = null;
-    previewFrame.removeAttribute('src');
-    previewStatus.textContent = 'Waiting for changes…';
+    if (previewFrame) previewFrame.removeAttribute('src');
+    if (importedPreviewFrame) importedPreviewFrame.removeAttribute('src');
+    setImportedPreviewStatus('Waiting for changes…');
   }
 
   function syncHeaderDependentControls() {
@@ -282,6 +308,305 @@
 
   function importedMergeToken(binding) {
     return `{{${String(binding || '').toUpperCase()}}}`;
+  }
+
+  const IMPORTED_SAMPLE_VALUES = {
+    COMPANY_NAME: 'Rev Engine Zimbabwe Demo',
+    COMPANY_LEGAL_NAME: 'Rev Engine Zimbabwe (Private) Limited',
+    COMPANY_ADDRESS: 'Harare, Zimbabwe',
+    COMPANY_EMAIL: 'support.zw@revengine.test',
+    COMPANY_PHONE: '+263 000 000 000',
+    COMPANY_WEBSITE: 'https://zw.revengine.test',
+    COMPANY_REGISTRATION: 'ZW-REG-0001',
+    COMPANY_TAX: 'ZW-VAT-0001',
+    CUSTOMER_NAME: 'Sample Solar Customer',
+    CUSTOMER_CONTACT: 'Accounts Team',
+    CUSTOMER_EMAIL: 'accounts@example.com',
+    CUSTOMER_PHONE: '+263 77 000 0000',
+    CUSTOMER_ADDRESS: 'Harare, Zimbabwe',
+    DOCUMENT_TITLE: 'INVOICE',
+    DOCUMENT_NUMBER: 'ZW-INV-0001',
+    DOCUMENT_STATUS: 'DRAFT',
+    DOCUMENT_ISSUE_DATE: '24 Jul 2026',
+    DOCUMENT_DUE_DATE: '07 Aug 2026',
+    DOCUMENT_PO: 'PO-1042',
+    TOTAL_SUBTOTAL: 'US$1,250.00',
+    TOTAL_DISCOUNT: 'US$0.00',
+    TOTAL_TAX: 'US$187.50',
+    TOTAL_TOTAL: 'US$1,437.50',
+    PAYMENT_REFERENCE: 'ZW-INV-0001'
+  };
+  for (let index = 1; index <= 8; index += 1) {
+    IMPORTED_SAMPLE_VALUES[`ITEM_${index}_DESCRIPTION`] = index === 1 ? 'Solar panel inspection and cleaning' : index === 2 ? 'Inverter performance test' : '';
+    IMPORTED_SAMPLE_VALUES[`ITEM_${index}_QTY`] = index <= 2 ? '1' : '';
+    IMPORTED_SAMPLE_VALUES[`ITEM_${index}_UNIT`] = index === 1 ? 'US$850.00' : index === 2 ? 'US$400.00' : '';
+    IMPORTED_SAMPLE_VALUES[`ITEM_${index}_TOTAL`] = index === 1 ? 'US$850.00' : index === 2 ? 'US$400.00' : '';
+  }
+
+  function importedSampleValue(binding) {
+    return IMPORTED_SAMPLE_VALUES[String(binding || '').toUpperCase()] || IMPORTED_BINDING_LABELS[String(binding || '').toUpperCase()] || '';
+  }
+
+  function interpolateImportedSample(value) {
+    return String(value || '').replace(/\{\{\s*([A-Z0-9_]+)\s*\}\}/gi, (token, binding) => importedSampleValue(binding) || token);
+  }
+
+  function importedElementDisplayValue(element) {
+    if (!element || element.hidden) return '';
+    const binding = String(element.binding || 'STATIC').toUpperCase();
+    if (binding !== 'STATIC') return importedSampleValue(binding);
+    return interpolateImportedSample(element.text == null ? element.originalText : element.text);
+  }
+
+  function importedElementChanged(element) {
+    return Boolean(element && (
+      String(element.binding || 'STATIC').toUpperCase() !== 'STATIC'
+      || String(element.text == null ? element.originalText : element.text) !== String(element.originalText || '')
+      || element.hidden === true
+    ));
+  }
+
+  function importedCanvasAssetUrl(page) {
+    if (!state.selected || !page || !page.backgroundAsset) return '';
+    return `${API_BASE}/document-templates/${encodeURIComponent(state.selected.id)}/canvas-assets/${encodeURIComponent(page.backgroundAsset)}`;
+  }
+
+  function selectedImportedText() {
+    if (!state.selectedImportedElementId) return null;
+    return findImportedTextElement(state.selectedImportedElementId);
+  }
+
+  function setImportedPreviewStatus(value) {
+    if (previewStatus) previewStatus.textContent = value;
+    if (importedPreviewStatus) importedPreviewStatus.textContent = value;
+  }
+
+  function updateImportedZoomLabel() {
+    if (importedZoomValue) importedZoomValue.textContent = `${Math.round(state.importedZoom * 100)}%`;
+  }
+
+  function fitImportedDocument() {
+    const canvas = exactImportedCanvas();
+    if (!canvas || !importedDocumentStage || !canvas.pages.length) return;
+    const widest = Math.max(...canvas.pages.map((page) => Number(page.width || 595)));
+    const available = Math.max(320, importedDocumentStage.clientWidth - 72);
+    state.importedZoom = Math.max(0.55, Math.min(1.35, available / widest));
+    renderImportedInlineEditor({ preserveScroll: true });
+  }
+
+  function importedTextNode(id) {
+    return importedDocumentPages && importedDocumentPages.querySelector(`[data-imported-inline-text="${CSS.escape(String(id || ''))}"]`);
+  }
+
+  function setCaretAtEnd(node) {
+    if (!node || !node.isContentEditable) return;
+    const range = document.createRange();
+    const selection = window.getSelection();
+    range.selectNodeContents(node);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  function currentCaretOffset(node) {
+    const selection = window.getSelection();
+    if (!node || !selection || !selection.rangeCount || !node.contains(selection.anchorNode)) return null;
+    const range = selection.getRangeAt(0).cloneRange();
+    range.selectNodeContents(node);
+    range.setEnd(selection.anchorNode, selection.anchorOffset);
+    return range.toString().length;
+  }
+
+  function syncImportedContextbar() {
+    if (!importedContextbar) return;
+    const match = selectedImportedText();
+    const logoSelected = state.selectedImportedLogo && exactImportedCanvas() && exactImportedCanvas().logo;
+    importedContextbar.hidden = !match && !logoSelected;
+    if (importedTextContextControls) importedTextContextControls.hidden = !match;
+    if (importedLogoContextControls) importedLogoContextControls.hidden = !logoSelected;
+    const title = importedContextbar.querySelector('[data-imported-context-title]');
+    const copy = importedContextbar.querySelector('[data-imported-context-copy]');
+    if (logoSelected) {
+      if (title) title.textContent = 'Logo selected';
+      if (copy) copy.textContent = 'Keep the imported logo, replace it with the company logo, or hide it.';
+      if (importedInlineLogoMode) importedInlineLogoMode.value = exactImportedCanvas().logo.mode || 'ORIGINAL';
+      return;
+    }
+    if (!match) return;
+    const element = match.element;
+    if (title) title.textContent = `Text on page ${match.page.pageNumber}`;
+    if (copy) copy.textContent = element.hidden ? 'This text is hidden. Show or reset it to edit again.' : 'Type directly on the page or connect this text to live Rev Engine data.';
+    if (importedInlineBinding) {
+      importedInlineBinding.innerHTML = importedBindingOptions(String(element.binding || 'STATIC').toUpperCase());
+      importedInlineBinding.value = String(element.binding || 'STATIC').toUpperCase();
+    }
+    if (importedInlineColour) importedInlineColour.value = element.textColor || '#111827';
+    const bold = importedContextbar.querySelector('[data-imported-inline-bold]');
+    if (bold) bold.classList.toggle('is-active', element.bold === true);
+    importedContextbar.querySelectorAll('[data-imported-inline-align]').forEach((button) => {
+      button.classList.toggle('is-active', button.dataset.importedInlineAlign === String(element.align || 'LEFT').toUpperCase());
+    });
+    const hide = importedContextbar.querySelector('[data-imported-inline-hide]');
+    if (hide) hide.textContent = element.hidden ? 'Show' : 'Hide';
+  }
+
+  function clearImportedSelection() {
+    state.selectedImportedElementId = null;
+    state.selectedImportedLogo = false;
+    state.importedCaretOffset = null;
+    importedDocumentPages && importedDocumentPages.querySelectorAll('.is-selected').forEach((node) => node.classList.remove('is-selected'));
+    syncImportedContextbar();
+  }
+
+  function selectImportedText(id, node) {
+    state.selectedImportedElementId = id;
+    state.selectedImportedLogo = false;
+    importedDocumentPages && importedDocumentPages.querySelectorAll('.is-selected').forEach((item) => item.classList.remove('is-selected'));
+    if (node) node.classList.add('is-selected');
+    syncImportedContextbar();
+  }
+
+  function selectImportedLogo(node) {
+    state.selectedImportedElementId = null;
+    state.selectedImportedLogo = true;
+    importedDocumentPages && importedDocumentPages.querySelectorAll('.is-selected').forEach((item) => item.classList.remove('is-selected'));
+    if (node) node.classList.add('is-selected');
+    syncImportedContextbar();
+  }
+
+  function importedLogoOverlay(page, zoom) {
+    const canvas = exactImportedCanvas();
+    const logo = canvas && canvas.logo;
+    if (!logo || Number(logo.page || 1) !== Number(page.pageNumber)) return '';
+    const mode = String(logo.mode || 'ORIGINAL').toUpperCase();
+    const style = [
+      `left:${Number(logo.x || 0) * zoom}px`, `top:${Number(logo.y || 0) * zoom}px`,
+      `width:${Number(logo.width || 1) * zoom}px`, `height:${Number(logo.height || 1) * zoom}px`,
+      `--imported-cover:${escapeHtml(logo.backgroundColor || '#FFFFFF')}`
+    ].join(';');
+    const companyLogoUrl = state.editorContext && state.editorContext.companyLogoUrl;
+    const replacement = mode === 'COMPANY'
+      ? companyLogoUrl ? `<img src="${escapeHtml(companyLogoUrl)}" alt="Company logo">` : '<span>Company logo</span>'
+      : mode === 'HIDDEN' ? '<span>Logo hidden</span>' : '';
+    return `<button class="imported-inline-logo mode-${mode.toLowerCase()}" type="button" style="${style}" data-imported-inline-logo aria-label="Edit logo">${replacement}</button>`;
+  }
+
+  function renderImportedInlineEditor(options = {}) {
+    const canvas = exactImportedCanvas();
+    if (!canvas || !importedDocumentPages) return;
+    const preserveScroll = options.preserveScroll === true;
+    const scrollTop = preserveScroll && importedDocumentStage ? importedDocumentStage.scrollTop : 0;
+    const scrollLeft = preserveScroll && importedDocumentStage ? importedDocumentStage.scrollLeft : 0;
+    const zoom = state.importedZoom;
+    const editable = canvas.textEditable !== false;
+    importedDocumentPages.innerHTML = canvas.pages.map((page) => {
+      const width = Number(page.width || 595) * zoom;
+      const height = Number(page.height || 842) * zoom;
+      const elements = (page.textElements || []).map((element) => {
+        const binding = String(element.binding || 'STATIC').toUpperCase();
+        const changed = importedElementChanged(element);
+        const display = element.hidden ? 'Hidden text' : importedElementDisplayValue(element);
+        const canType = editable && !element.hidden && binding === 'STATIC';
+        const classes = [
+          'imported-inline-text',
+          changed ? 'is-replacement' : 'is-original',
+          binding !== 'STATIC' ? 'is-live-field' : '',
+          element.hidden ? 'is-hidden-text' : '',
+          state.selectedImportedElementId === element.id ? 'is-selected' : ''
+        ].filter(Boolean).join(' ');
+        const style = [
+          `left:${Number(element.x || 0) * zoom}px`, `top:${Number(element.y || 0) * zoom}px`,
+          `width:${Math.max(4, Number(element.width || 1) * zoom)}px`, `height:${Math.max(4, Number(element.height || 1) * zoom)}px`,
+          `font-size:${Math.max(4, Number(element.fontSize || 9) * zoom)}px`,
+          `font-weight:${element.bold ? '700' : '400'}`, `text-align:${String(element.align || 'LEFT').toLowerCase()}`,
+          `--imported-text:${escapeHtml(element.textColor || '#111827')}`, `--imported-cover:${escapeHtml(element.backgroundColor || '#FFFFFF')}`
+        ].join(';');
+        return `<div class="${classes}" style="${style}" data-imported-inline-text="${escapeHtml(element.id)}" data-binding="${escapeHtml(binding)}" contenteditable="${canType ? 'plaintext-only' : 'false'}" spellcheck="false" role="textbox" aria-label="Editable text on page ${page.pageNumber}">${escapeHtml(display)}</div>`;
+      }).join('');
+      return `<article class="imported-edit-page" data-imported-page="${page.pageNumber}" style="width:${width}px;height:${height}px">
+        <span class="imported-page-number">Page ${page.pageNumber}</span>
+        <div class="imported-edit-page-canvas" style="width:${width}px;height:${height}px">
+          <img src="${escapeHtml(importedCanvasAssetUrl(page))}" alt="Imported document page ${page.pageNumber}" draggable="false">
+          ${elements}
+          ${importedLogoOverlay(page, zoom)}
+        </div>
+      </article>`;
+    }).join('');
+    updateImportedZoomLabel();
+    syncImportedContextbar();
+    if (importedDocumentStage && preserveScroll) {
+      importedDocumentStage.scrollTop = scrollTop;
+      importedDocumentStage.scrollLeft = scrollLeft;
+    }
+    if (!editable) {
+      const guidance = document.querySelector('[data-imported-editor-guidance]');
+      if (guidance) guidance.innerHTML = '<strong>This document has no editable text layer.</strong><span>Its pages are preserved, but this appears to be a scan. Import a searchable PDF or DOCX for click-to-edit text.</span>';
+    }
+  }
+
+  function setImportedMode(mode) {
+    state.importedMode = mode === 'PREVIEW' ? 'PREVIEW' : 'EDIT';
+    document.querySelectorAll('[data-imported-editor-mode]').forEach((button) => button.classList.toggle('active', button.dataset.importedEditorMode === state.importedMode));
+    if (importedDocumentStage) importedDocumentStage.hidden = state.importedMode !== 'EDIT';
+    if (importedDataPreview) importedDataPreview.hidden = state.importedMode !== 'PREVIEW';
+    if (state.importedMode === 'PREVIEW') {
+      clearImportedSelection();
+      updatePreview();
+    }
+  }
+
+  function refreshImportedInlineEditor({ focus = false } = {}) {
+    const selectedId = state.selectedImportedElementId;
+    renderImportedInlineEditor({ preserveScroll: true });
+    if (!focus || !selectedId) return;
+    window.setTimeout(() => {
+      const node = importedTextNode(selectedId);
+      if (!node || node.contentEditable === 'false') return;
+      node.focus({ preventScroll: true });
+      setCaretAtEnd(node);
+    }, 0);
+  }
+
+  function openImportedFieldPicker() {
+    const match = selectedImportedText();
+    if (!match) return;
+    openModal({
+      title: 'Insert live data',
+      copy: 'The field is inserted into this exact line. The document position and surrounding design stay locked.',
+      submitLabel: 'Insert field',
+      body: `<div class="field"><label for="importedInlineField">Rev Engine field</label><select id="importedInlineField" name="binding"><option value="">Choose a field</option>${importedBindingOptions('', false)}</select></div>`,
+      onSubmit: async (data) => {
+        const binding = String(data.get('binding') || '');
+        if (!binding) throw new Error('Choose a field to insert.');
+        const element = match.element;
+        const current = String(element.text == null ? element.originalText : element.text);
+        const offset = Math.max(0, Math.min(current.length, Number.isFinite(state.importedCaretOffset) ? state.importedCaretOffset : current.length));
+        const token = importedMergeToken(binding);
+        element.binding = 'STATIC';
+        element.hidden = false;
+        element.text = `${current.slice(0, offset)}${token}${current.slice(offset)}`;
+        state.importedCaretOffset = offset + token.length;
+        refreshImportedInlineEditor({ focus: true });
+        schedulePreview(500);
+      }
+    });
+  }
+
+  function updateImportedTextFormatting(action, value) {
+    const match = selectedImportedText();
+    if (!match) return;
+    const element = match.element;
+    if (action === 'bold') element.bold = !element.bold;
+    if (action === 'align') element.align = value;
+    if (action === 'colour') element.textColor = value;
+    if (action === 'hide') element.hidden = !element.hidden;
+    if (action === 'reset') {
+      element.text = element.originalText;
+      element.binding = 'STATIC';
+      element.hidden = false;
+    }
+    refreshImportedInlineEditor();
+    schedulePreview(400);
   }
 
   function renderImportedCanvasControls() {
@@ -424,10 +749,10 @@
           y: Math.max(0, Number(data.get('y')) || 0),
           width: Math.max(8, Number(data.get('width')) || 80),
           height: Math.max(8, Number(data.get('height')) || 40),
-          mode: importedLogoMode && importedLogoMode.value || logo.mode || 'ORIGINAL',
+          mode: importedInlineLogoMode && importedInlineLogoMode.value || importedLogoMode && importedLogoMode.value || logo.mode || 'ORIGINAL',
           backgroundColor: String(data.get('backgroundColor') || '#FFFFFF')
         };
-        renderImportedCanvasControls();
+        renderImportedInlineEditor({ preserveScroll: true });
         schedulePreview(80);
       }
     });
@@ -448,39 +773,52 @@
     const exactImport = Boolean(canvas);
     state.importedTextSearch = '';
     state.importedPage = 'ALL';
+    state.importedMode = 'EDIT';
+    state.importedZoom = 1;
+    state.selectedImportedElementId = null;
+    state.selectedImportedLogo = false;
+    state.importedCaretOffset = null;
+    editor.classList.toggle('is-imported-inline', exactImport);
+    document.body.classList.toggle('document-inline-editing', exactImport);
     document.querySelectorAll('[data-structured-design-controls]').forEach((node) => { node.hidden = exactImport; });
-    if (importedCanvasControls) importedCanvasControls.hidden = !exactImport;
+    if (structuredWorkspace) structuredWorkspace.hidden = exactImport;
+    if (importedInlineEditor) importedInlineEditor.hidden = !exactImport;
+    if (importedCanvasControls) importedCanvasControls.hidden = true;
+
     const importBanner = document.querySelector('[data-import-banner]');
-    importBanner.hidden = !template.hasImportSource;
+    importBanner.hidden = exactImport || !template.hasImportSource;
+    document.querySelectorAll('[data-view-import-source], [data-reconvert-import-source], [data-remove-import-source]').forEach((button) => {
+      button.hidden = !template.hasImportSource;
+    });
     const viewImport = document.querySelector('[data-view-import-source]');
-    if (viewImport) viewImport.textContent = 'Preview original';
+    if (viewImport) viewImport.textContent = exactImport ? 'Original PDF' : 'Preview original';
     const importHeading = document.querySelector('[data-import-heading]');
     const importCopy = document.querySelector('[data-import-copy]');
     const analysis = template.design && template.design.importAnalysis || {};
-    if (importHeading) importHeading.textContent = exactImport
-      ? 'Original PDF layout preserved'
-      : template.importStatus === 'NEEDS_REVIEW' ? 'This file needs manual rebuilding.' : 'Imported content is ready to review.';
+    if (importHeading) importHeading.textContent = template.importStatus === 'NEEDS_REVIEW' ? 'This file needs manual rebuilding.' : 'Imported content is ready to review.';
     if (importCopy) {
       const warning = Array.isArray(analysis.warnings) && analysis.warnings[0];
-      importCopy.textContent = exactImport
-        ? 'Rev Engine has not added its own header, logo, or sections. Edit the imported text and replace the original logo only when needed.'
-        : warning || 'Preview the original beside the live PDF, then review the editable content before publishing.';
+      importCopy.textContent = warning || 'Preview the original beside the live PDF, then review the editable content before publishing.';
     }
 
     const management = document.querySelector('[data-template-management]');
-    const managementActions = document.querySelector('[data-template-management-actions]');
     const managementCopy = document.querySelector('[data-template-management-copy]');
     if (management) management.classList.toggle('is-system', Boolean(template.isSystem));
-    if (managementActions) managementActions.querySelectorAll('[data-archive-template], [data-delete-template]').forEach((button) => { button.hidden = Boolean(template.isSystem); });
+    document.querySelectorAll('[data-archive-template], [data-delete-template]').forEach((button) => { button.hidden = Boolean(template.isSystem); });
     if (managementCopy) managementCopy.textContent = template.isSystem
       ? 'System templates stay available for every company. Duplicate this template to create a removable version.'
       : 'Archive it temporarily or delete it from your library. Issued documents keep their saved version.';
 
     syncControlValues();
-    if (exactImport) renderImportedCanvasControls();
-    else renderBlocks();
-    schedulePreview(80);
-    document.querySelector('[data-template-name]').focus({ preventScroll: true });
+    if (exactImport) {
+      renderImportedInlineEditor();
+      setImportedMode('EDIT');
+      window.setTimeout(fitImportedDocument, 0);
+    } else {
+      renderBlocks();
+      schedulePreview(80);
+      document.querySelector('[data-template-name]').focus({ preventScroll: true });
+    }
   }
 
   async function loadTemplates(selectId) {
@@ -489,6 +827,7 @@
     const data = await api(`/document-templates${suffix}`);
     state.templates = data.templates || [];
     state.blockTypes = data.blockTypes || Object.keys(BLOCK_LABELS);
+    state.editorContext = data.editorContext || {};
     renderLibrary();
     if (selectId) {
       const selected = state.templates.find((template) => template.id === selectId);
@@ -784,7 +1123,7 @@
       if (index >= 0) state.templates[index] = saved;
       renderLibrary();
       document.querySelector('[data-editor-title]').textContent = saved.name;
-      if (exactImportedCanvas()) renderImportedCanvasControls();
+      if (exactImportedCanvas()) renderImportedInlineEditor({ preserveScroll: true });
       else renderBlocks();
       if (showNotice) notify('Draft saved.');
       return saved;
@@ -880,6 +1219,7 @@
     const index = state.templates.findIndex((item) => item.id === updated.id);
     if (index >= 0) state.templates[index] = updated;
     document.querySelector('[data-import-banner]').hidden = true;
+    document.querySelectorAll('[data-view-import-source], [data-reconvert-import-source], [data-remove-import-source]').forEach((button) => { button.hidden = true; });
     renderLibrary();
     notify('Original comparison file removed. The imported layout remains.');
   }
@@ -900,7 +1240,7 @@
   function schedulePreview(delay = 450) {
     if (!state.selected || !state.design) return;
     window.clearTimeout(state.previewTimer);
-    previewStatus.textContent = 'Updating preview…';
+    setImportedPreviewStatus('Updating preview…');
     state.previewTimer = window.setTimeout(updatePreview, delay);
   }
 
@@ -920,12 +1260,13 @@
       if (request !== state.previewRequest || controller.signal.aborted) return;
       if (state.previewUrl) URL.revokeObjectURL(state.previewUrl);
       state.previewUrl = URL.createObjectURL(blob);
-      previewFrame.src = state.previewUrl;
-      previewStatus.textContent = 'Preview updated';
+      if (previewFrame) previewFrame.src = state.previewUrl;
+      if (importedPreviewFrame) importedPreviewFrame.src = state.previewUrl;
+      setImportedPreviewStatus('Preview updated');
     } catch (error) {
       if (error && error.name === 'AbortError') return;
       if (request !== state.previewRequest) return;
-      previewStatus.textContent = 'Preview unavailable';
+      setImportedPreviewStatus('Preview unavailable');
       notify(error.message || 'The preview could not be created.', false);
     } finally {
       if (state.previewController === controller) state.previewController = null;
@@ -939,6 +1280,30 @@
     const deleteCard = event.target.closest('[data-template-delete]');
     const move = event.target.closest('[data-block-move]');
     try {
+      const importedMode = event.target.closest('[data-imported-editor-mode]');
+      if (importedMode) { setImportedMode(importedMode.dataset.importedEditorMode); return; }
+      const importedZoom = event.target.closest('[data-imported-zoom]');
+      if (importedZoom) {
+        const action = importedZoom.dataset.importedZoom;
+        if (action === 'fit') fitImportedDocument();
+        else {
+          const next = state.importedZoom + (action === 'in' ? 0.1 : -0.1);
+          state.importedZoom = Math.max(0.5, Math.min(1.8, Number(next.toFixed(2))));
+          renderImportedInlineEditor({ preserveScroll: true });
+        }
+        return;
+      }
+      const inlineText = event.target.closest('[data-imported-inline-text]');
+      if (inlineText) { selectImportedText(inlineText.dataset.importedInlineText, inlineText); return; }
+      const inlineLogo = event.target.closest('[data-imported-inline-logo]');
+      if (inlineLogo) { selectImportedLogo(inlineLogo); return; }
+      if (event.target.closest('[data-imported-inline-bold]')) { updateImportedTextFormatting('bold'); return; }
+      const inlineAlign = event.target.closest('[data-imported-inline-align]');
+      if (inlineAlign) { updateImportedTextFormatting('align', inlineAlign.dataset.importedInlineAlign); return; }
+      if (event.target.closest('[data-imported-inline-reset]')) { updateImportedTextFormatting('reset'); return; }
+      if (event.target.closest('[data-imported-inline-hide]')) { updateImportedTextFormatting('hide'); return; }
+      if (event.target.closest('[data-imported-inline-insert-field]')) { openImportedFieldPicker(); return; }
+      if (state.importedMode === 'EDIT' && event.target.closest('[data-imported-document-stage]') && !event.target.closest('[data-imported-contextbar]')) clearImportedSelection();
       if (open) {
         const template = state.templates.find((item) => item.id === open.dataset.templateOpen);
         if (template) openEditor(template);
@@ -1012,6 +1377,95 @@
   if (importedPageFilter) importedPageFilter.addEventListener('change', () => {
     state.importedPage = importedPageFilter.value;
     renderImportedCanvasControls();
+  });
+
+  if (importedInlineBinding) importedInlineBinding.addEventListener('change', () => {
+    const match = selectedImportedText();
+    if (!match) return;
+    const element = match.element;
+    element.binding = importedInlineBinding.value || 'STATIC';
+    element.hidden = false;
+    if (element.binding === 'STATIC' && element.text == null) element.text = element.originalText;
+    refreshImportedInlineEditor({ focus: element.binding === 'STATIC' });
+    schedulePreview(400);
+  });
+
+  if (importedInlineColour) importedInlineColour.addEventListener('input', () => {
+    updateImportedTextFormatting('colour', importedInlineColour.value);
+  });
+
+  if (importedInlineLogoMode) importedInlineLogoMode.addEventListener('change', () => {
+    const canvas = exactImportedCanvas();
+    if (!canvas || !canvas.logo) return;
+    canvas.logo.mode = importedInlineLogoMode.value;
+    refreshImportedInlineEditor();
+    schedulePreview(300);
+  });
+
+  document.addEventListener('focusin', (event) => {
+    const node = event.target.closest && event.target.closest('[data-imported-inline-text]');
+    if (!node) return;
+    const match = findImportedTextElement(node.dataset.importedInlineText);
+    if (!match) return;
+    selectImportedText(match.element.id, node);
+    if (String(match.element.binding || 'STATIC').toUpperCase() === 'STATIC' && !match.element.hidden) {
+      node.classList.add('is-active');
+      const editableValue = String(match.element.text == null ? match.element.originalText : match.element.text);
+      if (node.textContent !== editableValue) {
+        node.textContent = editableValue;
+        window.setTimeout(() => setCaretAtEnd(node), 0);
+      }
+    }
+  });
+
+  document.addEventListener('input', (event) => {
+    const node = event.target.closest && event.target.closest('[data-imported-inline-text]');
+    if (!node) return;
+    const match = findImportedTextElement(node.dataset.importedInlineText);
+    if (!match) return;
+    const value = String(node.innerText || node.textContent || '').replace(/[\r\n]+/g, ' ');
+    match.element.text = value;
+    match.element.binding = 'STATIC';
+    match.element.hidden = false;
+    state.importedCaretOffset = currentCaretOffset(node);
+    node.classList.remove('is-original', 'is-live-field', 'is-hidden-text');
+    node.classList.add('is-replacement', 'is-active');
+    syncImportedContextbar();
+    schedulePreview(800);
+  });
+
+  document.addEventListener('focusout', (event) => {
+    const node = event.target.closest && event.target.closest('[data-imported-inline-text]');
+    if (!node) return;
+    const match = findImportedTextElement(node.dataset.importedInlineText);
+    if (!match) return;
+    node.classList.remove('is-active');
+    node.textContent = match.element.hidden ? 'Hidden text' : importedElementDisplayValue(match.element);
+  });
+
+  document.addEventListener('keyup', (event) => {
+    const node = event.target.closest && event.target.closest('[data-imported-inline-text]');
+    if (node) state.importedCaretOffset = currentCaretOffset(node);
+  });
+
+  document.addEventListener('mouseup', (event) => {
+    const node = event.target.closest && event.target.closest('[data-imported-inline-text]');
+    if (node) state.importedCaretOffset = currentCaretOffset(node);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    const node = event.target.closest && event.target.closest('[data-imported-inline-text]');
+    if (!node) return;
+    if (event.key === 'Enter') event.preventDefault();
+    if (event.key === 'Escape') node.blur();
+  });
+
+  document.addEventListener('paste', (event) => {
+    const node = event.target.closest && event.target.closest('[data-imported-inline-text]');
+    if (!node) return;
+    event.preventDefault();
+    const text = String(event.clipboardData && event.clipboardData.getData('text/plain') || '').replace(/[\r\n]+/g, ' ');
+    document.execCommand('insertText', false, text);
   });
 
   document.querySelector('[data-template-name]').addEventListener('input', (event) => {

@@ -4844,16 +4844,45 @@ router.get('/document-templates', requireRole(...adminRoles), asyncHandler(async
   await requireAnyPermission(req, ['company.settings.view', 'company.settings.manage', 'settings.finance.manage']);
   await seedStarterTemplates(prisma, req.companyId);
   const archivedOnly = String(req.query.status || '').toUpperCase() === 'ARCHIVED';
-  const templates = await prisma.documentTemplate.findMany({
-    where: { companyId: req.companyId, status: archivedOnly ? 'ARCHIVED' : { notIn: ['ARCHIVED', 'DELETED'] } },
-    include: { versions: { where: { publishedAt: { not: null } }, orderBy: { version: 'desc' }, take: 10 } },
-    orderBy: [{ documentType: 'asc' }, { isDefault: 'desc' }, { isSystem: 'desc' }, { updatedAt: 'desc' }]
-  });
+  const [templates, company] = await Promise.all([
+    prisma.documentTemplate.findMany({
+      where: { companyId: req.companyId, status: archivedOnly ? 'ARCHIVED' : { notIn: ['ARCHIVED', 'DELETED'] } },
+      include: { versions: { where: { publishedAt: { not: null } }, orderBy: { version: 'desc' }, take: 10 } },
+      orderBy: [{ documentType: 'asc' }, { isDefault: 'desc' }, { isSystem: 'desc' }, { updatedAt: 'desc' }]
+    }),
+    getCompanyWithBranding(req.companyId)
+  ]);
+  const branding = company ? publicBranding(company) : {};
   sendData(res, normalize({
     blockTypes: DOCUMENT_BLOCK_TYPES,
     documentTypes: DOCUMENT_TYPES,
+    editorContext: {
+      companyName: branding.brandName || company && (company.tradingName || company.name) || 'Company',
+      companyLogoUrl: branding.logoUrl || null
+    },
     templates: templates.map(safeDocumentTemplate)
   }));
+}));
+
+router.get('/document-templates/:id/canvas-assets/:assetName', requireRole(...adminRoles), asyncHandler(async (req, res) => {
+  await requireAnyPermission(req, ['company.settings.view', 'company.settings.manage', 'settings.finance.manage']);
+  const template = await prisma.documentTemplate.findFirst({
+    where: { id: req.params.id, companyId: req.companyId, status: { not: 'DELETED' } },
+    select: { design: true }
+  });
+  if (!template) throw notFound('Document template not found');
+  const assetName = safeDocumentTemplateAssetName(req.params.assetName);
+  const canvas = template.design && typeof template.design === 'object' ? template.design.importedCanvas : null;
+  const allowed = canvas && Array.isArray(canvas.pages) && canvas.pages.some((page) => page && page.backgroundAsset === assetName);
+  if (!allowed) throw notFound('Imported document page not found');
+  const assetPath = path.join(documentTemplateAssetDir, assetName);
+  const stat = await fs.promises.stat(assetPath).catch(() => null);
+  if (!stat || !stat.isFile()) throw notFound('Imported document page not found');
+  res.status(200)
+    .set('Content-Type', 'image/png')
+    .set('Content-Disposition', `inline; filename="${assetName}"`)
+    .set('Cache-Control', 'private, no-store')
+    .sendFile(assetPath);
 }));
 
 router.get('/document-templates/:id', requireRole(...adminRoles), validate(idParam, 'params'), asyncHandler(async (req, res) => {

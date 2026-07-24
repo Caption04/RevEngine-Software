@@ -69,7 +69,87 @@
           </div>
         </div>
 
-        <div class="document-studio-workspace">
+
+        <section class="imported-inline-editor" data-imported-inline-editor hidden>
+          <div class="imported-editor-commandbar">
+            <div class="imported-editor-mode-switch" role="tablist" aria-label="Imported document editor mode">
+              <button class="active" type="button" data-imported-editor-mode="EDIT">Edit design</button>
+              <button type="button" data-imported-editor-mode="PREVIEW">Preview with data</button>
+            </div>
+            <div class="imported-editor-command-actions">
+              <div class="imported-editor-zoom" aria-label="Document zoom">
+                <button class="icon-button" type="button" aria-label="Zoom out" data-imported-zoom="out">−</button>
+                <button class="text-button imported-zoom-value" type="button" data-imported-zoom="fit">100%</button>
+                <button class="icon-button" type="button" aria-label="Zoom in" data-imported-zoom="in">+</button>
+              </div>
+              <button class="secondary-button compact" type="button" data-view-import-source>Original PDF</button>
+              <details class="imported-editor-more">
+                <summary class="secondary-button compact" aria-label="More template actions">More</summary>
+                <div class="imported-editor-more-menu">
+                  <button class="text-button" type="button" data-reconvert-import-source>Convert original again</button>
+                  <button class="text-button" type="button" data-duplicate-template>Duplicate template</button>
+                  <button class="text-button" type="button" data-archive-template>Archive template</button>
+                  <button class="text-button danger-text" type="button" data-remove-import-source>Remove original file</button>
+                  <button class="text-button danger-text" type="button" data-delete-template>Delete template</button>
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <div class="imported-editor-guidance" data-imported-editor-guidance>
+            <strong>Edit the document itself.</strong>
+            <span>Click any text and type. The page structure stays locked so the design cannot be accidentally broken.</span>
+          </div>
+
+          <div class="imported-inline-contextbar" data-imported-contextbar hidden>
+            <div class="imported-context-copy">
+              <strong data-imported-context-title>Text selected</strong>
+              <span data-imported-context-copy>Type directly on the page or connect this text to live Rev Engine data.</span>
+            </div>
+            <div class="imported-context-controls" data-imported-text-context-controls>
+              <label>
+                <span>Live data</span>
+                <select data-imported-inline-binding></select>
+              </label>
+              <button class="icon-button" type="button" title="Bold" aria-label="Bold" data-imported-inline-bold><strong>B</strong></button>
+              <button class="icon-button" type="button" title="Align left" aria-label="Align left" data-imported-inline-align="LEFT">≡</button>
+              <button class="icon-button" type="button" title="Align centre" aria-label="Align centre" data-imported-inline-align="CENTER">≣</button>
+              <button class="icon-button" type="button" title="Align right" aria-label="Align right" data-imported-inline-align="RIGHT">≡</button>
+              <label class="imported-context-colour" title="Text colour">
+                <span>Colour</span>
+                <input type="color" data-imported-inline-colour>
+              </label>
+              <button class="secondary-button compact" type="button" data-imported-inline-insert-field>Insert field</button>
+              <button class="text-button" type="button" data-imported-inline-reset>Reset</button>
+              <button class="text-button danger-text" type="button" data-imported-inline-hide>Hide</button>
+            </div>
+            <div class="imported-context-controls" data-imported-logo-context-controls hidden>
+              <label>
+                <span>Logo</span>
+                <select data-imported-inline-logo-mode>
+                  <option value="ORIGINAL">Keep original</option>
+                  <option value="COMPANY">Use company logo</option>
+                  <option value="HIDDEN">Hide logo</option>
+                </select>
+              </label>
+              <button class="secondary-button compact" type="button" data-adjust-import-logo>Adjust logo area</button>
+            </div>
+          </div>
+
+          <div class="imported-document-stage" data-imported-document-stage>
+            <div class="imported-document-pages" data-imported-document-pages></div>
+          </div>
+
+          <section class="card imported-data-preview" data-imported-data-preview hidden>
+            <div class="document-preview-heading">
+              <div><strong>Preview with sample data</strong><span>This is the PDF customers will receive.</span></div>
+              <span data-imported-preview-status>Waiting for preview…</span>
+            </div>
+            <iframe title="Imported template data preview" data-imported-preview-frame></iframe>
+          </section>
+        </section>
+
+        <div class="document-studio-workspace" data-structured-workspace>
           <aside class="document-designer-panel">
             <section class="card document-control-card">
               <div class="document-control-heading">
