@@ -13,6 +13,7 @@
     previewUrl: null,
     previewRequest: 0,
     previewController: null,
+    modalPreviewUrl: null,
     saving: false
   };
 
@@ -101,8 +102,8 @@
       DOCUMENT_DETAILS: { label: documentType === 'CONTRACT' ? 'Agreement details' : 'Document details' },
       LINE_ITEMS: { label: documentType === 'CONTRACT' ? 'Services included' : 'Items', columns: ['DESCRIPTION', 'QTY', 'UNIT', 'TOTAL'] },
       TOTALS: { label: 'Summary' },
-      PAYMENT_OPTIONS: { label: 'Payment options', body: '', accounts: [{ id: 'payment-account-1', label: 'Bank transfer', bankName: '', accountName: '', accountNumber: '', branchName: '', branchCode: '', swiftCode: '' }], bankName: '', accountName: '', accountNumber: '', branchName: '', branchCode: '', swiftCode: '', referenceRule: 'Use the invoice number as the payment reference.' },
-      ONLINE_PAYMENT: { label: 'Pay online', buttonLabel: 'Make payment online', urlMode: 'AUTO', customUrl: '' },
+      PAYMENT_OPTIONS: { label: 'Payment options', body: '', accountLayout: 'STACKED', accounts: [{ id: 'payment-account-1', label: 'Bank transfer', bankName: '', accountName: '', accountNumber: '', branchName: '', branchCode: '', swiftCode: '' }], bankName: '', accountName: '', accountNumber: '', branchName: '', branchCode: '', swiftCode: '', referenceRule: 'Use the invoice number as the payment reference.' },
+      ONLINE_PAYMENT: { label: 'Pay online', body: '', buttonLabel: 'Make payment online', urlMode: 'AUTO', customUrl: '' },
       TERMS: { label: 'Terms and conditions', body: '' },
       DISCLAIMER: { label: 'Important payment notice', body: 'Before making payment, confirm that the payment details match the details issued by this company.' },
       SIGNATURES: { label: 'Signatures', leftLabel: 'For the company', rightLabel: 'For the customer' },
@@ -148,7 +149,8 @@
       return;
     }
     grid.innerHTML = visible.map((template) => {
-      const source = template.isSystem ? 'System template' : template.sourceType === 'IMPORTED' && template.hasImportSource ? 'Imported reference' : template.sourceType === 'BLANK' ? 'Built from scratch' : 'Ready-made template';
+      const sourceFormat = template.design && template.design.importAnalysis && template.design.importAnalysis.sourceFormat;
+      const source = template.isSystem ? 'System template' : template.sourceType === 'IMPORTED' && template.hasImportSource ? `Converted ${sourceFormat || 'document'}` : template.sourceType === 'BLANK' ? 'Built from scratch' : 'Ready-made template';
       const version = template.currentVersion ? `Version ${template.currentVersion}` : 'Not published yet';
       const variant = templateVariant(template);
       const activeActions = `<button class="secondary-button compact" type="button" data-template-open="${escapeHtml(template.id)}">Edit template</button><button class="text-button" type="button" data-template-duplicate="${escapeHtml(template.id)}">Duplicate</button>`;
@@ -238,7 +240,17 @@
     const importBanner = document.querySelector('[data-import-banner]');
     importBanner.hidden = !template.hasImportSource;
     const viewImport = document.querySelector('[data-view-import-source]');
-    if (viewImport) viewImport.textContent = template.importFileName ? `View ${template.importFileName}` : 'View imported file';
+    if (viewImport) viewImport.textContent = 'Preview original';
+    const importHeading = document.querySelector('[data-import-heading]');
+    const importCopy = document.querySelector('[data-import-copy]');
+    const analysis = template.design && template.design.importAnalysis || {};
+    if (importHeading) importHeading.textContent = template.importStatus === 'NEEDS_REVIEW'
+      ? 'This file needs manual rebuilding.'
+      : 'Your document was converted into editable sections.';
+    if (importCopy) {
+      const warning = Array.isArray(analysis.warnings) && analysis.warnings[0];
+      importCopy.textContent = warning || 'Preview the original beside the live PDF, then review each editable section before publishing.';
+    }
 
     const management = document.querySelector('[data-template-management]');
     const managementActions = document.querySelector('[data-template-management-actions]');
@@ -272,10 +284,11 @@
     return `<div class="field"><label for="templateModal-${escapeHtml(name)}">${escapeHtml(labelText)}</label>${input}${help ? `<small class="field-help">${escapeHtml(help)}</small>` : ''}</div>`;
   }
 
-  function openModal({ title, copy, body, submitLabel = 'Continue', onSubmit, afterOpen }) {
+  function openModal({ title, copy, body, submitLabel = 'Continue', cancelLabel = 'Cancel', showCancel = true, wide = false, onSubmit, afterOpen }) {
     modalTitle.textContent = title;
     modalCopy.textContent = copy || '';
-    modalForm.innerHTML = `${body}<div class="modal-actions"><button class="secondary-button" type="button" data-cancel-template-modal>Cancel</button><button class="primary-button" type="submit">${escapeHtml(submitLabel)}</button></div>`;
+    modal.querySelector('.document-template-modal-card').classList.toggle('is-wide', wide);
+    modalForm.innerHTML = `${body}<div class="modal-actions">${showCancel ? `<button class="secondary-button" type="button" data-cancel-template-modal>${escapeHtml(cancelLabel)}</button>` : ''}<button class="primary-button" type="submit">${escapeHtml(submitLabel)}</button></div>`;
     modal.hidden = false;
     document.body.classList.add('modal-open');
     modalForm.onsubmit = async (event) => {
@@ -291,7 +304,8 @@
         submit.disabled = false;
       }
     };
-    modalForm.querySelector('[data-cancel-template-modal]').addEventListener('click', closeModal);
+    const cancel = modalForm.querySelector('[data-cancel-template-modal]');
+    if (cancel) cancel.addEventListener('click', closeModal);
     if (typeof afterOpen === 'function') afterOpen(modalForm);
     window.setTimeout(() => {
       const first = modalForm.querySelector('input, select, textarea, button');
@@ -300,7 +314,10 @@
   }
 
   function closeModal() {
+    if (state.modalPreviewUrl) URL.revokeObjectURL(state.modalPreviewUrl);
+    state.modalPreviewUrl = null;
     modal.hidden = true;
+    modal.querySelector('.document-template-modal-card').classList.remove('is-wide');
     modalForm.innerHTML = '';
     modalForm.onsubmit = null;
     document.body.classList.remove('modal-open');
@@ -327,14 +344,44 @@
   function importTemplateModal() {
     openModal({
       title: 'Import an existing document',
-      copy: 'Upload a PDF, Word document, or image. Rev Engine keeps it privately as a reference while you map its style into editable sections.',
-      submitLabel: 'Import and map',
-      body: `${modalField('name', 'Template name', '<input id="templateModal-name" name="name" minlength="2" maxlength="120" required placeholder="Example: Existing company invoice">')}${modalField('documentType', 'Document type', '<select id="templateModal-documentType" name="documentType" required><option value="INVOICE">Invoice</option><option value="QUOTE">Quote</option><option value="CONTRACT">Contract</option></select>')}${modalField('file', 'Document file', '<input id="templateModal-file" name="file" type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp" required>', 'PDF, DOCX, PNG, JPG, or WEBP. Maximum 12 MB.')}`,
+      copy: 'Rev Engine converts readable content into editable sections and keeps the original available for comparison.',
+      submitLabel: 'Convert document',
+      wide: true,
+      body: `<div class="document-import-recommendation"><strong>Best results: searchable PDF or DOCX</strong><span>Images and scanned documents are not recommended. They do not have a reliable editable text layer and may need to be rebuilt manually.</span></div><div class="document-modal-grid">${modalField('name', 'Template name', '<input id="templateModal-name" name="name" minlength="2" maxlength="120" required placeholder="Example: Existing company invoice">')}${modalField('documentType', 'Document type', '<select id="templateModal-documentType" name="documentType" required><option value="INVOICE">Invoice</option><option value="QUOTE">Quote</option><option value="CONTRACT">Contract</option></select>')}</div>${modalField('file', 'Document file', '<input id="templateModal-file" name="file" type="file" accept=".pdf,.docx,.png,.jpg,.jpeg,.webp" required>', 'Maximum 12 MB. Choose a searchable PDF or DOCX whenever possible.')}<div class="document-import-file-warning" data-import-file-warning hidden></div><section class="document-upload-preview" data-upload-preview><div class="document-upload-preview-empty"><strong>Document preview</strong><span>Select a file to check it before conversion.</span></div></section>`,
+      afterOpen: (form) => {
+        const input = form.querySelector('#templateModal-file');
+        const preview = form.querySelector('[data-upload-preview]');
+        const warning = form.querySelector('[data-import-file-warning]');
+        input.addEventListener('change', () => {
+          if (state.modalPreviewUrl) URL.revokeObjectURL(state.modalPreviewUrl);
+          state.modalPreviewUrl = null;
+          const file = input.files && input.files[0];
+          warning.hidden = true;
+          warning.textContent = '';
+          if (!file) {
+            preview.innerHTML = '<div class="document-upload-preview-empty"><strong>Document preview</strong><span>Select a file to check it before conversion.</span></div>';
+            return;
+          }
+          const name = escapeHtml(file.name);
+          const isImage = /^image\//.test(file.type);
+          const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+          const isDocx = /\.docx$/i.test(file.name);
+          if (isImage) {
+            warning.hidden = false;
+            warning.textContent = 'Image imports are allowed, but they usually require manual rebuilding. A searchable PDF or DOCX will convert more reliably.';
+          }
+          state.modalPreviewUrl = URL.createObjectURL(file);
+          if (isPdf) preview.innerHTML = `<iframe title="Preview of ${name}" src="${state.modalPreviewUrl}"></iframe>`;
+          else if (isImage) preview.innerHTML = `<img alt="Preview of ${name}" src="${state.modalPreviewUrl}">`;
+          else if (isDocx) preview.innerHTML = `<div class="document-upload-preview-empty"><strong>${name}</strong><span>Word content will be converted into editable sections after upload. The converted preview will open automatically.</span></div>`;
+          else preview.innerHTML = `<div class="document-upload-preview-empty"><strong>${name}</strong><span>This file cannot be previewed in the browser.</span></div>`;
+        });
+      },
       onSubmit: async (data) => {
         const created = await api('/document-templates/import', { method: 'POST', body: data });
         state.showArchived = false;
         await loadTemplates(created.id);
-        notify('Document imported. Match its design using the editable sections.');
+        notify(created.importStatus === 'NEEDS_REVIEW' ? 'File added. It needs manual rebuilding before publishing.' : 'Document converted. Review the editable sections before publishing.');
       }
     });
   }
@@ -397,9 +444,10 @@
     const fields = block.type === 'FOOTER'
       ? []
       : [modalField('label', 'Section heading', `<input id="templateModal-label" name="label" maxlength="80" value="${escapeHtml(block.label || '')}">`)];
-    const bodyTypes = new Set(['PAYMENT_OPTIONS', 'TERMS', 'DISCLAIMER', 'FOOTER', 'CONTRACT_BODY']);
+    const bodyTypes = new Set(['PAYMENT_OPTIONS', 'ONLINE_PAYMENT', 'TERMS', 'DISCLAIMER', 'FOOTER', 'CONTRACT_BODY']);
     if (bodyTypes.has(block.type)) fields.push(modalField('body', block.type === 'CONTRACT_BODY' ? 'Main content' : 'Text', `<textarea id="templateModal-body" name="body" rows="6" maxlength="6000" placeholder="Enter the text shown on the document">${escapeHtml(block.body || '')}</textarea>`));
     if (block.type === 'PAYMENT_OPTIONS') {
+      fields.push(modalField('accountLayout', 'Payment option layout', `<select id="templateModal-accountLayout" name="accountLayout"><option value="STACKED"${block.accountLayout !== 'COLUMNS' ? ' selected' : ''}>Stacked</option><option value="COLUMNS"${block.accountLayout === 'COLUMNS' ? ' selected' : ''}>Side by side</option></select>`));
       fields.push(`<div class="payment-account-editor-list" data-payment-account-list>${paymentAccountsForBlock(block).slice(0, 4).map(paymentAccountMarkup).join('')}</div>`);
       fields.push('<button class="secondary-button compact" type="button" data-add-payment-account>+ Add another payment option</button>');
       fields.push(modalField('referenceRule', 'Payment reference instruction', `<input id="templateModal-referenceRule" name="referenceRule" maxlength="300" value="${escapeHtml(block.referenceRule || '')}">`));
@@ -432,7 +480,7 @@
       body: blockEditorFields(block),
       afterOpen: (form) => { if (block.type === 'PAYMENT_OPTIONS') wirePaymentAccountEditor(form); },
       onSubmit: async (data) => {
-        ['label', 'body', 'bankName', 'accountName', 'accountNumber', 'branchName', 'branchCode', 'swiftCode', 'referenceRule', 'buttonLabel', 'urlMode', 'customUrl', 'leftLabel', 'rightLabel'].forEach((field) => {
+        ['label', 'body', 'accountLayout', 'bankName', 'accountName', 'accountNumber', 'branchName', 'branchCode', 'swiftCode', 'referenceRule', 'buttonLabel', 'urlMode', 'customUrl', 'leftLabel', 'rightLabel'].forEach((field) => {
           if (data.has(field)) block[field] = String(data.get(field) || '').trim();
         });
         if (data.has('columns')) block.columns = String(data.get('columns') || '').split(',').map((item) => item.trim().toUpperCase()).filter(Boolean).slice(0, 4);
@@ -589,17 +637,23 @@
 
   function viewImportedSource() {
     if (!state.selected || !state.selected.hasImportSource) return;
-    const url = `${API_BASE}/document-templates/${encodeURIComponent(state.selected.id)}/import-source`;
-    const opened = window.open(url, '_blank');
-    if (opened) opened.opener = null;
-    else notify('Allow pop-ups for this site, then try again.', false);
+    const url = `${API_BASE}/document-templates/${encodeURIComponent(state.selected.id)}/import-preview`;
+    openModal({
+      title: 'Original document',
+      copy: state.selected.importFileName || 'Compare the original file with the editable live PDF before publishing.',
+      body: `<section class="document-source-preview"><iframe title="Original imported document" src="${escapeHtml(url)}"></iframe></section>`,
+      submitLabel: 'Close',
+      showCancel: false,
+      wide: true,
+      onSubmit: async () => {}
+    });
   }
 
   async function removeImportedSource() {
     if (!state.selected || !state.selected.hasImportSource) return;
     const accepted = !window.RevEngineUI || await window.RevEngineUI.confirm({
       title: 'Remove imported file?',
-      message: 'The editable template stays. Only the original reference file is removed.',
+      message: 'The converted editable template stays. Only the original uploaded file is removed.',
       confirmLabel: 'Remove file',
       danger: true
     });
@@ -611,6 +665,19 @@
     document.querySelector('[data-import-banner]').hidden = true;
     renderLibrary();
     notify('Imported file removed.');
+  }
+
+  async function reconvertImportedSource() {
+    if (!state.selected || !state.selected.hasImportSource) return;
+    const accepted = !window.RevEngineUI || await window.RevEngineUI.confirm({
+      title: 'Convert the original again?',
+      message: 'This replaces the current working design with a fresh conversion from the uploaded file. Published versions and issued documents will not change.',
+      confirmLabel: 'Convert again'
+    });
+    if (!accepted) return;
+    const updated = await api(`/document-templates/${encodeURIComponent(state.selected.id)}/reconvert`, { method: 'POST' });
+    await loadTemplates(updated.id);
+    notify(updated.importStatus === 'NEEDS_REVIEW' ? 'No reliable text layer was found. Rebuild this template manually.' : 'Original document converted again. Review the editable sections.');
   }
 
   function schedulePreview(delay = 450) {
@@ -679,6 +746,7 @@
       if (event.target.closest('[data-archive-template]')) { await archiveTemplate(); return; }
       if (event.target.closest('[data-delete-template]')) { await deleteTemplate(); return; }
       if (event.target.closest('[data-view-import-source]')) { viewImportedSource(); return; }
+      if (event.target.closest('[data-reconvert-import-source]')) { await reconvertImportedSource(); return; }
       if (event.target.closest('[data-remove-import-source]')) { await removeImportedSource(); return; }
       if (event.target.closest('[data-close-template-modal]')) { closeModal(); return; }
       const edit = event.target.closest('[data-block-edit]');

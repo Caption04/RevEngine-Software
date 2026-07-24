@@ -38,13 +38,15 @@ test('archived templates can be viewed and restored while custom templates can b
   assert.match(frontend, /deleteTemplate/);
 });
 
-test('imported reference files can be opened and removed without deleting the template', () => {
+test('converted source files can be previewed and removed without deleting the editable template', () => {
   const html = read('document-templates.html');
   const frontend = read('assets/document-templates.js');
   const routes = read('src/routes/api.js');
   assert.match(html, /data-view-import-source/);
   assert.match(html, /data-remove-import-source/);
-  assert.match(frontend, /window\.open\(url, '_blank'\)/);
+  assert.match(frontend, /\/import-preview/);
+  assert.match(frontend, /Original document/);
+  assert.match(routes, /router\.get\('\/document-templates\/:id\/import-preview'/);
   assert.match(routes, /router\.delete\('\/document-templates\/:id\/import-source'/);
   assert.match(routes, /sourceType: 'BLANK', importFileName: null/);
 });
