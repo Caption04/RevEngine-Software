@@ -222,3 +222,10 @@ test('original bold metadata remains effective until the user explicitly toggles
   assert.match(canvasService, /\['b', 'strong'\]/);
   assert.match(canvasService, /font-weight\\s\*:/);
 });
+
+test('logo toolbar dropdown and action stay aligned at the same fixed height', () => {
+  const css = read('assets/app.css');
+
+  assert.match(css, /\[data-imported-logo-context-controls\]\s*\{[\s\S]*?flex-direction:\s*row;[\s\S]*?align-items:\s*center;[\s\S]*?min-height:\s*32px;/);
+  assert.match(css, /\[data-imported-logo-context-controls\] select,[\s\S]*?\[data-imported-logo-context-controls\] \.secondary-button\.compact\s*\{[\s\S]*?height:\s*32px;[\s\S]*?min-height:\s*32px;[\s\S]*?margin:\s*0;/);
+});

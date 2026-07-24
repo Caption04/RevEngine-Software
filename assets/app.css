@@ -9661,3 +9661,27 @@ body[data-document-editor-route="true"] .imported-inline-editor {
   text-decoration-thickness: 1px;
   text-underline-offset: 0.08em;
 }
+
+/* Keep the logo formatting controls on the same baseline as the permanent toolbar. */
+body[data-document-editor-route="true"] .imported-permanent-toolbar [data-imported-logo-context-controls] {
+  flex-direction: row;
+  align-items: center;
+  min-height: 32px;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar [data-imported-logo-context-controls] > label {
+  align-self: center;
+  margin: 0;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar [data-imported-logo-context-controls] select,
+body[data-document-editor-route="true"] .imported-permanent-toolbar [data-imported-logo-context-controls] .secondary-button.compact {
+  height: 32px;
+  min-height: 32px;
+  margin: 0;
+}
+
+body[data-document-editor-route="true"] .imported-permanent-toolbar [data-imported-logo-context-controls] .secondary-button.compact {
+  padding-block: 0;
+  align-self: center;
+}
